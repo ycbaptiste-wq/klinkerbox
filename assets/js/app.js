@@ -1,0 +1,665 @@
+// ===================== KLINKERBOX · APP =====================
+(function(){
+  const P = window.PRODUCTS, I = window.I18N, FAM = window.FAMILIES, SUB = window.SUBS, FIN = window.FINISH;
+  let lang = localStorage.getItem('kb_lang') || 'de';
+
+  // Referenzen — real project photos from the existing gallery (with captions)
+  const REFS = [
+    {src:"assets/refs/ref-ancbelg-bronzegelb-basel.jpg",   cap:"Ancienne Belgique Bronzegelb · Eulenstrasse 18, Basel"},
+    {src:"assets/refs/ref-septima-aureum-udligenswil.jpg", cap:"SeptimA Aureum · Götzentalstrasse 1, Udligenswil"},
+    {src:"assets/refs/ref-lecorbusier-bern.jpg",           cap:"Gebäudekomplex Le-Corbusier-Platz, Bern"},
+    {src:"assets/refs/ref-ancbelg-kupferbraun-romont.jpg", cap:"Ancienne Belgique Kupferbraun · Romont"},
+    {src:"assets/refs/ref-route-de-suisse-coppet.jpg",     cap:"Route de Suisse 5, Coppet"},
+    {src:"assets/refs/ref-septima-mahagonie.jpg",          cap:"SeptimA Mahagonie"},
+    {src:"assets/refs/ref-denogent.jpg",                   cap:"Denogent SA"}
+  ];
+  // YouTube films embedded from the existing site
+  const VIDEOS = [
+    {id:"Ft_g9so_NEY", title:"Schulhaus"},
+    {id:"Pa4jem2yNjE", title:"Schulhaus"},
+    {id:"mLcptkMgEjM", title:"Wohnsiedlung"}
+  ];
+  // Extra installation photos per product (product galleries)
+  const EXTRA = {
+    "Ancienne Belgique|Bronzegelb":[{src:"assets/refs/ref-ancbelg-bronzegelb-basel.jpg",cap:"Eulenstrasse 18, Basel"}],
+    "Ancienne Belgique|Kupferbraun":[{src:"assets/refs/ref-ancbelg-kupferbraun-romont.jpg",cap:"Romont"}],
+    "SeptimA|Aureum":[{src:"assets/refs/ref-septima-aureum-udligenswil.jpg",cap:"Götzentalstrasse 1, Udligenswil"}],
+    "SeptimA|Mahagonie":[{src:"assets/refs/ref-septima-mahagonie.jpg",cap:"SeptimA Mahagonie"}]
+  };
+
+  const state = {cat:'pflaster', sub:null, stil:null, typ:null, color:null, size:'all', q:''};
+  let lbGallery=[], lbIndex=0;  // current lightbox gallery state
+
+  const $  = s => document.querySelector(s);
+  const $$ = s => Array.from(document.querySelectorAll(s));
+  const subLabel = v => (SUB[v] && SUB[v][lang]) || v;
+  const famLabel = v => (FAM[v] && FAM[v][lang]) || v;
+
+  // ----- surface finish (Oberfläche) for paving bricks -----
+  function finishTokens(p){
+    if(p.cat!=='pflaster') return null;
+    const s=p.series, n=p.name;
+    if(s==='Ancienne Belgique') return ['unbesandet','getrommelt'];
+    if(s==='Elegantia') return ['unbesandet','vollkantig'];
+    if(s==='Septema Aqua Splitt') return ['unbesandet','vollkantig'];
+    if(s==='SeptimA'){
+      if(['Anthrazit','Grau Gelb','Rotbraun'].includes(n)) return ['besandet','vollkantig'];
+      if(['Arena','Colosseum','Forum'].includes(n)) return ['besandet','getrommelt'];
+      if(['Amarant','Salvia','Sepia','Titan','Vanille','Carbon','Graphit'].includes(n)) return ['unbesandet','vollkantig'];
+      return ['unbesandet','getrommelt'];
+    }
+    return null;
+  }
+  const finishLabel = p => { const t=finishTokens(p); return t? t.map(x=>FIN[x][lang]).join(' · ') : ''; };
+  const enrich = p => (window.ENRICH && window.ENRICH[p.id]) || null;
+  // ---- runtime HAND-MADE stamp removal (clones brick texture over the bottom-right corner) ----
+  const STAMPED=new Set(['m240','m241','m242','m243','m244','m245']);
+  const cleanCache={};
+  const imgSrc=p=>cleanCache[p.id]||p.img;
+  function cleanStamp(p, cb){
+    if(!STAMPED.has(p.id)){ cb&&cb(p.img); return; }
+    if(cleanCache[p.id]){ cb&&cb(cleanCache[p.id]); return; }
+    const im=new Image();
+    im.onload=()=>{ try{
+      const W=im.naturalWidth,H=im.naturalHeight;
+      const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+      const cx=cv.getContext('2d'); cx.drawImage(im,0,0);
+      const rw=Math.round(W*0.46), rh=Math.round(H*0.40);     // bottom-right region with the stamp
+      cx.drawImage(cv, W-2*rw, H-rh, rw, rh, W-rw, H-rh, rw, rh); // clone the patch to its left
+      cleanCache[p.id]=cv.toDataURL('image/jpeg',0.9); cb&&cb(cleanCache[p.id]);
+    }catch(e){ cleanCache[p.id]=p.img; cb&&cb(p.img); } };
+    im.onerror=()=>{ cleanCache[p.id]=p.img; cb&&cb(p.img); };
+    im.src=p.img;
+  }
+  const baseOf=s=>s.split('/').pop();
+  function gallery(p){ const e=enrich(p); const g=(e && e.gallery && e.gallery.length)? e.gallery.slice() : [p.img];
+    const pb=baseOf(p.img);   // swap the (possibly stamped) gallery swatch for the clean card crop
+    return g.map(s=> baseOf(s)===pb ? imgSrc(p) : s); }
+  function loadOf(p){ const e=enrich(p); return (e && e.load) || ''; }
+  const ALLFMT = "Alle Formate";
+  const isAllFmt = p => p.size===ALLFMT;
+  const isMulti = p => !!(p.formats && p.formats.length);      // available in several specific formats
+  const sizeLabel = p => isMulti(p) ? I[lang].multiformats : (isAllFmt(p) ? I[lang].allformats : p.size);
+  // hand-produced ranges (tumbled / water-struck / hand-moulded clinker)
+  const HANDMADE_IDS=new Set(['m132','m133','m240','m241','m242','m243','m244','m245','p11']);
+  function isHandmade(p){
+    if(HANDMADE_IDS.has(p.id)) return true;          // products whose photos carried the HAND-MADE stamp
+    if(p.series==='SeptimA' || p.series==='Ancienne Belgique') return true;
+    if(p.series==='Nature 7' || p.series==='Nature 10') return true;
+    if(p.series==='LF Langformat') return true;       // Wasserstrich / water-struck
+    if(p.sub==='Wasserstrich') return true;
+    return false;
+  }
+
+  // ===================== I18N =====================
+  function applyLang(){
+    const dict = I[lang];
+    document.documentElement.lang = lang;
+    $$('[data-t]').forEach(el=>{ const k=el.dataset.t; if(dict[k]!==undefined) el.innerHTML = dict[k]; });
+    $$('[data-ph]').forEach(el=>{ const k=el.dataset.ph; if(dict[k]!==undefined) el.placeholder = dict[k]; });
+    $('#langLabel').textContent = lang.toUpperCase();
+    $$('#langMenu button').forEach(b=>b.classList.toggle('active', b.dataset.lang===lang));
+    $('#search').placeholder = dict.search_ph;
+    buildSubChips(); buildStilChips(); buildTypChips(); buildSizeSelect(); buildVideos(); render();
+    if(window.MIX){ updateFab(); if(!$('#mixer').hidden) renderMixer(); }
+  }
+
+  // ===================== FILTER BUILDERS =====================
+  function pool(){ return state.cat==='all' ? P : P.filter(p=>p.cat===state.cat); }
+
+  const SUB_ORDER=["getrommelt","scharfkantig","Sickerstein","Strangpress","Wasserstrich","Handgeschlagen",
+    "Langformat LF","R-Format","Normalformat NF","Indoor","Outdoor"];
+  function buildSubChips(){
+    const wrap = $('#subChips'); wrap.innerHTML='';
+    const subs = [...new Set(pool().map(p=>p.sub))].sort((a,b)=>{
+      const ia=SUB_ORDER.indexOf(a), ib=SUB_ORDER.indexOf(b);
+      return (ia<0?99:ia)-(ib<0?99:ib);
+    });
+    if(subs.length<=1){ wrap.parentElement.style.display='none'; return; }
+    wrap.parentElement.style.display='';
+    subs.forEach(s=>{
+      const b=document.createElement('button');
+      b.className='chip'+(state.sub===s?' is-active':'');
+      b.textContent=subLabel(s);
+      b.onclick=()=>{ state.sub = state.sub===s?null:s; buildSubChips(); render(); };
+      wrap.appendChild(b);
+    });
+  }
+  const stilLabel = v => (window.STIL && window.STIL[v] && window.STIL[v][lang]) || v;
+  function buildStilChips(){
+    const group=$('#stilGroup'), wrap=$('#stilChips'); wrap.innerHTML='';
+    const stils=[...new Set(pool().map(p=>p.stil).filter(Boolean))];
+    if(state.cat!=='pflaster' || stils.length<=1){ group.hidden=true; state.stil=null; return; }
+    group.hidden=false;
+    // keep a stable order
+    ['versickern','historisch','modern'].filter(s=>stils.includes(s)).forEach(s=>{
+      const b=document.createElement('button');
+      b.className='chip'+(state.stil===s?' is-active':'');
+      b.textContent=stilLabel(s);
+      b.onclick=()=>{ state.stil = state.stil===s?null:s; buildStilChips(); render(); };
+      wrap.appendChild(b);
+    });
+  }
+  function buildTypChips(){
+    const group=$('#typGroup'), wrap=$('#typChips'); wrap.innerHTML='';
+    const typs=[...new Set(pool().map(p=>p.typ).filter(t=>t && t!=='Langformat LF' && t!=='Normalformat NF'))];
+    if(state.cat!=='mauer' || typs.length<=1){ group.hidden=true; state.typ=null; return; }
+    group.hidden=false;
+    ['Mauerziegel','Mauerverblender','Riemchen'].filter(t=>typs.includes(t)).forEach(t=>{
+      const b=document.createElement('button');
+      b.className='chip'+(state.typ===t?' is-active':'');
+      b.textContent=subLabel(t);
+      b.onclick=()=>{ state.typ = state.typ===t?null:t; buildTypChips(); render(); };
+      wrap.appendChild(b);
+    });
+  }
+  function buildColorDots(){
+    const wrap = $('#colorDots'); wrap.innerHTML='';
+    const fams=[...new Set(pool().map(p=>p.family))];          // only colours present in the current category
+    if(state.color && !fams.includes(state.color)) state.color=null;
+    fams.sort((a,b)=>Object.keys(FAM).indexOf(a)-Object.keys(FAM).indexOf(b)).forEach(f=>{
+      const d=document.createElement('button');
+      d.className='cdot'+(state.color===f?' is-active':'');
+      d.style.background=window.FAMILY_HEX[f]||'#999'; d.dataset.name=famLabel(f);
+      d.onclick=()=>{ state.color = state.color===f?null:f; buildColorDots(); render(); };
+      wrap.appendChild(d);
+    });
+  }
+  function buildSizeSelect(){
+    const sel=$('#sizeSelect'); const prev=state.size;
+    // "Alle Formate" products match every size; multi-format products contribute each of their formats
+    const raw=[]; pool().forEach(p=>{ if(isMulti(p)) raw.push(...p.formats); else raw.push(p.size); });
+    const sizes=[...new Set(raw)].filter(s=>s!==ALLFMT && s!=='Mehrere Formate').sort();
+    sel.innerHTML='';
+    const o0=document.createElement('option'); o0.value='all'; o0.textContent=I[lang].size_all; sel.appendChild(o0);
+    sizes.forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o); });
+    sel.value = sizes.includes(prev)?prev:'all'; state.size = sel.value;
+    sel.onchange=()=>{ state.size=sel.value; render(); };
+  }
+
+  // ===================== RENDER GRID =====================
+  function filtered(){
+    return P.filter(p=>{
+      if(state.cat!=='all' && p.cat!==state.cat) return false;
+      if(state.sub && p.sub!==state.sub) return false;
+      if(state.stil && p.stil!==state.stil) return false;
+      if(state.typ && p.typ!==state.typ) return false;
+      if(state.color && p.family!==state.color) return false;
+      if(state.size!=='all' && !isAllFmt(p) && p.size!==state.size && !(isMulti(p) && p.formats.includes(state.size))) return false;
+      if(state.q){
+        const h=(p.series+' '+p.name+' '+famLabel(p.family)+' '+p.size).toLowerCase();
+        if(!h.includes(state.q.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }
+  function render(){
+    const grid=$('#grid'); const list=filtered();
+    $('#count').textContent=list.length;
+    $('#empty').hidden = list.length>0;
+    grid.innerHTML='';
+    list.forEach((p,i)=>{
+      const c=document.createElement('article'); c.className='card';
+      c.innerHTML=`
+        <div class="card__img"><img loading="lazy" src="${imgSrc(p)}" alt="${p.series} ${p.name}"></div>
+        <div class="card__body">
+          <div class="card__series">${p.series}</div>
+          <div class="card__name">${p.name}</div>
+          <div class="card__meta"><span class="card__swatch" style="background:${p.hex}"></span>${famLabel(p.family)} · ${sizeLabel(p)}</div>
+        </div>`;
+      c.onclick=()=>openLightbox(p);
+      grid.appendChild(c);
+      requestAnimationFrame(()=>setTimeout(()=>c.classList.add('in'), Math.min(i*18,450)));
+    });
+  }
+
+  // ===================== LIGHTBOX (product gallery) =====================
+  function openLightbox(p){
+    const d=I[lang], gal=gallery(p), LO=window.LOADS;
+    const catName = p.cat==='pflaster'?d.nav_pflaster:p.cat==='mauer'?d.nav_mauer:d.nav_tonplatten;
+    const fin = finishLabel(p);
+    const load = loadOf(p);
+    const multi = gal.length>1;
+    const thumbs = multi ? `<div class="lb__thumbs">${gal.map((src,i)=>
+        `<button class="lb__thumb${i===0?' is-active':''}" data-i="${i}"><img loading="lazy" src="${src}" alt=""></button>`).join('')}</div>` : '';
+    const counter = multi ? `<span class="lb__count" id="lbCount">1 / ${gal.length}</span>` : '';
+    const navArrows = multi ? `<button class="lb__nav lb__nav--prev" id="lbPrev" aria-label="‹">‹</button>
+        <button class="lb__nav lb__nav--next" id="lbNext" aria-label="›">›</button>` : '';
+    const hand = isHandmade(p);
+    const loadPills = load ? ['F','A','B','G'].map(k=>`<span class="lb__load${load.includes(k)?' on':''}">${LO[k][lang]}</span>`).join('') : '';
+    const handPill = hand ? `<span class="lb__load lb__load--hm on"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V6a2 2 0 0 1 4 0v5M13 7a2 2 0 0 1 4 0v6M7 12V9a2 2 0 0 1 4 0M17 9a2 2 0 0 1 4 0v5a7 7 0 0 1-7 7h-2a7 7 0 0 1-5-2l-3.5-3.5a2 2 0 0 1 3-2.6L9 14"/></svg>${d.lb_handmade}</span>` : '';
+    const loadRow = (load||hand) ? `<div class="lb__specrow lb__specrow--load"><span>${load?LO._label[lang]:d.lb_props}</span>
+        <div class="lb__loads">${loadPills}${handPill}</div></div>` : '';
+    // technical data (description + spec rows + tonplatten format table)
+    const sp = window.SPECS && window.SPECS[p.id];
+    const descHtml = sp && sp.desc ? `<p class="lb__desc">${sp.desc}</p>` : '';
+    const specRows = sp && sp.rows ? `<div class="lb__trows">${sp.rows.map(r=>
+        `<div class="lb__trow"><span class="lb__trk">${r[0]}</span><span class="lb__trv">${r[1]}</span></div>`).join('')}</div>` : '';
+    const tf = (p.cat==='tonplatten' && window.TONFORMATS && !['Handschlagbodenplatten','Ziegelboden','Bodenplatten'].includes(p.series)) ? `
+        <table class="lb__table"><thead><tr><th>${d.tf_format}</th><th>${d.tf_dicke}</th><th>${d.tf_units}</th><th>${d.tf_weight}</th></tr></thead>
+        <tbody>${window.TONFORMATS.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</tbody></table>` : '';
+    const techHtml = (specRows||tf) ? `<div class="lb__tech"><h4 class="lb__techh">${d.lb_specs}</h4>${specRows}${tf}</div>` : '';
+    $('#lbInner').innerHTML=`
+      <div class="lb__media">
+        <div class="lb__img">${counter}${navArrows}<img id="lbMain" src="${gal[0]}" alt="${p.series} ${p.name}"></div>
+        ${thumbs}
+      </div>
+      <div class="lb__info">
+        <div class="lb__series">${p.series}</div>
+        <div class="lb__name">${p.name}</div>
+        ${descHtml}
+        <dl class="lb__dl lb__dl--base">
+          <div class="lb__di"><dt>${d.lb_cat}</dt><dd>${catName}</dd></div>
+          <div class="lb__di"><dt>${d.lb_sub}</dt><dd>${subLabel(p.typ||p.sub)}</dd></div>
+          ${fin?`<div class="lb__di"><dt>${d.lb_finish}</dt><dd>${fin}</dd></div>`:''}
+          <div class="lb__di"><dt>${d.lb_color}</dt><dd class="lb__cdd"><span class="lb__dot" style="background:${p.hex}"></span>${famLabel(p.family)}</dd></div>
+          ${isMulti(p)
+            ? `<div class="lb__di lb__di--wide"><dt>${d.lb_size}</dt><dd class="lb__fmts">${p.formats.map(f=>`<span>${f}</span>`).join('')}</dd></div>`
+            : `<div class="lb__di"><dt>${d.lb_size}</dt><dd>${sizeLabel(p)}</dd></div>`}
+        </dl>
+        ${loadRow}
+        ${techHtml}
+        <div class="lb__actions">
+          <button type="button" class="btn btn--solid lb__cta" id="lbCta">${d.lb_cta}</button>
+          <button type="button" class="btn btn--outline" id="lbMix">${window.MIX[mixHas(p)?'added':'add'][lang]}</button>
+        </div>
+      </div>`;
+    $('#lbCta').onclick=()=>requestSample(p);
+    $('#lbMix').onclick=()=>{ addToMixer(p); const b=$('#lbMix'); if(b) b.textContent=window.MIX[mixHas(p)?'added':'add'][lang]; };
+    lbGallery=gal; lbIndex=0;
+    $$('.lb__thumb').forEach(t=>t.onclick=()=>showLb(+t.dataset.i));
+    if(multi){ $('#lbPrev').onclick=e=>{e.stopPropagation();showLb(lbIndex-1);}; $('#lbNext').onclick=e=>{e.stopPropagation();showLb(lbIndex+1);};
+      attachSwipe($('.lb__img'), ()=>showLb(lbIndex-1), ()=>showLb(lbIndex+1)); }
+    openModal();
+  }
+  function showLb(i){
+    if(!lbGallery.length) return;
+    lbIndex=(i+lbGallery.length)%lbGallery.length;
+    const main=$('#lbMain'); if(main) main.src=lbGallery[lbIndex];
+    const c=$('#lbCount'); if(c) c.textContent=`${lbIndex+1} / ${lbGallery.length}`;
+    $$('.lb__thumb').forEach(x=>x.classList.toggle('is-active', +x.dataset.i===lbIndex));
+  }
+  function openImage(src){
+    lbGallery=[]; lbIndex=0;
+    $('#lbInner').innerHTML=`<img class="lb__solo" src="${src}" alt="">`;
+    openModal();
+  }
+  function openModal(){ $('#lightbox').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop(); }
+  function closeLightbox(){ $('#lightbox').hidden=true; document.body.style.overflow=''; lbGallery=[]; if(window.__lenis) window.__lenis.start(); }
+  function scrollToEl(el){ if(window.__lenis) window.__lenis.scrollTo(el,{offset:-10}); else el.scrollIntoView({behavior:'smooth',block:'start'}); }
+  // drag / trackpad swipe to flip through a gallery
+  function attachSwipe(el, prev, next){
+    if(!el) return; let sx=0, dragging=false, moved=0, wlock=0;
+    const img=el.querySelector('img'); el.classList.add('lb-swipe');
+    el.addEventListener('pointerdown',e=>{ if(e.button!==0) return; dragging=true; sx=e.clientX; moved=0;
+      try{el.setPointerCapture(e.pointerId);}catch(_){} el.classList.add('lb-grabbing'); });
+    el.addEventListener('pointermove',e=>{ if(!dragging) return; moved=e.clientX-sx; if(img) img.style.transform=`translateX(${moved*0.28}px)`; });
+    const end=()=>{ if(!dragging) return; dragging=false; el.classList.remove('lb-grabbing'); if(img) img.style.transform='';
+      if(moved>45) prev(); else if(moved<-45) next(); };
+    el.addEventListener('pointerup',end); el.addEventListener('pointercancel',end); el.addEventListener('pointerleave',end);
+    el.addEventListener('wheel',e=>{ if(Math.abs(e.deltaX)>Math.abs(e.deltaY)+2 && Math.abs(e.deltaX)>10){
+      e.preventDefault(); const now=Date.now(); if(now-wlock<420) return; wlock=now; e.deltaX>0?next():prev(); } },{passive:false});
+  }
+
+  // ===================== COLOUR MIXER =====================
+  let mix=[], mixCat=null, mixLayout=[], mixSeq=[0], wildOff=[];
+  let mixBond='run', mixOrder=0, mixBed='normal', mixHead='normal', mixJoint='#9d988f';
+  const MROWS=20, MCOLS=6, NB=MCOLS+2;          // bricks per row incl. overflow
+  const JW={glue:1, narrow:3, normal:6};
+  const MORTARS=[['Weiss','#f0ece3'],['Naturweiss','#e8e1d2'],['Creme','#e3d8c0'],['Sandbeige','#d9caa6'],
+    ['Hellbeige','#cdbf9c'],['Kalk','#cac4b3'],['Hellgrau','#c4bfb5'],['Perlgrau','#b2ada4'],
+    ['Kieselgrau','#9d988f'],['Zementgrau','#8a857e'],['Steingrau','#75716a'],['Basaltgrau','#5d5a54'],
+    ['Anthrazit','#45433f'],['Schwarzgrau','#333230'],['Sandgelb','#cdb98a'],['Tongrau','#a39a8b']];
+  const MIX=()=>window.MIX;
+  const mixHas=p=>mix.some(x=>x.p.id===p.id);
+  const catName=c=>c==='pflaster'?I[lang].nav_pflaster:c==='mauer'?I[lang].nav_mauer:I[lang].nav_tonplatten;
+  // ---- single clean brick-face texture (crops a joint-free patch from the swatch) ----
+  const brickCache={};
+  function makeBrick(p, cb){
+    if(brickCache[p.id]){ cb&&cb(brickCache[p.id]); return; }
+    const im=new Image();
+    im.onload=()=>{
+      try{
+        const W=im.naturalWidth,H=im.naturalHeight;
+        const aw=130, ah=Math.max(40,Math.round(130*H/W));
+        const cv=document.createElement('canvas'); cv.width=aw; cv.height=ah;
+        const cx=cv.getContext('2d',{willReadFrequently:true}); cx.drawImage(im,0,0,aw,ah);
+        const d=cx.getImageData(0,0,aw,ah).data;
+        const L=(x,y)=>{const i=((y|0)*aw+(x|0))*4;return .299*d[i]+.587*d[i+1]+.114*d[i+2];};
+        // longest run of dark rows = a brick course (joints are the bright lines between)
+        const rowB=[]; for(let y=0;y<ah;y++){let s=0;for(let x=0;x<aw;x++)s+=L(x,y);rowB[y]=s/aw;}
+        const longestDarkRun=(arr,len,frac)=>{ const mn=Math.min.apply(null,arr),mx=Math.max.apply(null,arr),th=mn+(mx-mn)*frac;
+          let b0=0,b1=len,best=0,s=null; for(let i=0;i<=len;i++){ const dark=i<len&&arr[i]<th;
+            if(dark){ if(s===null)s=i; } else { if(s!==null){ if(i-s>best){best=i-s;b0=s;b1=i;} s=null; } } } return [b0,b1]; };
+        let [y0,y1]=longestDarkRun(rowB,ah,0.5); const bh=y1-y0;
+        const yA=y0+Math.max(1,Math.round(bh*0.20)), yB=y1-Math.max(1,Math.round(bh*0.20));
+        // within that band, find a single brick face: cap width to ~one brick and slide to the darkest
+        // (joint-free) window so we never span a vertical head-joint
+        const colB=[]; for(let x=0;x<aw;x++){let s=0,n=0;for(let y=yA;y<yB;y++){s+=L(x,y);n++;}colB[x]=s/(n||1);}
+        let [x0,x1]=longestDarkRun(colB,aw,0.62);
+        const bandH=yB-yA, targetW=Math.min(x1-x0, Math.max(6,Math.round(bandH*3.0)));
+        let bx=x0, bestAvg=1e9;
+        for(let x=x0;x<=x1-targetW;x++){ let s=0; for(let xx=x;xx<x+targetW;xx++) s+=colB[xx]; const avg=s/targetW; if(avg<bestAvg){bestAvg=avg;bx=x;} }
+        const xA=bx+Math.max(1,Math.round(targetW*0.08)), xB=bx+targetW-Math.max(1,Math.round(targetW*0.08));
+        // crop full-res; guard against degenerate regions
+        let fx=Math.round(xA/aw*W), fy=Math.round(yA/ah*H), fw=Math.round((xB-xA)/aw*W), fh=Math.round((yB-yA)/ah*H);
+        if(fw<W*0.06||fh<H*0.04){ fx=Math.round(W*0.36); fy=Math.round(H*0.40); fw=Math.round(W*0.26); fh=Math.round(H*0.16); }
+        const out=document.createElement('canvas'); out.width=fw; out.height=fh;
+        out.getContext('2d').drawImage(im,fx,fy,fw,fh,0,0,fw,fh);
+        const url=out.toDataURL('image/jpeg',0.88); brickCache[p.id]=url; cb&&cb(url);
+      }catch(e){ brickCache[p.id]=p.img; cb&&cb(p.img); }
+    };
+    im.onerror=()=>{ brickCache[p.id]=p.img; cb&&cb(p.img); };
+    im.src=imgSrc(p);
+  }
+  function ensureBricks(cb){ let pend=mix.length; if(!pend){cb&&cb();return;} mix.forEach(m=>makeBrick(m.p,()=>{ if(--pend===0) cb&&cb(); })); }
+  const brickSrc=p=>brickCache[p.id]||p.img;
+  function toast(msg){
+    let t=$('#toast'); if(!t){ t=document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+    t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2600);
+  }
+  function addToMixer(p){
+    if(mixHas(p)){ return; }                       // each product only once
+    if(mixCat && p.cat!==mixCat){ mix=[]; mixCat=null; mixLayout=[]; toast(MIX().reset[lang]); }  // other category → reset
+    mix.push({p:p, weight:3}); mixCat=p.cat; genLayout(); updateFab();
+    makeBrick(p,()=>{ if(!$('#mixer').hidden) refreshWall(); });
+    if(!$('#mixer').hidden) renderMixer();
+  }
+  function removeFromMixer(p){ mix=mix.filter(x=>x.p.id!==p.id); if(!mix.length) mixCat=null; genLayout(); updateFab(); renderMixer(); }
+  function clearMixer(){ mix=[]; mixCat=null; mixLayout=[]; updateFab(); renderMixer(); }
+  // evenly-spaced ordered sequence that respects the mix ratio
+  function evenSeq(){
+    const w=mix.map(m=>m.weight), total=w.reduce((a,b)=>a+b,0)||1, acc=w.map(()=>0), seq=[];
+    for(let k=0;k<total;k++){ for(let i=0;i<w.length;i++) acc[i]+=w[i];
+      let mi=0; for(let i=1;i<w.length;i++) if(acc[i]>acc[mi]) mi=i; acc[mi]-=total; seq.push(mi); }
+    return seq.length?seq:[0];
+  }
+  function genLayout(){
+    mixSeq=evenSeq();
+    const total=mix.reduce((a,m)=>a+m.weight,0)||1; mixLayout=[]; wildOff=[];
+    for(let s=0;s<MROWS*NB;s++){
+      let r=Math.random()*total, idx=0;
+      for(let i=0;i<mix.length;i++){ idx=i; r-=mix[i].weight; if(r<=0) break; }
+      mixLayout.push({rnd:idx, t:Math.random(), x:30+Math.floor(Math.random()*40), y:30+Math.floor(Math.random()*40), v:(0.9+Math.random()*0.2).toFixed(3)});
+    }
+    for(let r=0;r<MROWS;r++) wildOff.push(Math.random());
+  }
+  function bondOffset(row){
+    if(mixBond==='stack') return 0;
+    if(mixBond==='cross') return [0,0.5,0.25,0.75][row%4];
+    if(mixBond==='wild') return wildOff[row]||0;
+    return (row%2)*0.5;                          // running bond
+  }
+  function wallHTML(){
+    if(!mix.length) return '';
+    if(!mixLayout.length) genLayout();
+    const bed=JW[mixBed], head=JW[mixHead], L=mixSeq.length;
+    let rows='';
+    for(let row=0;row<MROWS;row++){
+      const off=bondOffset(row);
+      let bricks='';
+      for(let c=0;c<NB;c++){
+        const b=mixLayout[row*NB+c];
+        const ord=mixSeq[(((c+row) % L)+L)%L];     // ordered pattern (diagonal shift)
+        const idx=(b.t<=mixOrder)?ord:b.rnd;        // blend random ↔ ordered
+        const p=mix[idx]?mix[idx].p:mix[0].p;
+        bricks+=`<span class="mixbrick" style="background-image:url(${brickSrc(p)});background-position:${b.x}% ${b.y}%;filter:brightness(${b.v})"></span>`;
+      }
+      rows+=`<div class="mixrow" style="gap:${head}px;margin-left:calc((-1 * var(--bw) - ${head}px) * ${off})">${bricks}</div>`;
+    }
+    return `<div class="mixwall" style="background:${mixJoint};gap:${bed}px;padding:${bed}px">${rows}</div>`;
+  }
+  function refreshWall(){ const w=$('#mixPreview'); if(w) w.innerHTML=wallHTML(); }
+  function updatePcts(){ const total=mix.reduce((a,m)=>a+m.weight,0)||1;
+    $$('#mixList .mixratio__pct').forEach(s=>{ s.textContent=Math.round(mix[+s.dataset.i].weight/total*100)+'%'; }); }
+  function updateFab(){ const f=$('#mixFab'); $('#mixCount').textContent=mix.length; f.hidden=mix.length===0; $('#mixFabTxt').textContent=MIX().title[lang]; }
+  function openMixer(){ renderMixer(); ensureBricks(()=>refreshWall()); $('#mixer').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop(); }
+  function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); }
+  function exportWall(){
+    if(!mix.length) return;
+    Promise.all(mix.map(m=>new Promise(res=>{ const im=new Image(); im.onload=()=>res({id:m.p.id,im}); im.onerror=()=>res({id:m.p.id,im:null}); im.src=brickSrc(m.p); })))
+    .then(arr=>{
+      const map={}; arr.forEach(o=>map[o.id]=o.im);
+      const CW=1600, gh=JW[mixHead]*2.6, gb=JW[mixBed]*2.6, pad=gb;
+      const bw=CW*0.156, bh=bw*5/18, L=mixSeq.length;
+      const CH=Math.round(pad*2+MROWS*bh+(MROWS-1)*gb);
+      const cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
+      const cx=cv.getContext('2d'); cx.fillStyle=mixJoint; cx.fillRect(0,0,CW,CH);
+      for(let row=0;row<MROWS;row++){
+        const off=bondOffset(row)*(bw+gh), y=pad+row*(bh+gb);
+        for(let c=0;c<NB;c++){
+          const b=mixLayout[row*NB+c]; const ord=mixSeq[(((c+row)%L)+L)%L]; const idx=(b.t<=mixOrder)?ord:b.rnd;
+          const im=map[(mix[idx]||mix[0]).p.id]; if(!im) continue;
+          const x=pad-off+c*(bw+gh);
+          cx.save(); cx.beginPath(); cx.rect(x,y,bw,bh); cx.clip();
+          const ir=im.width/im.height, br=bw/bh; let dw,dh;
+          if(ir>br){dh=bh;dw=bh*ir;}else{dw=bw;dh=bw/ir;}
+          cx.drawImage(im,x+(bw-dw)/2,y+(bh-dh)/2,dw,dh); cx.restore();
+        }
+      }
+      cv.toBlob(bl=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='klinkerbox-mischung.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); },'image/png');
+    });
+  }
+  const seg=(name,opts,cur)=>`<div class="mixseg" data-seg="${name}">${opts.map(o=>
+    `<button class="mixseg__b${o[0]===cur?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
+  function renderMixer(){
+    const M=MIX();
+    $('#mixTitle').textContent=M.title[lang];
+    $('#mixShuffle').textContent=M.shuffle[lang]; $('#mixClear').textContent=M.clear[lang];
+    { const ex=$('#mixExport'); if(ex) ex.textContent=M.export[lang]; }
+    $('#mixCatLabel').textContent=mixCat?catName(mixCat):M.hint[lang];
+    const prev=$('#mixPreview'), list=$('#mixList');
+    if(!mix.length){ prev.innerHTML=`<div class="mixer__empty">${M.empty[lang]}</div>`; list.innerHTML=''; return; }
+    prev.innerHTML=wallHTML();
+    const total=mix.reduce((a,m)=>a+m.weight,0)||1;
+    const ratio=`<div class="mixgrp"><div class="mixgrp__h">${M.ratio[lang]}</div>${mix.map((m,i)=>`
+      <div class="mixratio__row">
+        <span class="mixchip__sw" style="background:${m.p.hex}"></span>
+        <span class="mixratio__name">${m.p.series} · ${m.p.name}</span>
+        <input type="range" class="mixratio__sl" min="1" max="12" value="${m.weight}" data-i="${i}" aria-label="${m.p.name}">
+        <span class="mixratio__pct" data-i="${i}">${Math.round(m.weight/total*100)}%</span>
+        <button class="mixchip__x" data-id="${m.p.id}" aria-label="remove">&times;</button>
+      </div>`).join('')}</div>`;
+    const order=`<div class="mixgrp"><div class="mixgrp__h">${M.order[lang]}</div>
+      <div class="mixorder"><span>${M.o_rnd[lang]}</span>
+        <input type="range" id="mixOrderSl" min="0" max="100" value="${Math.round(mixOrder*100)}">
+        <span>${M.o_ord[lang]}</span></div></div>`;
+    const bond=`<div class="mixgrp"><div class="mixgrp__h">${M.verband[lang]}</div>
+      ${seg('bond',[['run',M.b_run[lang]],['cross',M.b_cross[lang]],['stack',M.b_stack[lang]],['wild',M.b_wild[lang]]],mixBond)}</div>`;
+    const joints=`<div class="mixgrp"><div class="mixgrp__h">${M.bed[lang]} · ${M.head[lang]}</div>
+      <div class="mixjoint"><span>${M.bed[lang]}</span>${seg('bed',[['glue',M.j_glue[lang]],['narrow',M.j_narrow[lang]],['normal',M.j_normal[lang]]],mixBed)}</div>
+      <div class="mixjoint"><span>${M.head[lang]}</span>${seg('head',[['glue',M.j_glue[lang]],['narrow',M.j_narrow[lang]],['normal',M.j_normal[lang]]],mixHead)}</div></div>`;
+    const jcol=`<div class="mixgrp"><div class="mixgrp__h">${M.jcolor[lang]}</div>
+      <div class="mixmortars">${MORTARS.map(c=>`<button class="mixmortar${c[1]===mixJoint?' is-active':''}" style="background:${c[1]}" data-hex="${c[1]}" title="${c[0]}"></button>`).join('')}</div></div>`;
+    list.innerHTML=ratio+order+bond+joints+jcol;
+    // handlers
+    list.querySelectorAll('.mixratio__sl').forEach(sl=>sl.oninput=()=>{ mix[+sl.dataset.i].weight=+sl.value; genLayout(); updatePcts(); refreshWall(); });
+    list.querySelectorAll('.mixchip__x').forEach(b=>b.onclick=()=>{ const p=P.find(x=>x.id===b.dataset.id); if(p) removeFromMixer(p); });
+    $('#mixOrderSl').oninput=e=>{ mixOrder=+e.target.value/100; refreshWall(); };
+    list.querySelectorAll('.mixseg').forEach(s=>s.querySelectorAll('.mixseg__b').forEach(b=>b.onclick=()=>{
+      const v=b.dataset.v, name=s.dataset.seg;
+      if(name==='bond') mixBond=v; else if(name==='bed') mixBed=v; else if(name==='head') mixHead=v;
+      s.querySelectorAll('.mixseg__b').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWall();
+    }));
+    list.querySelectorAll('.mixmortar').forEach(b=>b.onclick=()=>{ mixJoint=b.dataset.hex;
+      list.querySelectorAll('.mixmortar').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWall(); });
+  }
+  // form per stone — pre-fill the contact form with the selected product
+  function requestSample(p){
+    closeLightbox();
+    const f=$('#contactForm'); if(!f) return;
+    const prod=`${p.series} — ${p.name}`;
+    const pf=f.elements.produkt; if(pf){ pf.value=prod; }
+    const muster=$$('#interestChecks input').find(c=>c.value==='Muster'); if(muster) muster.checked=true;
+    scrollToEl($('#kontakt'));
+    const field=$('#produktField');
+    if(field){ field.classList.remove('flash'); void field.offsetWidth; field.classList.add('flash'); }
+    setTimeout(()=>{ if(pf) pf.focus({preventScroll:true}); }, 600);
+  }
+
+  // ===================== VIDEOS (lite YouTube embed) =====================
+  let vidObs=null;
+  function buildVideos(){
+    const wrap=$('#videos'); if(!wrap) return; wrap.innerHTML='';
+    if(vidObs) vidObs.disconnect();
+    vidObs=new IntersectionObserver((es)=>{
+      es.forEach(e=>{
+        const card=e.target, v=card.__v;
+        if(e.isIntersecting && !card.classList.contains('is-playing')){
+          card.insertAdjacentHTML('afterbegin',
+            `<iframe src="https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&mute=1&loop=1&playlist=${v.id}&controls=1&rel=0&modestbranding=1&playsinline=1" title="${v.title}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`);
+          card.classList.add('is-playing');
+        }
+      });
+    },{threshold:.4});
+    VIDEOS.forEach(v=>{
+      const card=document.createElement('div'); card.className='vcard'; card.__v=v;
+      card.innerHTML=`<img class="vcard__poster" loading="lazy" referrerpolicy="no-referrer" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt="${v.title}"><span class="vcard__title">${v.title}</span>`;
+      wrap.appendChild(card); vidObs.observe(card);
+    });
+  }
+
+  // ===================== REFERENZEN GALLERY =====================
+  function buildRefs(){
+    const wrap=$('#refsGrid');
+    wrap.classList.add('refs__marquee');
+    const track=document.createElement('div'); track.className='refs__track';
+    // duplicate the set once for a seamless infinite loop
+    REFS.concat(REFS).forEach((r,i)=>{
+      const fig=document.createElement('figure'); fig.className='reffig';
+      fig.innerHTML=`<img loading="lazy" src="${r.src}" alt="">`;
+      fig.onclick=()=>openRefGallery(i % REFS.length);
+      track.appendChild(fig);
+    });
+    wrap.appendChild(track);
+  }
+  function openRefGallery(i){
+    lbGallery=REFS.map(r=>r.src); lbIndex=i;
+    $('#lbInner').innerHTML=`<div class="lb__solowrap">
+        <span class="lb__count lb__count--solo" id="lbCount">${i+1} / ${lbGallery.length}</span>
+        <button class="lb__nav lb__nav--prev" id="lbPrev" aria-label="‹">‹</button>
+        <button class="lb__nav lb__nav--next" id="lbNext" aria-label="›">›</button>
+        <img class="lb__solo" id="lbMain" src="${lbGallery[i]}" alt=""></div>`;
+    $('#lbPrev').onclick=e=>{e.stopPropagation();showLb(lbIndex-1);};
+    $('#lbNext').onclick=e=>{e.stopPropagation();showLb(lbIndex+1);};
+    attachSwipe($('.lb__solowrap'), ()=>showLb(lbIndex-1), ()=>showLb(lbIndex+1));
+    openModal();
+  }
+
+  // ===================== FORMS (static → mailto) =====================
+  function bindForms(){
+    const cf=$('#contactForm');
+    if(cf) cf.onsubmit=e=>{
+      e.preventDefault();
+      const f=cf.elements;
+      if(f.website.value){ return; } // honeypot
+      if(!f.name.value.trim()||!f.email.value.trim()||!f.message.value.trim()){
+        showHint($('#formHint'), I[lang].f_req, false); return;
+      }
+      const interests=$$('#interestChecks input:checked').map(c=>c.value).join(', ');
+      const d=I[lang];
+      const body=[
+        `${d.f_name}: ${f.name.value}`,
+        `${d.f_company}: ${f.company.value}`,
+        `${d.f_phone}: ${f.phone.value}`,
+        `${d.f_email}: ${f.email.value}`,
+        `${d.f_projaddr}: ${f.projaddr.value}`,
+        `${d.f_interest}: ${interests}`,
+        '',`${d.f_message}:`, f.message.value
+      ].join('\n');
+      window.location.href=`mailto:info@klinkerbox.ch?subject=${encodeURIComponent('Anfrage Klinkerbox — '+f.name.value)}&body=${encodeURIComponent(body)}`;
+      showHint($('#formHint'), I[lang].nl_done, true);
+    };
+    const nf=$('#newsForm');
+    if(nf) nf.onsubmit=e=>{
+      e.preventDefault();
+      const f=nf.elements; if(!f.email.value.trim()) return;
+      const body=`${I[lang].nl_first}: ${f.first.value}\n${I[lang].nl_last}: ${f.last.value}\n${I[lang].nl_email}: ${f.email.value}`;
+      window.location.href=`mailto:info@klinkerbox.ch?subject=${encodeURIComponent('Newsletter-Anmeldung')}&body=${encodeURIComponent(body)}`;
+      nf.reset();
+    };
+  }
+  function showHint(el,msg,ok){ if(!el) return; el.hidden=false; el.textContent=msg; el.className='cform__hint '+(ok?'is-ok':'is-err'); }
+
+  // ===================== REVEAL OBSERVER =====================
+  const revObs=new IntersectionObserver((es)=>{
+    es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); revObs.unobserve(e.target); } });
+  },{threshold:.12});
+  $$('.reveal').forEach(el=>revObs.observe(el));
+
+  // ===================== NAV / EVENTS =====================
+  function bind(){
+    $$('#catTabs .tab').forEach(t=>t.onclick=()=>{
+      $$('#catTabs .tab').forEach(x=>x.classList.remove('is-active')); t.classList.add('is-active');
+      state.cat=t.dataset.cat; state.sub=null; state.stil=null;
+      buildSubChips(); buildStilChips(); buildTypChips(); buildColorDots(); buildSizeSelect(); render();
+      scrollToEl($('#katalog'));
+    });
+    $$('[data-cat]').forEach(el=>{ if(el.closest('#catTabs')) return;
+      el.addEventListener('click',()=>{ const c=el.dataset.cat; if(!c) return;
+        const tab=document.querySelector(`#catTabs .tab[data-cat="${c}"]`); if(tab) tab.click(); });
+    });
+    [['#pflaster','pflaster'],['#mauer','mauer'],['#tonplatten','tonplatten']].forEach(([href,cat])=>{
+      $$(`.nav__links a[href="${href}"]`).forEach(a=>a.addEventListener('click',()=>{
+        const tab=document.querySelector(`#catTabs .tab[data-cat="${cat}"]`);
+        if(tab){ $$('#catTabs .tab').forEach(x=>x.classList.remove('is-active')); tab.classList.add('is-active');
+          state.cat=cat; state.sub=null; state.stil=null; state.typ=null; buildSubChips(); buildStilChips(); buildTypChips(); buildColorDots(); buildSizeSelect(); render(); }
+        $('#navLinks').classList.remove('open');
+      }));
+    });
+    $$('.nav__links a').forEach(a=>a.addEventListener('click',()=>$('#navLinks').classList.remove('open')));
+    $('#search').oninput=e=>{ state.q=e.target.value; render(); };
+    $('#resetBtn').onclick=()=>{ state.sub=null; state.stil=null; state.color=null; state.size='all'; state.q='';
+      $('#search').value=''; state.typ=null; $('#sizeSelect').value='all'; buildSubChips(); buildStilChips(); buildTypChips(); buildColorDots(); buildSizeSelect(); render(); };
+    $('#langBtn').onclick=e=>{ e.stopPropagation(); $('#lang').classList.toggle('open'); };
+    $$('#langMenu button').forEach(b=>b.onclick=()=>{ lang=b.dataset.lang; localStorage.setItem('kb_lang',lang);
+      $('#lang').classList.remove('open'); applyLang(); buildColorDots(); });
+    document.addEventListener('click',()=>$('#lang').classList.remove('open'));
+    $('#burger').onclick=()=>$('#navLinks').classList.toggle('open');
+    $('#lbClose').onclick=closeLightbox;
+    $('#lightbox').onclick=e=>{ if(e.target.id==='lightbox') closeLightbox(); };
+    $('#mixFab').onclick=openMixer; $('#mixClose').onclick=closeMixer;
+    $('#mixer').onclick=e=>{ if(e.target.id==='mixer') closeMixer(); };
+    $('#mixClear').onclick=clearMixer; $('#mixShuffle').onclick=()=>{ genLayout(); renderMixer(); };
+    $('#mixExport').onclick=exportWall;
+    document.addEventListener('keydown',e=>{
+      if(e.key==='Escape' && !$('#mixer').hidden){ closeMixer(); return; }
+      if($('#lightbox').hidden) return;
+      if(e.key==='Escape') closeLightbox();
+      else if(e.key==='ArrowLeft' && lbGallery.length>1) showLb(lbIndex-1);
+      else if(e.key==='ArrowRight' && lbGallery.length>1) showLb(lbIndex+1);
+    });
+    const nav=$('#nav'); const onScroll=()=>nav.classList.toggle('scrolled', window.scrollY>20);
+    window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+    $('#year').textContent=new Date().getFullYear();
+  }
+
+  // ===================== SMOOTH SCROLL (Lenis) =====================
+  function smoothScroll(){
+    if(matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    if(typeof window.Lenis==='undefined') return;          // graceful fallback to native scroll
+    const lenis=new window.Lenis({
+      duration:1.05,                                       // normal tempo, smooth glide
+      easing:t=>Math.min(1,1.001-Math.pow(2,-10*t)),        // ease-out expo
+      smoothWheel:true, wheelMultiplier:1, touchMultiplier:1.6, lerp:null
+    });
+    window.__lenis=lenis;
+    (function raf(t){ lenis.raf(t); requestAnimationFrame(raf); })(0);
+  }
+
+  // ===================== IMAGE PROTECTION =====================
+  function protectImages(){
+    const sel='img,.card__img,.reffig,.lb__media,.lb__img,.lb__solo,.mixwall,.mixbrick,.vcard,.cat__media,.hero__media';
+    document.addEventListener('contextmenu',e=>{ if(e.target.closest(sel)) e.preventDefault(); });
+    document.addEventListener('dragstart',e=>{ if(e.target.tagName==='IMG'||e.target.closest(sel)) e.preventDefault(); });
+    // strip native save/drag affordances as images are added
+    const harden=()=>$$('img').forEach(im=>{ im.setAttribute('draggable','false'); im.oncontextmenu=()=>false; });
+    harden(); new MutationObserver(harden).observe(document.body,{childList:true,subtree:true});
+  }
+
+  // ===================== INIT =====================
+  buildColorDots(); buildRefs(); bindForms(); bind(); applyLang(); smoothScroll(); protectImages();
+  // clean the HAND-MADE stamp from the affected images, then refresh what's on screen
+  P.filter(p=>STAMPED.has(p.id)).forEach(p=>cleanStamp(p,()=>{ if(!$('#grid')) return;
+    $$('#grid .card').forEach(c=>{ const img=c.querySelector('img'); if(img && img.alt===p.series+' '+p.name) img.src=imgSrc(p); }); }));
+})();
