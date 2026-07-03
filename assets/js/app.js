@@ -336,7 +336,10 @@
   const MIX=()=>window.MIX;
   const mixHas=p=>mix.some(x=>x.p.id===p.id);
   const catName=c=>c==='pflaster'?I[lang].nav_pflaster:c==='mauer'?I[lang].nav_mauer:I[lang].nav_tonplatten;
-  // ---- single clean brick-face texture (crops a joint-free patch from the swatch) ----
+  // ---- single clean stone/tile face (finds the joint-free patch of one unit) ----
+  // Slides a small square window over the photo and keeps the one with the least
+  // "joint energy" — i.e. no dark mortar line and no bright grout line crossing it.
+  // Works for brick walls, cobbles and tile floors (hexagon/square) alike.
   const brickCache={};
   function makeBrick(p, cb){
     if(brickCache[p.id]){ cb&&cb(brickCache[p.id]); return; }
@@ -344,32 +347,51 @@
     im.onload=()=>{
       try{
         const W=im.naturalWidth,H=im.naturalHeight;
-        const aw=130, ah=Math.max(40,Math.round(130*H/W));
-        const cv=document.createElement('canvas'); cv.width=aw; cv.height=ah;
-        const cx=cv.getContext('2d',{willReadFrequently:true}); cx.drawImage(im,0,0,aw,ah);
-        const d=cx.getImageData(0,0,aw,ah).data;
-        const L=(x,y)=>{const i=((y|0)*aw+(x|0))*4;return .299*d[i]+.587*d[i+1]+.114*d[i+2];};
-        // longest run of dark rows = a brick course (joints are the bright lines between)
-        const rowB=[]; for(let y=0;y<ah;y++){let s=0;for(let x=0;x<aw;x++)s+=L(x,y);rowB[y]=s/aw;}
-        const longestDarkRun=(arr,len,frac)=>{ const mn=Math.min.apply(null,arr),mx=Math.max.apply(null,arr),th=mn+(mx-mn)*frac;
-          let b0=0,b1=len,best=0,s=null; for(let i=0;i<=len;i++){ const dark=i<len&&arr[i]<th;
-            if(dark){ if(s===null)s=i; } else { if(s!==null){ if(i-s>best){best=i-s;b0=s;b1=i;} s=null; } } } return [b0,b1]; };
-        let [y0,y1]=longestDarkRun(rowB,ah,0.5); const bh=y1-y0;
-        const yA=y0+Math.max(1,Math.round(bh*0.20)), yB=y1-Math.max(1,Math.round(bh*0.20));
-        // within that band, find a single brick face: cap width to ~one brick and slide to the darkest
-        // (joint-free) window so we never span a vertical head-joint
-        const colB=[]; for(let x=0;x<aw;x++){let s=0,n=0;for(let y=yA;y<yB;y++){s+=L(x,y);n++;}colB[x]=s/(n||1);}
-        let [x0,x1]=longestDarkRun(colB,aw,0.62);
-        const bandH=yB-yA, targetW=Math.min(x1-x0, Math.max(6,Math.round(bandH*3.0)));
-        let bx=x0, bestAvg=1e9;
-        for(let x=x0;x<=x1-targetW;x++){ let s=0; for(let xx=x;xx<x+targetW;xx++) s+=colB[xx]; const avg=s/targetW; if(avg<bestAvg){bestAvg=avg;bx=x;} }
-        const xA=bx+Math.max(1,Math.round(targetW*0.08)), xB=bx+targetW-Math.max(1,Math.round(targetW*0.08));
-        // crop full-res; guard against degenerate regions
-        let fx=Math.round(xA/aw*W), fy=Math.round(yA/ah*H), fw=Math.round((xB-xA)/aw*W), fh=Math.round((yB-yA)/ah*H);
-        if(fw<W*0.06||fh<H*0.04){ fx=Math.round(W*0.36); fy=Math.round(H*0.40); fw=Math.round(W*0.26); fh=Math.round(H*0.16); }
+        const AW=190, AH=Math.max(60,Math.round(AW*H/W));
+        const cv=document.createElement('canvas'); cv.width=AW; cv.height=AH;
+        const cx=cv.getContext('2d',{willReadFrequently:true}); cx.drawImage(im,0,0,AW,AH);
+        const d=cx.getImageData(0,0,AW,AH).data;
+        const lum=new Float32Array(AW*AH);
+        let gmin=1e9,gmax=-1e9;
+        for(let i=0,j=0;i<d.length;i+=4,j++){ const v=.299*d[i]+.587*d[i+1]+.114*d[i+2]; lum[j]=v; if(v<gmin)gmin=v; if(v>gmax)gmax=v; }
+        const grange=Math.max(1,gmax-gmin);
+        // multi-scale + multi-aspect search: several patch shapes so dense cobbles,
+        // big faces AND long thin courses can each find a joint-free window.
+        const M=Math.min(AW,AH);
+        const shapes=[[0.15,0.15],[0.11,0.11],[0.24,0.12],[0.32,0.10],[0.12,0.24],
+                      [0.20,0.07],[0.28,0.06],[0.07,0.20]];  // thin slivers for narrow courses
+        let best=null;
+        for(const [fw_,fh_] of shapes){
+          const winW=Math.max(8,Math.round(M*fw_)), winH=Math.max(8,Math.round(M*fh_));
+          if(winW+2>=AW || winH+2>=AH) continue;
+          const stepX=Math.max(2,Math.round(winW*0.34)), stepY=Math.max(2,Math.round(winH*0.34));
+          const rows=new Float32Array(winH), cols=new Float32Array(winW);
+          const areaPen=Math.max(0,(0.0256-fw_*fh_))*0.6;  // gently prefer a larger clean patch
+          for(let y=0;y+winH<=AH;y+=stepY) for(let x=0;x+winW<=AW;x+=stepX){
+            rows.fill(0); cols.fill(0); let sum=0;
+            for(let yy=0;yy<winH;yy++){ let rs=0; const base=(y+yy)*AW+x;
+              for(let xx=0;xx<winW;xx++){ const v=lum[base+xx]; rs+=v; cols[xx]+=v; } rows[yy]=rs/winW; sum+=rs; }
+            const area=winW*winH, mean=sum/area, rel=(mean-gmin)/grange;
+            if(rel<0.12||rel>0.9) continue;               // skip deep shadow / bright mortar zones
+            let rmin=1e9,rmax=-1e9,cmin=1e9,cmax=-1e9;
+            for(let k=0;k<winH;k++){ const rv=rows[k]; if(rv<rmin)rmin=rv; if(rv>rmax)rmax=rv; }
+            for(let k=0;k<winW;k++){ const cvl=cols[k]/winH; if(cvl<cmin)cmin=cvl; if(cvl>cmax)cmax=cvl; }
+            const darkLine=Math.max(mean-rmin, mean-cmin);   // dark mortar line (bed or head joint)
+            const brightLine=Math.max(rmax-mean, cmax-mean); // bright grout line
+            const lineEnergy=(darkLine + brightLine*0.7)/grange;
+            let vsum=0; for(let yy=0;yy<winH;yy++){ const base=(y+yy)*AW+x; for(let xx=0;xx<winW;xx++){ const dv=lum[base+xx]-mean; vsum+=dv*dv; } }
+            const sd=Math.sqrt(vsum/area)/grange;
+            const cxn=(x+winW/2)/AW-0.5, cyn=(y+winH/2)/AH-0.5;
+            const score=lineEnergy*3.0 + Math.max(0,sd-0.24)*1.8 + Math.sqrt(cxn*cxn+cyn*cyn)*0.22 + areaPen;
+            if(!best||score<best.score) best={score,x,y,winW,winH};
+          }
+        }
+        let fx,fy,fw,fh;
+        if(best){ fx=Math.round(best.x/AW*W); fy=Math.round(best.y/AH*H); fw=Math.round(best.winW/AW*W); fh=Math.round(best.winH/AH*H); }
+        else { fw=Math.round(W*0.18); fh=Math.round(H*0.18); fx=Math.round((W-fw)/2); fy=Math.round((H-fh)/2); }
         const out=document.createElement('canvas'); out.width=fw; out.height=fh;
         out.getContext('2d').drawImage(im,fx,fy,fw,fh,0,0,fw,fh);
-        const url=out.toDataURL('image/jpeg',0.88); brickCache[p.id]=url; cb&&cb(url);
+        const url=out.toDataURL('image/jpeg',0.9); brickCache[p.id]=url; cb&&cb(url);
       }catch(e){ brickCache[p.id]=p.img; cb&&cb(p.img); }
     };
     im.onerror=()=>{ brickCache[p.id]=p.img; cb&&cb(p.img); };
