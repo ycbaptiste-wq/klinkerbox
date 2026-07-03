@@ -197,7 +197,7 @@ window.MIX = {
   title:  {de:"Farbmixer", fr:"Mélangeur de couleurs", it:"Mixer colori", en:"Colour mixer"},
   add:    {de:"Zum Mixer", fr:"Ajouter au mélangeur", it:"Aggiungi al mixer", en:"Add to mixer"},
   added:  {de:"Im Mixer ✓", fr:"Dans le mélangeur ✓", it:"Nel mixer ✓", en:"In mixer ✓"},
-  hint:   {de:"Steine derselben Kategorie zu einem Mix kombinieren.", fr:"Combinez des briques de la même catégorie.", it:"Combina pietre della stessa categoria.", en:"Combine bricks of the same category."},
+  hint:   {de:"Steine derselben Kategorie und Form kombinieren.", fr:"Combinez des pièces de même catégorie et forme.", it:"Combina pezzi di stessa categoria e forma.", en:"Combine pieces of the same category and shape."},
   empty:  {de:"Noch keine Steine im Mixer. Öffne ein Produkt und füge es hinzu.", fr:"Aucune brique dans le mélangeur. Ouvrez un produit et ajoutez-le.", it:"Nessuna pietra nel mixer. Apri un prodotto e aggiungilo.", en:"No bricks yet. Open a product and add it."},
   clear:  {de:"Leeren", fr:"Vider", it:"Svuota", en:"Clear"},
   shuffle:{de:"Neu mischen", fr:"Mélanger", it:"Rimescola", en:"Shuffle"},
@@ -218,7 +218,8 @@ window.MIX = {
   j_normal:{de:"Normal", fr:"Normal", it:"Normale", en:"Normal"},
   jcolor: {de:"Fugenfarbe", fr:"Couleur du joint", it:"Colore fuga", en:"Joint colour"},
   export: {de:"Als Bild speichern", fr:"Enregistrer l'image", it:"Salva immagine", en:"Save image"},
-  reset:  {de:"Andere Kategorie — Mixer zurückgesetzt", fr:"Autre catégorie — mélange réinitialisé", it:"Altra categoria — mixer azzerato", en:"Other category — mixer reset"}
+  reset:  {de:"Andere Kategorie — Mixer zurückgesetzt", fr:"Autre catégorie — mélange réinitialisé", it:"Altra categoria — mixer azzerato", en:"Other category — mixer reset"},
+  resetfmt:{de:"Anderes Format — nur gleiche Formen mischbar", fr:"Autre format — seules les mêmes formes se mélangent", it:"Altro formato — solo stesse forme miscelabili", en:"Different format — only matching shapes mix"}
 };
 
 // Pflasterklinker style themes (Stil) — per the search structure

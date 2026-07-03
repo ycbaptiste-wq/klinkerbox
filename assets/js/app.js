@@ -302,10 +302,33 @@
   }
 
   // ===================== COLOUR MIXER =====================
-  let mix=[], mixCat=null, mixLayout=[], mixSeq=[0], wildOff=[];
+  let mix=[], mixCat=null, mixShape=null, mixLayout=[], mixSeq=[0], wildOff=[];
   let mixBond='run', mixOrder=0, mixBed='normal', mixHead='normal', mixJoint='#9d988f';
   const MROWS=20, MCOLS=6, NB=MCOLS+2;          // bricks per row incl. overflow
   const JW={glue:1, narrow:3, normal:6};
+  // ---- shape family: only products of the same shape/format can be mixed ----
+  const FAM_AR={square:1, block:2.1, brick:3.4, strip:6};   // render aspect ratio (w/h)
+  const FAM_BW={square:12.5, block:17, brick:15.6, strip:22};// tile width (% of row)
+  const RECT_FAM=f=>f==='brick'||f==='block'||f==='strip'||f==='square';
+  function shapeFamily(p){
+    const s=(p.size||'')+' '+((p.formats&&p.formats.join(' '))||'');
+    if(p.cat==='tonplatten'){
+      if(/hexagon|sechseck/i.test(s)) return 'hex';
+      if(/oktogon|oktagon|octagon/i.test(s)) return 'oct';
+      if(/quadrat|viereck/i.test(s)) return 'square';
+    }
+    const nums=(s.match(/\d+(?:[.,]\d+)?/g)||[]).map(n=>parseFloat(n.replace(',','.'))).filter(n=>n>0);
+    if(nums.length>=2){
+      const sorted=[...nums].sort((a,b)=>b-a);
+      // wall/paving bricks: longest ÷ shortest (thin height) · flat tiles: two largest
+      const r=(p.cat==='tonplatten') ? sorted[0]/(sorted[1]||1) : sorted[0]/(sorted[sorted.length-1]||1);
+      if(r<1.3) return 'square';
+      if(r<2.4) return 'block';
+      if(r<4.4) return 'brick';
+      return 'strip';
+    }
+    return 'brick';
+  }
   const MORTARS=[['Weiss','#f0ece3'],['Naturweiss','#e8e1d2'],['Creme','#e3d8c0'],['Sandbeige','#d9caa6'],
     ['Hellbeige','#cdbf9c'],['Kalk','#cac4b3'],['Hellgrau','#c4bfb5'],['Perlgrau','#b2ada4'],
     ['Kieselgrau','#9d988f'],['Zementgrau','#8a857e'],['Steingrau','#75716a'],['Basaltgrau','#5d5a54'],
@@ -360,13 +383,17 @@
   }
   function addToMixer(p){
     if(mixHas(p)){ return; }                       // each product only once
-    if(mixCat && p.cat!==mixCat){ mix=[]; mixCat=null; mixLayout=[]; toast(MIX().reset[lang]); }  // other category → reset
-    mix.push({p:p, weight:3}); mixCat=p.cat; genLayout(); updateFab();
+    const fam=shapeFamily(p);
+    if(mix.length && (p.cat!==mixCat || fam!==mixShape)){   // other category or shape → reset
+      mix=[]; mixCat=null; mixShape=null; mixLayout=[];
+      toast(p.cat!==mixCat ? MIX().reset[lang] : MIX().resetfmt[lang]);
+    }
+    mix.push({p:p, weight:3}); mixCat=p.cat; mixShape=fam; genLayout(); updateFab();
     makeBrick(p,()=>{ if(!$('#mixer').hidden) refreshWall(); });
     if(!$('#mixer').hidden) renderMixer();
   }
-  function removeFromMixer(p){ mix=mix.filter(x=>x.p.id!==p.id); if(!mix.length) mixCat=null; genLayout(); updateFab(); renderMixer(); }
-  function clearMixer(){ mix=[]; mixCat=null; mixLayout=[]; updateFab(); renderMixer(); }
+  function removeFromMixer(p){ mix=mix.filter(x=>x.p.id!==p.id); if(!mix.length){ mixCat=null; mixShape=null; } genLayout(); updateFab(); renderMixer(); }
+  function clearMixer(){ mix=[]; mixCat=null; mixShape=null; mixLayout=[]; updateFab(); renderMixer(); }
   // evenly-spaced ordered sequence that respects the mix ratio
   function evenSeq(){
     const w=mix.map(m=>m.weight), total=w.reduce((a,b)=>a+b,0)||1, acc=w.map(()=>0), seq=[];
@@ -390,24 +417,57 @@
     if(mixBond==='wild') return wildOff[row]||0;
     return (row%2)*0.5;                          // running bond
   }
+  // pick which product fills cell (c,row) — blends random ↔ ordered
+  function cellP(c,row){
+    const L=mixSeq.length, b=mixLayout[(row*NB+c)%mixLayout.length];
+    const ord=mixSeq[(((c+row)%L)+L)%L], idx=(b.t<=mixOrder)?ord:b.rnd;
+    return {p:(mix[idx]?mix[idx].p:mix[0].p), b};
+  }
   function wallHTML(){
     if(!mix.length) return '';
     if(!mixLayout.length) genLayout();
-    const bed=JW[mixBed], head=JW[mixHead], L=mixSeq.length;
+    const fam=mixShape||'brick';
+    if(fam==='hex') return hexWall();
+    if(fam==='oct') return octWall();
+    return rectWall(fam);
+  }
+  function rectWall(fam){
+    const bed=JW[mixBed], head=JW[mixHead];
+    const bw=FAM_BW[fam]||15.6, ar=FAM_AR[fam]||3.4;
+    const square=(fam==='square');
     let rows='';
     for(let row=0;row<MROWS;row++){
-      const off=bondOffset(row);
+      const off=square?0:bondOffset(row);         // square tiles lay on a straight grid
       let bricks='';
       for(let c=0;c<NB;c++){
-        const b=mixLayout[row*NB+c];
-        const ord=mixSeq[(((c+row) % L)+L)%L];     // ordered pattern (diagonal shift)
-        const idx=(b.t<=mixOrder)?ord:b.rnd;        // blend random ↔ ordered
-        const p=mix[idx]?mix[idx].p:mix[0].p;
+        const {p,b}=cellP(c,row);
         bricks+=`<span class="mixbrick" style="background-image:url(${brickSrc(p)});background-position:${b.x}% ${b.y}%;filter:brightness(${b.v})"></span>`;
       }
       rows+=`<div class="mixrow" style="gap:${head}px;margin-left:calc((-1 * var(--bw) - ${head}px) * ${off})">${bricks}</div>`;
     }
-    return `<div class="mixwall" style="background:${mixJoint};gap:${bed}px;padding:${bed}px">${rows}</div>`;
+    return `<div class="mixwall" style="--bw:${bw}%;--ar:${ar};background:${mixJoint};gap:${bed}px;padding:${bed}px">${rows}</div>`;
+  }
+  function hexWall(){
+    const bed=Math.max(2,JW[mixBed]), COLS=7, ROWS=16;
+    let rows='';
+    for(let row=0;row<ROWS;row++){
+      let tiles='';
+      for(let c=0;c<COLS;c++){
+        const {p,b}=cellP(c,row);
+        tiles+=`<span class="mixhextile" style="background-image:url(${brickSrc(p)});background-position:${b.x}% ${b.y}%;filter:brightness(${b.v})"></span>`;
+      }
+      rows+=`<div class="mixhexrow${row%2?' is-odd':''}" style="gap:${bed}px">${tiles}</div>`;
+    }
+    return `<div class="mixwall mixhexwall" style="background:${mixJoint};padding:${bed}px 0">${rows}</div>`;
+  }
+  function octWall(){
+    const bed=Math.max(3,JW[mixBed]), COLS=8, ROWS=11;
+    let cells='';
+    for(let row=0;row<ROWS;row++) for(let c=0;c<COLS;c++){
+      const {p,b}=cellP(c,row);
+      cells+=`<span class="mixocttile" style="background-image:url(${brickSrc(p)});background-position:${b.x}% ${b.y}%;filter:brightness(${b.v})"></span>`;
+    }
+    return `<div class="mixwall mixoctwall" style="background:${mixJoint};gap:${bed}px;padding:${bed}px;grid-template-columns:repeat(${COLS},1fr)">${cells}</div>`;
   }
   function refreshWall(){ const w=$('#mixPreview'); if(w) w.innerHTML=wallHTML(); }
   function updatePcts(){ const total=mix.reduce((a,m)=>a+m.weight,0)||1;
@@ -417,27 +477,52 @@
   function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); }
   function exportWall(){
     if(!mix.length) return;
+    const fam=mixShape||'brick', L=mixSeq.length;
+    const pickIm=(map,c,row)=>{ const b=mixLayout[(row*NB+c)%mixLayout.length];
+      const ord=mixSeq[(((c+row)%L)+L)%L], idx=(b.t<=mixOrder)?ord:b.rnd; return map[(mix[idx]||mix[0]).p.id]; };
+    const drawClip=(cx,im,x,y,w,h,poly)=>{ cx.save(); cx.beginPath();
+      if(poly){ poly.forEach((pt,i)=>{ const px=x+pt[0]*w, py=y+pt[1]*h; i?cx.lineTo(px,py):cx.moveTo(px,py); }); cx.closePath(); }
+      else cx.rect(x,y,w,h);
+      cx.clip(); const ir=im.width/im.height, br=w/h; let dw,dh;
+      if(ir>br){dh=h;dw=h*ir;}else{dw=w;dh=w/ir;}
+      cx.drawImage(im,x+(w-dw)/2,y+(h-dh)/2,dw,dh); cx.restore(); };
     Promise.all(mix.map(m=>new Promise(res=>{ const im=new Image(); im.onload=()=>res({id:m.p.id,im}); im.onerror=()=>res({id:m.p.id,im:null}); im.src=brickSrc(m.p); })))
     .then(arr=>{
       const map={}; arr.forEach(o=>map[o.id]=o.im);
       const CW=1600, gh=JW[mixHead]*2.6, gb=JW[mixBed]*2.6, pad=gb;
-      const bw=CW*0.156, bh=bw*5/18, L=mixSeq.length;
-      const CH=Math.round(pad*2+MROWS*bh+(MROWS-1)*gb);
+      const save=cv=>cv.toBlob(bl=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='klinkerbox-mischung.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); },'image/png');
+      if(fam==='hex'){
+        const COLS=7, ROWS=9, hw=CW/(COLS+0.5), hh=hw*0.866, gap=Math.max(2,gb*0.5);
+        const CH=Math.round(pad*2+hh*(1+(ROWS-1)*0.75)+ROWS*2);
+        const cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
+        const cx=cv.getContext('2d'); cx.fillStyle=mixJoint; cx.fillRect(0,0,CW,CH);
+        const hex=[[0.5,0],[1,0.25],[1,0.75],[0.5,1],[0,0.75],[0,0.25]];
+        for(let row=0;row<ROWS;row++){ const y=pad+row*hh*0.75, xoff=(row%2)?hw*0.5:0;
+          for(let c=0;c<COLS;c++){ const im=pickIm(map,c,row); if(!im) continue;
+            drawClip(cx,im,xoff+c*(hw+gap)-gap*0.5,y,hw,hh,hex); } }
+        save(cv); return;
+      }
+      if(fam==='oct'){
+        const COLS=8, ROWS=8, gap=Math.max(3,gb*0.6), tw=(CW-pad*2-(COLS-1)*gap)/COLS;
+        const CH=Math.round(pad*2+ROWS*tw+(ROWS-1)*gap);
+        const cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
+        const cx=cv.getContext('2d'); cx.fillStyle=mixJoint; cx.fillRect(0,0,CW,CH);
+        const oct=[[0.3,0],[0.7,0],[1,0.3],[1,0.7],[0.7,1],[0.3,1],[0,0.7],[0,0.3]];
+        for(let row=0;row<ROWS;row++) for(let c=0;c<COLS;c++){ const im=pickIm(map,c,row); if(!im) continue;
+          drawClip(cx,im,pad+c*(tw+gap),pad+row*(tw+gap),tw,tw,oct); }
+        save(cv); return;
+      }
+      // rectangular families (brick / block / strip / square)
+      const bwF=(FAM_BW[fam]||15.6)/100, bw=CW*bwF, bh=bw/(FAM_AR[fam]||3.4);
+      const square=(fam==='square'), CH=Math.round(pad*2+MROWS*bh+(MROWS-1)*gb);
       const cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
       const cx=cv.getContext('2d'); cx.fillStyle=mixJoint; cx.fillRect(0,0,CW,CH);
       for(let row=0;row<MROWS;row++){
-        const off=bondOffset(row)*(bw+gh), y=pad+row*(bh+gb);
-        for(let c=0;c<NB;c++){
-          const b=mixLayout[row*NB+c]; const ord=mixSeq[(((c+row)%L)+L)%L]; const idx=(b.t<=mixOrder)?ord:b.rnd;
-          const im=map[(mix[idx]||mix[0]).p.id]; if(!im) continue;
-          const x=pad-off+c*(bw+gh);
-          cx.save(); cx.beginPath(); cx.rect(x,y,bw,bh); cx.clip();
-          const ir=im.width/im.height, br=bw/bh; let dw,dh;
-          if(ir>br){dh=bh;dw=bh*ir;}else{dw=bw;dh=bw/ir;}
-          cx.drawImage(im,x+(bw-dw)/2,y+(bh-dh)/2,dw,dh); cx.restore();
-        }
+        const off=(square?0:bondOffset(row))*(bw+gh), y=pad+row*(bh+gb);
+        for(let c=0;c<NB;c++){ const im=pickIm(map,c,row); if(!im) continue;
+          drawClip(cx,im,pad-off+c*(bw+gh),y,bw,bh); }
       }
-      cv.toBlob(bl=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='klinkerbox-mischung.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); },'image/png');
+      save(cv);
     });
   }
   const seg=(name,opts,cur)=>`<div class="mixseg" data-seg="${name}">${opts.map(o=>
@@ -464,8 +549,10 @@
       <div class="mixorder"><span>${M.o_rnd[lang]}</span>
         <input type="range" id="mixOrderSl" min="0" max="100" value="${Math.round(mixOrder*100)}">
         <span>${M.o_ord[lang]}</span></div></div>`;
-    const bond=`<div class="mixgrp"><div class="mixgrp__h">${M.verband[lang]}</div>
-      ${seg('bond',[['run',M.b_run[lang]],['cross',M.b_cross[lang]],['stack',M.b_stack[lang]],['wild',M.b_wild[lang]]],mixBond)}</div>`;
+    const bond=RECT_FAM(mixShape||'brick') && (mixShape||'brick')!=='square'
+      ? `<div class="mixgrp"><div class="mixgrp__h">${M.verband[lang]}</div>
+      ${seg('bond',[['run',M.b_run[lang]],['cross',M.b_cross[lang]],['stack',M.b_stack[lang]],['wild',M.b_wild[lang]]],mixBond)}</div>`
+      : '';
     const joints=`<div class="mixgrp"><div class="mixgrp__h">${M.bed[lang]} · ${M.head[lang]}</div>
       <div class="mixjoint"><span>${M.bed[lang]}</span>${seg('bed',[['glue',M.j_glue[lang]],['narrow',M.j_narrow[lang]],['normal',M.j_normal[lang]]],mixBed)}</div>
       <div class="mixjoint"><span>${M.head[lang]}</span>${seg('head',[['glue',M.j_glue[lang]],['narrow',M.j_narrow[lang]],['normal',M.j_normal[lang]]],mixHead)}</div></div>`;
