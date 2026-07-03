@@ -384,6 +384,7 @@ a.cinfo__val:hover{color:var(--clay)}
 .mixer__cat{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--clay);font-weight:600}
 .mixer__preview{flex:1;min-width:0;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#221f1c;display:flex;align-items:center}
 .mixer__preview .mixwall{width:100%}
+.mixcanvas{display:block;width:100%;height:100%;object-fit:cover}
 .mixer__empty{padding:2.6rem 1.5rem;text-align:center;color:var(--ink-soft);font-size:.95rem}
 /* running-bond wall of individual bricks */
 .mixwall{--bw:15.6%;--ar:3.4;display:flex;flex-direction:column;gap:4px;padding:5px;overflow:hidden}

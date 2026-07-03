@@ -208,6 +208,8 @@ window.MIX = {
   b_cross:{de:"Kreuzverband", fr:"En croix", it:"A croce", en:"Cross bond"},
   b_stack:{de:"Stapelverband", fr:"Empilé", it:"Impilato", en:"Stack bond"},
   b_wild: {de:"Wilder Verband", fr:"Sauvage", it:"Selvaggia", en:"Wild bond"},
+  b_herring:{de:"Fischgrätverband", fr:"À bâtons rompus", it:"A spina di pesce", en:"Herringbone"},
+  b_basket:{de:"Parkettverband", fr:"En vannerie", it:"A canestro", en:"Basket weave"},
   order:  {de:"Anordnung", fr:"Disposition", it:"Disposizione", en:"Arrangement"},
   o_rnd:  {de:"Zufällig", fr:"Aléatoire", it:"Casuale", en:"Random"},
   o_ord:  {de:"Geordnet", fr:"Ordonné", it:"Ordinato", en:"Ordered"},
