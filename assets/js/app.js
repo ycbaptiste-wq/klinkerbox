@@ -193,24 +193,45 @@
       return true;
     });
   }
+  const PAGE=12;                       // products per page → less endless scrolling
+  let mList=[], mShown=0;
+  function makeCard(p,stagger){
+    const c=document.createElement('article'); c.className='card'+(mixHas(p)?' in-mix':'');
+    c.dataset.pid=p.id;
+    c.innerHTML=`
+      <span class="card__mixbadge">${window.MIX.added[lang]}</span>
+      <div class="card__img"><img loading="lazy" src="${imgSrc(p)}" alt="${p.series} ${p.name}"></div>
+      <div class="card__body">
+        <div class="card__series">${p.series}</div>
+        <div class="card__name">${p.name}</div>
+        <div class="card__meta"><span class="card__swatch" style="background:${p.hex}"></span>${famLabel(p.family)} · ${sizeLabel(p)}</div>
+      </div>`;
+    c.onclick=()=>openLightbox(p);
+    $('#grid').appendChild(c);
+    requestAnimationFrame(()=>setTimeout(()=>c.classList.add('in'), Math.min(stagger*18,300)));
+  }
+  function updateMore(){
+    const btn=$('#loadMore'); if(!btn) return;
+    const rem=mList.length-mShown; btn.hidden=rem<=0;
+    const n=btn.querySelector('.loadmore__n'); if(n) n.textContent=rem;
+  }
+  function loadMore(){
+    const from=mShown, to=Math.min(mShown+PAGE, mList.length);
+    for(let i=from;i<to;i++) makeCard(mList[i], i-from);
+    mShown=to; updateMore();
+  }
   function render(){
-    const grid=$('#grid'); const list=filtered();
-    $('#count').textContent=list.length;
-    $('#empty').hidden = list.length>0;
-    grid.innerHTML='';
-    list.forEach((p,i)=>{
-      const c=document.createElement('article'); c.className='card';
-      c.innerHTML=`
-        <div class="card__img"><img loading="lazy" src="${imgSrc(p)}" alt="${p.series} ${p.name}"></div>
-        <div class="card__body">
-          <div class="card__series">${p.series}</div>
-          <div class="card__name">${p.name}</div>
-          <div class="card__meta"><span class="card__swatch" style="background:${p.hex}"></span>${famLabel(p.family)} · ${sizeLabel(p)}</div>
-        </div>`;
-      c.onclick=()=>openLightbox(p);
-      grid.appendChild(c);
-      requestAnimationFrame(()=>setTimeout(()=>c.classList.add('in'), Math.min(i*18,450)));
-    });
+    mList=filtered();
+    $('#count').textContent=mList.length;
+    $('#empty').hidden = mList.length>0;
+    $('#grid').innerHTML='';
+    mShown=Math.min(PAGE, mList.length);
+    for(let i=0;i<mShown;i++) makeCard(mList[i], i);
+    updateMore();
+  }
+  // reflect current mixer selection on the product cards
+  function markMixedCards(){
+    $$('#grid .card').forEach(c=>{ const on=mix.some(m=>m.p.id===c.dataset.pid); c.classList.toggle('in-mix', on); });
   }
 
   // ===================== LIGHTBOX (product gallery) =====================
@@ -542,7 +563,8 @@
   }
   function updatePcts(){ const total=mix.reduce((a,m)=>a+m.weight,0)||1;
     $$('#mixList .mixratio__pct').forEach(s=>{ s.textContent=Math.round(mix[+s.dataset.i].weight/total*100)+'%'; }); }
-  function updateFab(){ const f=$('#mixFab'); $('#mixCount').textContent=mix.length; f.hidden=mix.length===0; $('#mixFabTxt').textContent=MIX().title[lang]; }
+  function updateFab(){ const c=$('#mixCount'); c.textContent=mix.length; c.hidden=mix.length===0;
+    $('#mixFabTxt').textContent=MIX().title[lang]; markMixedCards(); }
   function openMixer(){ $('#mixer').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop(); renderMixer(); refreshWall(); }
   function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); }
   function exportWall(){
@@ -739,6 +761,7 @@
     $('#burger').onclick=()=>$('#navLinks').classList.toggle('open');
     $('#lbClose').onclick=closeLightbox;
     $('#lightbox').onclick=e=>{ if(e.target.id==='lightbox') closeLightbox(); };
+    $('#loadMore').onclick=loadMore;
     $('#mixFab').onclick=openMixer; $('#mixClose').onclick=closeMixer;
     $('#mixer').onclick=e=>{ if(e.target.id==='mixer') closeMixer(); };
     $('#mixClear').onclick=clearMixer; $('#mixShuffle').onclick=()=>{ genLayout(); renderMixer(); };
