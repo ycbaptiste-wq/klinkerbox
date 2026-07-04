@@ -200,7 +200,7 @@
     c.dataset.pid=p.id;
     c.innerHTML=`
       <span class="card__mixbadge">${window.MIX.added[lang]}</span>
-      <div class="card__img"><img loading="lazy" src="${imgSrc(p)}" alt="${p.series} ${p.name}"></div>
+      <div class="card__img"><img loading="lazy" decoding="async" src="${imgSrc(p)}" alt="${p.series} ${p.name}"></div>
       <div class="card__body">
         <div class="card__series">${p.series}</div>
         <div class="card__name">${p.name}</div>
@@ -670,11 +670,14 @@
     // duplicate the set once for a seamless infinite loop
     REFS.concat(REFS).forEach((r,i)=>{
       const fig=document.createElement('figure'); fig.className='reffig';
-      fig.innerHTML=`<img loading="lazy" src="${r.src}" alt="">`;
+      fig.innerHTML=`<img loading="lazy" decoding="async" src="${r.src}" alt="">`;
       fig.onclick=()=>openRefGallery(i % REFS.length);
       track.appendChild(fig);
     });
     wrap.appendChild(track);
+    // pause the marquee while it's off-screen so it never competes with scrolling
+    new IntersectionObserver(es=>es.forEach(e=>track.classList.toggle('paused', !e.isIntersecting)))
+      .observe($('#referenzen'));
   }
   function openRefGallery(i){
     lbGallery=REFS.map(r=>r.src); lbIndex=i;

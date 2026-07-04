@@ -215,7 +215,9 @@ html.lenis,html.lenis body{height:auto}
 .refs__marquee{position:relative;overflow:hidden;width:100%;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
   mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
-.refs__track{display:flex;gap:1.1rem;width:max-content;padding:.4rem 0;animation:refscroll 60s linear infinite}
+.refs__track{display:flex;gap:1.1rem;width:max-content;padding:.4rem 0;animation:refscroll 60s linear infinite;
+  will-change:transform;backface-visibility:hidden}
+.refs__track.paused{animation-play-state:paused}
 .refs__marquee:hover .refs__track{animation-play-state:paused}
 .reffig{flex:0 0 auto;width:clamp(240px,28vw,360px);aspect-ratio:4/3;margin:0;border-radius:16px;overflow:hidden;
   box-shadow:var(--shadow-s);cursor:pointer;position:relative;transition:transform .4s var(--ease),box-shadow .4s}
@@ -390,9 +392,10 @@ a.cinfo__val:hover{color:var(--clay)}
 .mixfab svg{width:22px;height:22px}
 .mixfab__count{background:#fff;color:var(--clay);border-radius:100px;min-width:23px;height:23px;display:grid;place-items:center;font-size:.8rem;font-weight:700;padding:0 .35rem}
 .mixfab__count[hidden]{display:none}
-/* one-off attention pulse so the tool gets noticed */
-.mixfab::before{content:"";position:absolute;inset:0;border-radius:100px;box-shadow:0 0 0 0 rgba(176,73,47,.5);animation:fabpulse 2.6s var(--ease) 3}
-@keyframes fabpulse{0%{box-shadow:0 0 0 0 rgba(176,73,47,.5)}70%,100%{box-shadow:0 0 0 16px rgba(176,73,47,0)}}
+/* one-off attention pulse — transform/opacity only, so it stays on the GPU (no scroll jank) */
+.mixfab::before{content:"";position:absolute;inset:-2px;border-radius:100px;border:2px solid rgba(176,73,47,.55);
+  pointer-events:none;transform-origin:center;animation:fabpulse 2.4s var(--ease) 3 both}
+@keyframes fabpulse{0%{opacity:.6;transform:scale(1)}70%,100%{opacity:0;transform:scale(1.4)}}
 .mixer{position:fixed;inset:0;z-index:120;background:rgba(15,12,10,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:24px;animation:fade .3s var(--ease)}
 .mixer[hidden]{display:none}
 .mixer__panel{position:relative;background:#fff;border-radius:var(--radius-lg);width:min(1080px,96vw);height:min(720px,94vh);
