@@ -436,7 +436,34 @@
     if(!$('#mixer').hidden) renderMixer();
   }
   function removeFromMixer(p){ mix=mix.filter(x=>x.p.id!==p.id); if(!mix.length){ mixCat=null; mixShape=null; } genLayout(); updateFab(); renderMixer(); }
-  function clearMixer(){ mix=[]; mixCat=null; mixShape=null; mixLayout=[]; updateFab(); renderMixer(); }
+  function clearMixer(){ mix=[]; mixCat=null; mixShape=null; mixLayout=[]; mixBond='run'; updateFab(); renderMixer(); }
+  // ---- ready-made suggestions for the empty mixer (same category + same shape) ----
+  const SUGGEST_SPECS=[
+    {sf:'brick',cat:'pflaster',want:['terra','rot','braun'],
+      t:{de:'Warmes Pflaster',fr:'Pavés chaleureux',it:'Pavimento caldo',en:'Warm paving'}},
+    {sf:'brick',cat:'pflaster',want:['schwarz','grau','beige'],
+      t:{de:'Anthrazit & Sand',fr:'Anthracite & sable',it:'Antracite & sabbia',en:'Anthracite & sand'}},
+    {sf:'brick',cat:'mauer',want:['terra','rot','beige'],
+      t:{de:'Mediterrane Fassade',fr:'Façade méditerranéenne',it:'Facciata mediterranea',en:'Mediterranean façade'}},
+    {sf:'brick',cat:'mauer',want:['beige','grau','terra'],
+      t:{de:'Sandstein-Töne',fr:'Tons grès',it:'Toni arenaria',en:'Sandstone tones'}},
+    {sf:'hex',cat:'tonplatten',want:['terra','braun','rot'],
+      t:{de:'Terrakotta-Wabe',fr:'Nid d’abeille terracotta',it:'Favo terracotta',en:'Terracotta honeycomb'}},
+    {sf:'square',cat:'tonplatten',want:['terra','braun','beige'],
+      t:{de:'Sanfte Böden',fr:'Sols doux',it:'Pavimenti tenui',en:'Soft floors'}}
+  ];
+  let _suggest=null;
+  function getSuggestions(){
+    if(_suggest) return _suggest;
+    _suggest=SUGGEST_SPECS.map(spec=>{
+      const pool=P.filter(p=>p.cat===spec.cat && shapeFamily(p)===spec.sf);
+      const picked=[];
+      spec.want.forEach(fam=>{ const c=pool.find(p=>p.family===fam && !picked.includes(p)); if(c) picked.push(c); });
+      return {title:spec.t, cat:spec.cat, products:picked};
+    }).filter(s=>s.products.length>=2);
+    return _suggest;
+  }
+  function loadSuggestion(s){ clearMixer(); s.products.forEach(p=>addToMixer(p)); renderMixer(); }
   // evenly-spaced ordered sequence that respects the mix ratio
   function evenSeq(){
     const w=mix.map(m=>m.weight), total=w.reduce((a,b)=>a+b,0)||1, acc=w.map(()=>0), seq=[];
@@ -565,7 +592,7 @@
     $$('#mixList .mixratio__pct').forEach(s=>{ s.textContent=Math.round(mix[+s.dataset.i].weight/total*100)+'%'; }); }
   function updateFab(){ const c=$('#mixCount'); c.textContent=mix.length; c.hidden=mix.length===0;
     $('#mixFabTxt').textContent=MIX().title[lang]; markMixedCards(); }
-  function openMixer(){ $('#mixer').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop(); renderMixer(); refreshWall(); }
+  function openMixer(){ $('#mixer').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop(); renderMixer(); }
   function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); }
   function exportWall(){
     if(!mix.length) return;
@@ -585,7 +612,22 @@
     { const ex=$('#mixExport'); if(ex) ex.textContent=M.export[lang]; }
     $('#mixCatLabel').textContent=mixCat?catName(mixCat):M.hint[lang];
     const prev=$('#mixPreview'), list=$('#mixList');
-    if(!mix.length){ prev.innerHTML=`<div class="mixer__empty">${M.empty[lang]}</div>`; list.innerHTML=''; return; }
+    if(!mix.length){
+      const sugs=getSuggestions();
+      prev.innerHTML=`<div class="mixsuggest">
+        <div class="mixsuggest__h">${M.suggest_title[lang]}</div>
+        <div class="mixsuggest__grid">${sugs.map((s,i)=>`
+          <button class="mixsug" data-i="${i}">
+            <span class="mixsug__row">${s.products.map(p=>`<span class="mixsug__dot" style="background:${p.hex}"></span>`).join('')}</span>
+            <span class="mixsug__t">${s.title[lang]}</span>
+            <span class="mixsug__c">${catName(s.cat)}</span>
+          </button>`).join('')}</div>
+        <p class="mixsuggest__hint">${M.empty[lang]}</p>
+      </div>`;
+      list.innerHTML='';
+      prev.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
+      return;
+    }
     refreshWall();
     const total=mix.reduce((a,m)=>a+m.weight,0)||1;
     const ratio=`<div class="mixgrp"><div class="mixgrp__h">${M.ratio[lang]}</div>${mix.map((m,i)=>`

@@ -199,6 +199,7 @@ window.MIX = {
   added:  {de:"Im Mixer ✓", fr:"Dans le mélangeur ✓", it:"Nel mixer ✓", en:"In mixer ✓"},
   hint:   {de:"Steine derselben Kategorie und Form kombinieren.", fr:"Combinez des pièces de même catégorie et forme.", it:"Combina pezzi di stessa categoria e forma.", en:"Combine pieces of the same category and shape."},
   empty:  {de:"Noch keine Steine im Mixer. Öffne ein Produkt und füge es hinzu.", fr:"Aucune brique dans le mélangeur. Ouvrez un produit et ajoutez-le.", it:"Nessuna pietra nel mixer. Apri un prodotto e aggiungilo.", en:"No bricks yet. Open a product and add it."},
+  suggest_title:{de:"Zum Starten – schöne Kombinationen", fr:"Pour commencer – belles combinaisons", it:"Per iniziare – belle combinazioni", en:"To get started – nice combinations"},
   clear:  {de:"Leeren", fr:"Vider", it:"Svuota", en:"Clear"},
   shuffle:{de:"Neu mischen", fr:"Mélanger", it:"Rimescola", en:"Shuffle"},
   diffcat:{de:"Im Mixer sind nur Produkte derselben Kategorie möglich.", fr:"Seuls les produits de la même catégorie sont possibles.", it:"Solo prodotti della stessa categoria.", en:"Only products of the same category can be mixed."},
