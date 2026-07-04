@@ -1,5 +1,6 @@
 /* ===================== KLINKERBOX · DESIGN SYSTEM ===================== */
 :root{
+  color-scheme: light only;   /* light design — opt out of browser forced dark mode */
   --bg:#fbfaf8;
   --bg-soft:#f3f0ea;
   --ink:#1c1b19;
