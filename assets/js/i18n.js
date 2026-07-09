@@ -19,7 +19,7 @@ window.I18N = {
     refs_eyebrow:"Referenzen", refs_title:"Gebaut, um zu bleiben.",
     refs_videos:"Filme aus der Praxis", refs_projects:"Ausgeführte Projekte",
     contact_eyebrow:"Kontakt", contact_title:"Sprechen wir über Ihr Projekt.",
-    contact_lead:"Persönliche Beratung, Muster und Offerten — direkt vom Fachspezialist und Baustellenbegleiter.",
+    contact_lead:"Persönliche Beratung, Muster und Offerten — direkt vom Fachspezialisten und Baustellenbegleiter.",
     contact_person:"Ansprechpartner", contact_addr:"Adresse",
     contact_phone:"Telefon", contact_hours:"Öffnungszeiten",
     contact_hours_val:"Mo–Fr 7:30–18:00 · Sa/So geschlossen",
