@@ -131,7 +131,7 @@
   function buildStilChips(){
     const group=$('#stilGroup'), wrap=$('#stilChips'); wrap.innerHTML='';
     const stils=[...new Set(pool().map(p=>p.stil).filter(Boolean))];
-    if(state.cat!=='pflaster' || stils.length<=1){ group.hidden=true; state.stil=null; return; }
+    if((state.cat!=='pflaster' && state.cat!=='tonplatten') || stils.length<=1){ group.hidden=true; state.stil=null; return; }
     group.hidden=false;
     // keep a stable order
     ['versickern','historisch','modern'].filter(s=>stils.includes(s)).forEach(s=>{
@@ -185,7 +185,8 @@
       if(state.cat!=='all' && p.cat!==state.cat) return false;
       if(state.sub && p.sub!==state.sub) return false;
       if(state.stil && p.stil!==state.stil) return false;
-      if(state.typ && p.typ!==state.typ) return false;
+      // every Mauerklinker is also available as Riemchen → the Riemchen filter matches all
+      if(state.typ && p.typ!==state.typ && !(state.typ==='Riemchen' && p.cat==='mauer')) return false;
       if(state.color && p.family!==state.color) return false;
       if(state.size!=='all' && !isAllFmt(p) && p.size!==state.size && !(isMulti(p) && p.formats.includes(state.size))) return false;
       if(state.q){
