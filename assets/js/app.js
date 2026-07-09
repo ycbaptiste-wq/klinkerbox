@@ -199,7 +199,7 @@
   const PAGE=12;                       // products per page → less endless scrolling
   let mList=[], mShown=0;
   function makeCard(p,stagger){
-    const c=document.createElement('article'); c.className='card'+(mixHas(p)?' in-mix':'');
+    const c=document.createElement('article'); c.className='card'+(allZoneIds().has(p.id)?' in-mix':'');
     c.dataset.pid=p.id;
     c.innerHTML=`
       <span class="card__mixbadge">${window.MIX.added[lang]}</span>
@@ -233,8 +233,9 @@
     updateMore();
   }
   // reflect current mixer selection on the product cards
-  function markMixedCards(){
-    $$('#grid .card').forEach(c=>{ const on=mix.some(m=>m.p.id===c.dataset.pid); c.classList.toggle('in-mix', on); });
+  function markMixedCards(ids){
+    ids=ids||allZoneIds();
+    $$('#grid .card').forEach(c=>{ c.classList.toggle('in-mix', ids.has(c.dataset.pid)); });
   }
 
   // ===================== LIGHTBOX (product gallery) =====================
@@ -328,6 +329,14 @@
   // ===================== COLOUR MIXER =====================
   let mix=[], mixCat=null, mixShape=null, mixLayout=[], mixSeq=[0], wildOff=[], mixView='wall';
   let mixBond='run', mixOrder=0, mixBed='normal', mixHead='normal', mixJoint='#9d988f';
+  // ---- configurator surfaces: each surface (Fassade/Pflaster/Wohnzimmer) keeps its own mix ----
+  function blankZone(){ return {mix:[],cat:null,shape:null,bond:'run',bed:'normal',head:'normal',joint:'#9d988f',order:0,layout:[],seq:[0],wild:[]}; }
+  let zoneData={facade:blankZone(),paving:blankZone(),interior:blankZone()};
+  let activeZone='facade';
+  function saveActive(){ zoneData[activeZone]={mix,cat:mixCat,shape:mixShape,bond:mixBond,bed:mixBed,head:mixHead,joint:mixJoint,order:mixOrder,layout:mixLayout,seq:mixSeq,wild:wildOff}; }
+  function loadActive(name){ activeZone=name; const z=zoneData[name];
+    mix=z.mix; mixCat=z.cat; mixShape=z.shape; mixBond=z.bond; mixBed=z.bed; mixHead=z.head; mixJoint=z.joint; mixOrder=z.order; mixLayout=z.layout; mixSeq=z.seq; wildOff=z.wild; }
+  saveActive();   // link the initial globals to the facade surface
   const MROWS=20, MCOLS=6, NB=MCOLS+2;          // bricks per row incl. overflow
   const JW={glue:1, narrow:3, normal:6};
   // ---- shape family: only products of the same shape/format can be mixed ----
@@ -434,12 +443,12 @@
       mix=[]; mixCat=null; mixShape=null; mixLayout=[]; mixBond='run';
       toast(p.cat!==mixCat ? MIX().reset[lang] : MIX().resetfmt[lang]);
     }
-    mix.push({p:p, weight:3}); mixCat=p.cat; mixShape=fam; genLayout(); updateFab();
+    mix.push({p:p, weight:3}); mixCat=p.cat; mixShape=fam; genLayout(); saveActive(); updateFab();
     makeBrick(p,()=>{ if(!$('#mixer').hidden) refreshWall(); });
     if(!$('#mixer').hidden) renderMixer();
   }
-  function removeFromMixer(p){ mix=mix.filter(x=>x.p.id!==p.id); if(!mix.length){ mixCat=null; mixShape=null; } genLayout(); updateFab(); renderMixer(); }
-  function clearMixer(){ mix=[]; mixCat=null; mixShape=null; mixLayout=[]; mixBond='run'; mixView='wall'; updateFab(); renderMixer(); }
+  function removeFromMixer(p){ mix=mix.filter(x=>x.p.id!==p.id); if(!mix.length){ mixCat=null; mixShape=null; } genLayout(); saveActive(); updateFab(); renderMixer(); }
+  function clearMixer(){ mix=[]; mixCat=null; mixShape=null; mixLayout=[]; mixBond='run'; saveActive(); updateFab(); renderMixer(); }
   // ---- ready-made suggestions for the empty mixer (same category + same shape) ----
   const SUGGEST_SPECS=[
     {sf:'brick',cat:'pflaster',want:['terra','rot','braun'],
@@ -492,12 +501,13 @@
   }
   // ===== unified canvas wall renderer (preview + export share one code path) =====
   const imgObjCache={};
-  function ensureImgObjs(cb){
+  function ensureImgObjs(cb, products){
+    const list=products||mix.map(m=>m.p);
     const map={}; let pend=0, fired=false;
     const done=()=>{ if(pend===0 && !fired){ fired=true; cb(map); } };
-    mix.forEach(m=>{ const src=brickSrc(m.p), c=imgObjCache[m.p.id];
-      if(c && c.__src===src && c.complete){ map[m.p.id]=c; }
-      else { pend++; const im=new Image(); im.onload=()=>{ im.__src=src; imgObjCache[m.p.id]=im; map[m.p.id]=im; pend--; done(); };
+    list.forEach(p=>{ const src=brickSrc(p), c=imgObjCache[p.id];
+      if(c && c.__src===src && c.complete){ map[p.id]=c; }
+      else { pend++; const im=new Image(); im.onload=()=>{ im.__src=src; imgObjCache[p.id]=im; map[p.id]=im; pend--; done(); };
         im.onerror=()=>{ pend--; done(); }; im.src=src; }
     });
     done();
@@ -596,26 +606,27 @@
     cx.restore();
   }
   function shade(cx,x,y,w,h,c0,c1){ const g=cx.createLinearGradient(x,y,x,y+h); g.addColorStop(0,c0); g.addColorStop(1,c1); cx.fillStyle=g; cx.fillRect(x,y,w,h); }
-  function drawFacade(cx,W,H,tex){
+  function surfFill(cx,tex,scale,fallback){ return (tex && brickPattern(cx,tex,scale)) || fallback; }
+  function drawFacade(cx,W,H,fTex,pTex){
     // sky + ground
     let g=cx.createLinearGradient(0,0,0,H*0.75); g.addColorStop(0,'#bcdcef'); g.addColorStop(1,'#e9f2f6'); cx.fillStyle=g; cx.fillRect(0,0,W,H);
     const groundY=H*0.74; g=cx.createLinearGradient(0,groundY,0,H); g.addColorStop(0,'#aebd86'); g.addColorStop(1,'#93a56c'); cx.fillStyle=g; cx.fillRect(0,groundY,W,H-groundY);
     const midX=W/2, hw=W*0.60, hx0=midX-hw/2, hx1=midX+hw/2, eaveY=H*0.36, wallBot=groundY, apexY=H*0.14;
-    const pScale=Math.min(W,H)/tex.width*0.62;
-    // paved path (foreground) — perspective trapezoid, brick too
+    const tw=(fTex||pTex||{width:400}).width, fS=Math.min(W,H)/((fTex||{width:tw}).width)*0.62, pS=Math.min(W,H)/((pTex||{width:tw}).width)*0.72;
+    // paved path (foreground) — perspective trapezoid, paving mix (or neutral)
     cx.save(); poly(cx,[[midX-W*0.09,wallBot],[midX+W*0.09,wallBot],[midX+W*0.28,H],[midX-W*0.28,H]]); cx.clip();
-    cx.fillStyle=brickPattern(cx,tex,pScale*1.15)||'#8a6a58'; cx.fillRect(0,groundY,W,H-groundY);
+    cx.fillStyle=surfFill(cx,pTex,pS,'#c9c3b7'); cx.fillRect(0,groundY,W,H-groundY);
     shade(cx,0,groundY,W,H-groundY,'rgba(0,0,0,0)','rgba(0,0,0,.28)'); cx.restore();
     // roof (dark) — overhang triangle behind gable
     cx.save(); poly(cx,[[hx0-W*0.05,eaveY+H*0.012],[hx1+W*0.05,eaveY+H*0.012],[midX,apexY-H*0.02]]);
     g=cx.createLinearGradient(0,apexY,0,eaveY); g.addColorStop(0,'#4a4d51'); g.addColorStop(1,'#303234'); cx.fillStyle=g; cx.fill(); cx.restore();
     // gable (brick triangle)
     cx.save(); poly(cx,[[hx0,eaveY],[hx1,eaveY],[midX,apexY]]); cx.clip();
-    cx.fillStyle=brickPattern(cx,tex,pScale)||'#8a6a58'; cx.fillRect(hx0,apexY,hw,eaveY-apexY);
+    cx.fillStyle=surfFill(cx,fTex,fS,'#cfc8ba'); cx.fillRect(hx0,apexY,hw,eaveY-apexY);
     shade(cx,hx0,apexY,hw,eaveY-apexY,'rgba(255,255,255,.05)','rgba(0,0,0,.14)'); cx.restore();
     // facade (brick rectangle)
     cx.save(); cx.beginPath(); cx.rect(hx0,eaveY,hw,wallBot-eaveY); cx.clip();
-    cx.fillStyle=brickPattern(cx,tex,pScale)||'#8a6a58'; cx.fillRect(hx0,eaveY,hw,wallBot-eaveY);
+    cx.fillStyle=surfFill(cx,fTex,fS,'#cfc8ba'); cx.fillRect(hx0,eaveY,hw,wallBot-eaveY);
     // soft ambient occlusion
     const ao=cx.createLinearGradient(hx0,0,hx1,0); ao.addColorStop(0,'rgba(0,0,0,.16)'); ao.addColorStop(.5,'rgba(0,0,0,0)'); ao.addColorStop(1,'rgba(0,0,0,.16)'); cx.fillStyle=ao; cx.fillRect(hx0,eaveY,hw,wallBot-eaveY);
     shade(cx,hx0,eaveY,hw,wallBot-eaveY,'rgba(255,255,255,.06)','rgba(0,0,0,.12)'); cx.restore();
@@ -636,7 +647,7 @@
     cx.fillStyle='rgba(0,0,0,.14)'; cx.beginPath(); cx.ellipse(midX,wallBot+H*0.01,hw*0.62,H*0.02,0,0,7); cx.fill();
   }
   function drawInterior(cx,W,H,tex){
-    const floorY=H*0.68, pScale=Math.min(W,H)/tex.width*0.5;
+    const floorY=H*0.68, pScale=Math.min(W,H)/((tex||{width:400}).width)*0.5;
     // ceiling + back wall base
     cx.fillStyle='#efe7db'; cx.fillRect(0,0,W,floorY);
     // left wall (perspective, plain warm)
@@ -645,7 +656,7 @@
     // back brick wall (accent — Riemchen)
     const bx0=W*0.2, bx1=W, byTop=H*0.1, byBot=floorY-H*0.06;
     cx.save(); cx.beginPath(); cx.rect(bx0,byTop,bx1-bx0,byBot-byTop); cx.clip();
-    cx.fillStyle=brickPattern(cx,tex,pScale)||'#8a6a58'; cx.fillRect(bx0,byTop,bx1-bx0,byBot-byTop);
+    cx.fillStyle=surfFill(cx,tex,pScale,'#cfc8ba'); cx.fillRect(bx0,byTop,bx1-bx0,byBot-byTop);
     // light falloff from left window
     const lf=cx.createLinearGradient(bx0,0,bx1,0); lf.addColorStop(0,'rgba(255,245,225,.28)'); lf.addColorStop(.55,'rgba(0,0,0,0)'); lf.addColorStop(1,'rgba(0,0,0,.2)'); cx.fillStyle=lf; cx.fillRect(bx0,byTop,bx1-bx0,byBot-byTop);
     cx.restore();
@@ -671,8 +682,10 @@
   function roundRect(cx,x,y,w,h,r){ cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.closePath(); }
   function refreshWall(){
     const host=$('#mixPreview'); if(!host) return;
-    if(!mix.length){ host.innerHTML=''; return; }
-    if(!mixLayout.length) genLayout();
+    const sceneView=(mixView==='facade'||mixView==='paving'||mixView==='interior');
+    if(!mix.length && !sceneView){ host.innerHTML=''; return; }
+    saveActive();
+    if(!sceneView && !mixLayout.length) genLayout();
     let cv=host.querySelector('canvas.mixcanvas');
     if(!cv){ host.innerHTML=''; cv=document.createElement('canvas'); cv.className='mixcanvas'; host.appendChild(cv); }
     const W=Math.max(220,host.clientWidth||host.getBoundingClientRect().width|0);
@@ -680,42 +693,68 @@
     const dpr=Math.min(2,window.devicePixelRatio||1);
     cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
     const cx=cv.getContext('2d'); cx.setTransform(dpr,0,0,dpr,0,0);
+    const allP=[]; ['facade','paving','interior'].forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
+    mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
     ensureImgObjs(map=>{
       cx.setTransform(dpr,0,0,dpr,0,0);
-      if(mixView==='wall'){ paintWall(cx,W,H,map); return; }
+      if(!sceneView){ paintWall(cx,W,H,map); return; }
       const TS=Math.round(Math.max(W,H)*0.9);
-      const tex=document.createElement('canvas'); tex.width=TS; tex.height=TS;
-      paintWall(tex.getContext('2d'),TS,TS,map);
-      if(mixView==='facade') drawFacade(cx,W,H,tex); else drawInterior(cx,W,H,tex);
-    });
+      if(mixView==='interior'){ drawInterior(cx,W,H,zoneTex('interior',TS,map)); return; }
+      drawFacade(cx,W,H,zoneTex('facade',TS,map),zoneTex('paving',TS,map));
+    }, allP);
+  }
+  // render one surface's mix to an offscreen texture (temporarily swaps the active state)
+  function zoneTex(name,size,map){
+    const z=zoneData[name]; if(!z.mix.length) return null;
+    const B=[mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff];
+    let tex=null;
+    try{
+      mix=z.mix;mixCat=z.cat;mixShape=z.shape;mixBond=z.bond;mixBed=z.bed;mixHead=z.head;mixJoint=z.joint;mixOrder=z.order;mixLayout=z.layout;mixSeq=z.seq;wildOff=z.wild;
+      if(!mixLayout.length){ genLayout(); z.layout=mixLayout; z.seq=mixSeq; z.wild=wildOff; }
+      tex=document.createElement('canvas'); tex.width=size; tex.height=size;
+      paintWall(tex.getContext('2d'),size,size,map);
+    } finally {
+      [mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff]=B;   // always restore active zone
+    }
+    return tex;
+  }
+  const VIEW_ZONE={facade:'facade',paving:'paving',interior:'interior'};
+  function switchView(v){
+    saveActive();
+    if(VIEW_ZONE[v] && VIEW_ZONE[v]!==activeZone) loadActive(VIEW_ZONE[v]);
+    mixView=v; renderMixer();
   }
   function buildViewToggle(){
     const el=$('#mixView'); if(!el) return;
-    if(!mix.length){ el.hidden=true; el.innerHTML=''; return; }
+    const anyMix=zoneData.facade.mix.length||zoneData.paving.mix.length||zoneData.interior.mix.length||mix.length;
+    if(!anyMix){ el.hidden=true; el.innerHTML=''; return; }
     const M=MIX();
-    const opts=[['wall',M.view_wall[lang]],['facade',M.view_facade[lang]],['interior',M.view_interior[lang]]];
+    const opts=[['wall',M.view_wall[lang]],['facade',M.view_facade[lang]],['paving',M.view_paving[lang]],['interior',M.view_interior[lang]]];
     el.hidden=false;
     el.innerHTML=opts.map(o=>`<button class="mixview__b${o[0]===mixView?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('');
-    el.querySelectorAll('.mixview__b').forEach(b=>b.onclick=()=>{ mixView=b.dataset.v;
-      el.querySelectorAll('.mixview__b').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWall(); });
+    el.querySelectorAll('.mixview__b').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
   }
   function updatePcts(){ const total=mix.reduce((a,m)=>a+m.weight,0)||1;
     $$('#mixList .mixratio__pct').forEach(s=>{ s.textContent=Math.round(mix[+s.dataset.i].weight/total*100)+'%'; }); }
-  function updateFab(){ const c=$('#mixCount'); c.textContent=mix.length; c.hidden=mix.length===0;
-    $('#mixFabTxt').textContent=MIX().title[lang]; markMixedCards(); }
+  function allZoneIds(){ saveActive(); const s=new Set(); ['facade','paving','interior'].forEach(z=>zoneData[z].mix.forEach(m=>s.add(m.p.id))); return s; }
+  function updateFab(){ const ids=allZoneIds(), n=ids.size, c=$('#mixCount'); c.textContent=n; c.hidden=n===0;
+    $('#mixFabTxt').textContent=MIX().title[lang]; markMixedCards(ids); }
   function openMixer(){ $('#mixer').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop(); renderMixer(); }
   function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); }
   function exportWall(){
-    if(!mix.length) return;
+    saveActive();
     const fam=mixShape||'brick';
-    const scene=(mixView==='facade'||mixView==='interior');
+    const scene=(mixView==='facade'||mixView==='paving'||mixView==='interior');
+    if(!mix.length && !scene) return;
     const CW=1600, CH=scene?1120:((fam==='hex'||fam==='oct'||fam==='square')?1600:1150);
     const cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
     const cx=cv.getContext('2d');
+    const allP=[]; ['facade','paving','interior'].forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
+    mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
     ensureImgObjs(map=>{
-      if(scene){ const TS=Math.round(Math.max(CW,CH)*0.9); const tex=document.createElement('canvas'); tex.width=TS; tex.height=TS;
-        paintWall(tex.getContext('2d'),TS,TS,map);
-        if(mixView==='facade') drawFacade(cx,CW,CH,tex); else drawInterior(cx,CW,CH,tex);
+      if(scene){ const TS=Math.round(Math.max(CW,CH)*0.9);
+        if(mixView==='interior') drawInterior(cx,CW,CH,zoneTex('interior',TS,map));
+        else drawFacade(cx,CW,CH,zoneTex('facade',TS,map),zoneTex('paving',TS,map));
       } else paintWall(cx,CW,CH,map);
       cv.toBlob(bl=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='klinkerbox-mischung.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); },'image/png'); });
   }
@@ -726,21 +765,27 @@
     $('#mixTitle').textContent=M.title[lang];
     $('#mixShuffle').textContent=M.shuffle[lang]; $('#mixClear').textContent=M.clear[lang];
     { const ex=$('#mixExport'); if(ex) ex.textContent=M.export[lang]; }
-    $('#mixCatLabel').textContent=mixCat?catName(mixCat):M.hint[lang];
+    const sceneView=(mixView==='facade'||mixView==='paving'||mixView==='interior');
+    const surfName=(mixView==='wall')? '' : (M['view_'+mixView]?M['view_'+mixView][lang]:'');
+    $('#mixCatLabel').textContent=(sceneView?surfName+(mixCat?' · ':''):'')+(mixCat?catName(mixCat):(sceneView?'':M.hint[lang]));
     buildViewToggle();
     const prev=$('#mixPreview'), list=$('#mixList');
+    const sugCards=sugs=>`<div class="mixsuggest__grid">${sugs.map((s,i)=>`
+      <button class="mixsug" data-i="${i}">
+        <span class="mixsug__row">${s.products.map(p=>`<span class="mixsug__dot" style="background:${p.hex}"></span>`).join('')}</span>
+        <span class="mixsug__t">${s.title[lang]}</span>
+        <span class="mixsug__c">${catName(s.cat)}</span>
+      </button>`).join('')}</div>`;
     if(!mix.length){
       const sugs=getSuggestions();
-      prev.innerHTML=`<div class="mixsuggest">
-        <div class="mixsuggest__h">${M.suggest_title[lang]}</div>
-        <div class="mixsuggest__grid">${sugs.map((s,i)=>`
-          <button class="mixsug" data-i="${i}">
-            <span class="mixsug__row">${s.products.map(p=>`<span class="mixsug__dot" style="background:${p.hex}"></span>`).join('')}</span>
-            <span class="mixsug__t">${s.title[lang]}</span>
-            <span class="mixsug__c">${catName(s.cat)}</span>
-          </button>`).join('')}</div>
-        <p class="mixsuggest__hint">${M.empty[lang]}</p>
-      </div>`;
+      if(sceneView){
+        // keep the building/room visible; prompt to fill this surface from the side panel
+        refreshWall();
+        list.innerHTML=`<div class="mixgrp"><div class="mixgrp__h">${surfName} · ${M.surf_add[lang]}</div>${sugCards(sugs)}</div>`;
+        list.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
+        return;
+      }
+      prev.innerHTML=`<div class="mixsuggest"><div class="mixsuggest__h">${M.suggest_title[lang]}</div>${sugCards(sugs)}<p class="mixsuggest__hint">${M.empty[lang]}</p></div>`;
       list.innerHTML='';
       prev.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
       return;
