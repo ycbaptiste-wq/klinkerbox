@@ -196,9 +196,10 @@ window.SUBS = {
 window.MIX = {
   title:  {de:"Farbmixer", fr:"Mélangeur de couleurs", it:"Mixer colori", en:"Colour mixer"},
   view_wall:    {de:"Muster", fr:"Motif", it:"Motivo", en:"Pattern"},
-  view_facade:  {de:"Fassade", fr:"Façade", it:"Facciata", en:"Façade"},
-  view_paving:  {de:"Pflaster", fr:"Pavage", it:"Pavimentazione", en:"Paving"},
-  view_interior:{de:"Wohnzimmer", fr:"Salon", it:"Soggiorno", en:"Living room"},
+  view_ext:     {de:"Aussen", fr:"Extérieur", it:"Esterno", en:"Exterior"},
+  view_int:     {de:"Innen", fr:"Intérieur", it:"Interno", en:"Interior"},
+  surf_facade:  {de:"Fassade", fr:"Façade", it:"Facciata", en:"Façade"},
+  surf_floor:   {de:"Boden", fr:"Sol", it:"Pavimento", en:"Floor"},
   surf_add:     {de:"Steine für diese Fläche wählen – oder eine Kombination:", fr:"Choisissez des pièces pour cette surface – ou une combinaison :", it:"Scegli pezzi per questa superficie – o una combinazione:", en:"Pick pieces for this surface – or a combination:"},
   add:    {de:"Zum Mixer", fr:"Ajouter au mélangeur", it:"Aggiungi al mixer", en:"Add to mixer"},
   added:  {de:"Im Mixer ✓", fr:"Dans le mélangeur ✓", it:"Nel mixer ✓", en:"In mixer ✓"},

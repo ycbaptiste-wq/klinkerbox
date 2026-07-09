@@ -329,10 +329,13 @@
   // ===================== COLOUR MIXER =====================
   let mix=[], mixCat=null, mixShape=null, mixLayout=[], mixSeq=[0], wildOff=[], mixView='wall';
   let mixBond='run', mixOrder=0, mixBed='normal', mixHead='normal', mixJoint='#9d988f';
-  // ---- configurator surfaces: each surface (Fassade/Pflaster/Wohnzimmer) keeps its own mix ----
+  // ---- configurator surfaces: Fassade (Mauerklinker) + Boden (Pflaster/Tonplatten), inside & out ----
   function blankZone(){ return {mix:[],cat:null,shape:null,bond:'run',bed:'normal',head:'normal',joint:'#9d988f',order:0,layout:[],seq:[0],wild:[]}; }
-  let zoneData={facade:blankZone(),paving:blankZone(),interior:blankZone()};
-  let activeZone='facade';
+  let zoneData={exterior_facade:blankZone(),exterior_floor:blankZone(),interior_facade:blankZone(),interior_floor:blankZone()};
+  let activeZone='exterior_facade', mixScene='exterior', mixSurface='facade';
+  const sceneNow=()=> (mixView==='interior')?'interior':(mixView==='exterior')?'exterior':mixScene;
+  const zoneKey=(scene,surf)=> scene+'_'+surf;
+  const surfaceOf=cat=> (cat==='mauer')?'facade':'floor';   // Mauerklinker → Fassade · Pflaster/Tonplatten → Boden
   function saveActive(){ zoneData[activeZone]={mix,cat:mixCat,shape:mixShape,bond:mixBond,bed:mixBed,head:mixHead,joint:mixJoint,order:mixOrder,layout:mixLayout,seq:mixSeq,wild:wildOff}; }
   function loadActive(name){ activeZone=name; const z=zoneData[name];
     mix=z.mix; mixCat=z.cat; mixShape=z.shape; mixBond=z.bond; mixBed=z.bed; mixHead=z.head; mixJoint=z.joint; mixOrder=z.order; mixLayout=z.layout; mixSeq=z.seq; wildOff=z.wild; }
@@ -437,6 +440,9 @@
     t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2600);
   }
   function addToMixer(p){
+    // route to the right surface: Mauerklinker → Fassade · Pflaster/Tonplatten → Boden
+    const surf=surfaceOf(p.cat), target=zoneKey(sceneNow(),surf);
+    if(target!==activeZone){ saveActive(); loadActive(target); mixSurface=surf; }
     if(mixHas(p)){ return; }                       // each product only once
     const fam=shapeFamily(p);
     if(mix.length && (p.cat!==mixCat || fam!==mixShape)){   // other category or shape → reset
@@ -474,6 +480,11 @@
       return {title:spec.t, cat:spec.cat, products:picked};
     }).filter(s=>s.products.length>=2);
     return _suggest;
+  }
+  // suggestions valid for the active surface (Fassade → Mauerklinker · Boden → Pflaster/Tonplatten)
+  function surfSuggestions(){
+    const cats = mixSurface==='facade' ? ['mauer'] : ['pflaster','tonplatten'];
+    return getSuggestions().filter(s=>cats.includes(s.cat));
   }
   function loadSuggestion(s){ clearMixer(); s.products.forEach(p=>addToMixer(p)); renderMixer(); }
   // evenly-spaced ordered sequence that respects the mix ratio
@@ -646,8 +657,9 @@
     // house drop shadow
     cx.fillStyle='rgba(0,0,0,.14)'; cx.beginPath(); cx.ellipse(midX,wallBot+H*0.01,hw*0.62,H*0.02,0,0,7); cx.fill();
   }
-  function drawInterior(cx,W,H,tex){
+  function drawInterior(cx,W,H,tex,floorTex){
     const floorY=H*0.68, pScale=Math.min(W,H)/((tex||{width:400}).width)*0.5;
+    const flScale=Math.min(W,H)/((floorTex||{width:400}).width)*0.6;
     // ceiling + back wall base
     cx.fillStyle='#efe7db'; cx.fillRect(0,0,W,floorY);
     // left wall (perspective, plain warm)
@@ -660,10 +672,11 @@
     // light falloff from left window
     const lf=cx.createLinearGradient(bx0,0,bx1,0); lf.addColorStop(0,'rgba(255,245,225,.28)'); lf.addColorStop(.55,'rgba(0,0,0,0)'); lf.addColorStop(1,'rgba(0,0,0,.2)'); cx.fillStyle=lf; cx.fillRect(bx0,byTop,bx1-bx0,byBot-byTop);
     cx.restore();
-    // floor (wood, perspective)
-    let fg=cx.createLinearGradient(0,floorY,0,H); fg.addColorStop(0,'#b99a76'); fg.addColorStop(1,'#8f7255'); cx.fillStyle=fg; cx.fillRect(0,floorY,W,H-floorY);
-    cx.strokeStyle='rgba(0,0,0,.10)'; cx.lineWidth=1;
-    for(let i=1;i<7;i++){ const y=floorY+(H-floorY)*(i/7); cx.beginPath(); cx.moveTo(0,y); cx.lineTo(W,y); cx.stroke(); }
+    // floor (Boden mix — Pflaster/Tonplatten — or warm neutral)
+    cx.save(); cx.beginPath(); cx.rect(0,floorY,W,H-floorY); cx.clip();
+    cx.fillStyle=surfFill(cx,floorTex,flScale,'#b99a76'); cx.fillRect(0,floorY,W,H-floorY);
+    const fsh=cx.createLinearGradient(0,floorY,0,H); fsh.addColorStop(0,'rgba(0,0,0,.22)'); fsh.addColorStop(.4,'rgba(0,0,0,0)'); fsh.addColorStop(1,'rgba(255,255,255,.06)'); cx.fillStyle=fsh; cx.fillRect(0,floorY,W,H-floorY);
+    cx.restore();
     // large framed picture on brick wall
     const px=bx0+(bx1-bx0)*0.5, pw=(bx1-bx0)*0.26, ph=(byBot-byTop)*0.42, py=byTop+(byBot-byTop)*0.16;
     cx.fillStyle='#1c1b19'; cx.fillRect(px,py,pw,ph); cx.fillStyle='#c9b79a'; cx.fillRect(px+pw*0.06,py+ph*0.06,pw*0.88,ph*0.88);
@@ -682,7 +695,7 @@
   function roundRect(cx,x,y,w,h,r){ cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.closePath(); }
   function refreshWall(){
     const host=$('#mixPreview'); if(!host) return;
-    const sceneView=(mixView==='facade'||mixView==='paving'||mixView==='interior');
+    const sceneView=(mixView==='exterior'||mixView==='interior');
     if(!mix.length && !sceneView){ host.innerHTML=''; return; }
     saveActive();
     if(!sceneView && !mixLayout.length) genLayout();
@@ -693,14 +706,15 @@
     const dpr=Math.min(2,window.devicePixelRatio||1);
     cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
     const cx=cv.getContext('2d'); cx.setTransform(dpr,0,0,dpr,0,0);
-    const allP=[]; ['facade','paving','interior'].forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
+    const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
     mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
     ensureImgObjs(map=>{
       cx.setTransform(dpr,0,0,dpr,0,0);
       if(!sceneView){ paintWall(cx,W,H,map); return; }
-      const TS=Math.round(Math.max(W,H)*0.9);
-      if(mixView==='interior'){ drawInterior(cx,W,H,zoneTex('interior',TS,map)); return; }
-      drawFacade(cx,W,H,zoneTex('facade',TS,map),zoneTex('paving',TS,map));
+      const TS=Math.round(Math.max(W,H)*0.9), sc=(mixView==='interior')?'interior':'exterior';
+      const facadeTex=zoneTex(zoneKey(sc,'facade'),TS,map), floorTex=zoneTex(zoneKey(sc,'floor'),TS,map);
+      if(mixView==='interior') drawInterior(cx,W,H,facadeTex,floorTex);
+      else drawFacade(cx,W,H,facadeTex,floorTex);
     }, allP);
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -718,25 +732,36 @@
     }
     return tex;
   }
-  const VIEW_ZONE={facade:'facade',paving:'paving',interior:'interior'};
   function switchView(v){
     saveActive();
-    if(VIEW_ZONE[v] && VIEW_ZONE[v]!==activeZone) loadActive(VIEW_ZONE[v]);
-    mixView=v; renderMixer();
+    if(v!=='wall') mixScene=(v==='interior')?'interior':'exterior';
+    mixView=v;
+    loadActive(zoneKey(sceneNow(),mixSurface));
+    renderMixer();
+  }
+  function switchSurface(s){
+    saveActive(); mixSurface=s;
+    loadActive(zoneKey(sceneNow(),s));
+    renderMixer();
   }
   function buildViewToggle(){
     const el=$('#mixView'); if(!el) return;
-    const anyMix=zoneData.facade.mix.length||zoneData.paving.mix.length||zoneData.interior.mix.length||mix.length;
+    const anyMix=Object.keys(zoneData).some(z=>zoneData[z].mix.length)||mix.length;
     if(!anyMix){ el.hidden=true; el.innerHTML=''; return; }
     const M=MIX();
-    const opts=[['wall',M.view_wall[lang]],['facade',M.view_facade[lang]],['paving',M.view_paving[lang]],['interior',M.view_interior[lang]]];
-    el.hidden=false;
-    el.innerHTML=opts.map(o=>`<button class="mixview__b${o[0]===mixView?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('');
-    el.querySelectorAll('.mixview__b').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
+    const views=[['wall',M.view_wall[lang]],['exterior',M.view_ext[lang]],['interior',M.view_int[lang]]];
+    let html=`<div class="mixview__row">${views.map(o=>`<button class="mixview__b${o[0]===mixView?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
+    if(mixView==='exterior'||mixView==='interior'){
+      const surfs=[['facade',M.surf_facade[lang]],['floor',M.surf_floor[lang]]];
+      html+=`<div class="mixview__row mixview__row--sub">${surfs.map(o=>`<button class="mixview__b mixview__b--sm${o[0]===mixSurface?' is-active':''}" data-s="${o[0]}">${o[1]}</button>`).join('')}</div>`;
+    }
+    el.hidden=false; el.innerHTML=html;
+    el.querySelectorAll('.mixview__b[data-v]').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
+    el.querySelectorAll('.mixview__b[data-s]').forEach(b=>b.onclick=()=>switchSurface(b.dataset.s));
   }
   function updatePcts(){ const total=mix.reduce((a,m)=>a+m.weight,0)||1;
     $$('#mixList .mixratio__pct').forEach(s=>{ s.textContent=Math.round(mix[+s.dataset.i].weight/total*100)+'%'; }); }
-  function allZoneIds(){ saveActive(); const s=new Set(); ['facade','paving','interior'].forEach(z=>zoneData[z].mix.forEach(m=>s.add(m.p.id))); return s; }
+  function allZoneIds(){ saveActive(); const s=new Set(); Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>s.add(m.p.id))); return s; }
   function updateFab(){ const ids=allZoneIds(), n=ids.size, c=$('#mixCount'); c.textContent=n; c.hidden=n===0;
     $('#mixFabTxt').textContent=MIX().title[lang]; markMixedCards(ids); }
   function openMixer(){ $('#mixer').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop(); renderMixer(); }
@@ -744,17 +769,17 @@
   function exportWall(){
     saveActive();
     const fam=mixShape||'brick';
-    const scene=(mixView==='facade'||mixView==='paving'||mixView==='interior');
+    const scene=(mixView==='exterior'||mixView==='interior');
     if(!mix.length && !scene) return;
     const CW=1600, CH=scene?1120:((fam==='hex'||fam==='oct'||fam==='square')?1600:1150);
     const cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
     const cx=cv.getContext('2d');
-    const allP=[]; ['facade','paving','interior'].forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
+    const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
     mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
     ensureImgObjs(map=>{
-      if(scene){ const TS=Math.round(Math.max(CW,CH)*0.9);
-        if(mixView==='interior') drawInterior(cx,CW,CH,zoneTex('interior',TS,map));
-        else drawFacade(cx,CW,CH,zoneTex('facade',TS,map),zoneTex('paving',TS,map));
+      if(scene){ const TS=Math.round(Math.max(CW,CH)*0.9), sc=(mixView==='interior')?'interior':'exterior';
+        const fT=zoneTex(zoneKey(sc,'facade'),TS,map), flT=zoneTex(zoneKey(sc,'floor'),TS,map);
+        if(mixView==='interior') drawInterior(cx,CW,CH,fT,flT); else drawFacade(cx,CW,CH,fT,flT);
       } else paintWall(cx,CW,CH,map);
       cv.toBlob(bl=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='klinkerbox-mischung.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); },'image/png'); });
   }
@@ -765,8 +790,8 @@
     $('#mixTitle').textContent=M.title[lang];
     $('#mixShuffle').textContent=M.shuffle[lang]; $('#mixClear').textContent=M.clear[lang];
     { const ex=$('#mixExport'); if(ex) ex.textContent=M.export[lang]; }
-    const sceneView=(mixView==='facade'||mixView==='paving'||mixView==='interior');
-    const surfName=(mixView==='wall')? '' : (M['view_'+mixView]?M['view_'+mixView][lang]:'');
+    const sceneView=(mixView==='exterior'||mixView==='interior');
+    const surfName=sceneView? (M[mixView==='interior'?'view_int':'view_ext'][lang]+' · '+M[mixSurface==='facade'?'surf_facade':'surf_floor'][lang]) : '';
     $('#mixCatLabel').textContent=(sceneView?surfName+(mixCat?' · ':''):'')+(mixCat?catName(mixCat):(sceneView?'':M.hint[lang]));
     buildViewToggle();
     const prev=$('#mixPreview'), list=$('#mixList');
@@ -777,7 +802,7 @@
         <span class="mixsug__c">${catName(s.cat)}</span>
       </button>`).join('')}</div>`;
     if(!mix.length){
-      const sugs=getSuggestions();
+      const sugs=sceneView?surfSuggestions():getSuggestions();
       if(sceneView){
         // keep the building/room visible; prompt to fill this surface from the side panel
         refreshWall();
