@@ -326,7 +326,7 @@
   }
 
   // ===================== COLOUR MIXER =====================
-  let mix=[], mixCat=null, mixShape=null, mixLayout=[], mixSeq=[0], wildOff=[];
+  let mix=[], mixCat=null, mixShape=null, mixLayout=[], mixSeq=[0], wildOff=[], mixView='wall';
   let mixBond='run', mixOrder=0, mixBed='normal', mixHead='normal', mixJoint='#9d988f';
   const MROWS=20, MCOLS=6, NB=MCOLS+2;          // bricks per row incl. overflow
   const JW={glue:1, narrow:3, normal:6};
@@ -439,7 +439,7 @@
     if(!$('#mixer').hidden) renderMixer();
   }
   function removeFromMixer(p){ mix=mix.filter(x=>x.p.id!==p.id); if(!mix.length){ mixCat=null; mixShape=null; } genLayout(); updateFab(); renderMixer(); }
-  function clearMixer(){ mix=[]; mixCat=null; mixShape=null; mixLayout=[]; mixBond='run'; updateFab(); renderMixer(); }
+  function clearMixer(){ mix=[]; mixCat=null; mixShape=null; mixLayout=[]; mixBond='run'; mixView='wall'; updateFab(); renderMixer(); }
   // ---- ready-made suggestions for the empty mixer (same category + same shape) ----
   const SUGGEST_SPECS=[
     {sf:'brick',cat:'pflaster',want:['terra','rot','braun'],
@@ -578,6 +578,97 @@
     for(let r=0;r<rows;r++) for(let c=0;c<n;c++){ const {im,b}=pickCell(map,c,r);
       drawUnit(cx,im,gap+c*(tw+gap),gap+r*(tw+gap),tw,tw,b,poly); }
   }
+  // ---- CONFIGURATOR SCENES: apply the live klinker mix to a building ----
+  function brickPattern(cx,tex,scale){
+    const pat=cx.createPattern(tex,'repeat');
+    if(pat && pat.setTransform){ try{ pat.setTransform(new DOMMatrix([scale,0,0,scale,0,0])); }catch(e){} }
+    return pat;
+  }
+  const poly=(cx,pts)=>{ cx.beginPath(); pts.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1])); cx.closePath(); };
+  function window2(cx,x,y,w,h,arch){
+    cx.save();
+    cx.fillStyle='#efe9df'; cx.fillRect(x-w*0.06,y-h*0.06,w*1.12,h*1.12);            // frame
+    const g=cx.createLinearGradient(x,y,x+w,y+h); g.addColorStop(0,'#7c93a3'); g.addColorStop(.5,'#aebecb'); g.addColorStop(1,'#5f7585');
+    cx.fillStyle=g; cx.fillRect(x,y,w,h);
+    cx.strokeStyle='#efe9df'; cx.lineWidth=Math.max(2,w*0.06);
+    cx.beginPath(); cx.moveTo(x+w/2,y); cx.lineTo(x+w/2,y+h); cx.moveTo(x,y+h/2); cx.lineTo(x+w,y+h/2); cx.stroke();
+    cx.strokeStyle='rgba(0,0,0,.18)'; cx.lineWidth=1; cx.strokeRect(x,y,w,h);
+    cx.restore();
+  }
+  function shade(cx,x,y,w,h,c0,c1){ const g=cx.createLinearGradient(x,y,x,y+h); g.addColorStop(0,c0); g.addColorStop(1,c1); cx.fillStyle=g; cx.fillRect(x,y,w,h); }
+  function drawFacade(cx,W,H,tex){
+    // sky + ground
+    let g=cx.createLinearGradient(0,0,0,H*0.75); g.addColorStop(0,'#bcdcef'); g.addColorStop(1,'#e9f2f6'); cx.fillStyle=g; cx.fillRect(0,0,W,H);
+    const groundY=H*0.74; g=cx.createLinearGradient(0,groundY,0,H); g.addColorStop(0,'#aebd86'); g.addColorStop(1,'#93a56c'); cx.fillStyle=g; cx.fillRect(0,groundY,W,H-groundY);
+    const midX=W/2, hw=W*0.60, hx0=midX-hw/2, hx1=midX+hw/2, eaveY=H*0.36, wallBot=groundY, apexY=H*0.14;
+    const pScale=Math.min(W,H)/tex.width*0.62;
+    // paved path (foreground) — perspective trapezoid, brick too
+    cx.save(); poly(cx,[[midX-W*0.09,wallBot],[midX+W*0.09,wallBot],[midX+W*0.28,H],[midX-W*0.28,H]]); cx.clip();
+    cx.fillStyle=brickPattern(cx,tex,pScale*1.15)||'#8a6a58'; cx.fillRect(0,groundY,W,H-groundY);
+    shade(cx,0,groundY,W,H-groundY,'rgba(0,0,0,0)','rgba(0,0,0,.28)'); cx.restore();
+    // roof (dark) — overhang triangle behind gable
+    cx.save(); poly(cx,[[hx0-W*0.05,eaveY+H*0.012],[hx1+W*0.05,eaveY+H*0.012],[midX,apexY-H*0.02]]);
+    g=cx.createLinearGradient(0,apexY,0,eaveY); g.addColorStop(0,'#4a4d51'); g.addColorStop(1,'#303234'); cx.fillStyle=g; cx.fill(); cx.restore();
+    // gable (brick triangle)
+    cx.save(); poly(cx,[[hx0,eaveY],[hx1,eaveY],[midX,apexY]]); cx.clip();
+    cx.fillStyle=brickPattern(cx,tex,pScale)||'#8a6a58'; cx.fillRect(hx0,apexY,hw,eaveY-apexY);
+    shade(cx,hx0,apexY,hw,eaveY-apexY,'rgba(255,255,255,.05)','rgba(0,0,0,.14)'); cx.restore();
+    // facade (brick rectangle)
+    cx.save(); cx.beginPath(); cx.rect(hx0,eaveY,hw,wallBot-eaveY); cx.clip();
+    cx.fillStyle=brickPattern(cx,tex,pScale)||'#8a6a58'; cx.fillRect(hx0,eaveY,hw,wallBot-eaveY);
+    // soft ambient occlusion
+    const ao=cx.createLinearGradient(hx0,0,hx1,0); ao.addColorStop(0,'rgba(0,0,0,.16)'); ao.addColorStop(.5,'rgba(0,0,0,0)'); ao.addColorStop(1,'rgba(0,0,0,.16)'); cx.fillStyle=ao; cx.fillRect(hx0,eaveY,hw,wallBot-eaveY);
+    shade(cx,hx0,eaveY,hw,wallBot-eaveY,'rgba(255,255,255,.06)','rgba(0,0,0,.12)'); cx.restore();
+    // eave fascia + ridge line
+    cx.fillStyle='#2c2e30'; cx.fillRect(hx0-W*0.02,eaveY-H*0.014,hw+W*0.04,H*0.02);
+    // windows + door
+    const ww=hw*0.19, wh=(wallBot-eaveY)*0.26, uY=eaveY+(wallBot-eaveY)*0.12, lY=eaveY+(wallBot-eaveY)*0.52;
+    window2(cx,hx0+hw*0.13,uY,ww,wh); window2(cx,hx1-hw*0.13-ww,uY,ww,wh);
+    window2(cx,hx0+hw*0.13,lY,ww,wh);
+    // door
+    const dw=hw*0.2, dh=(wallBot-eaveY)*0.42, dx=hx1-hw*0.13-dw, dy=wallBot-dh;
+    cx.fillStyle='#efe9df'; cx.fillRect(dx-dw*0.08,dy-dh*0.03,dw*1.16,dh*1.03);
+    g=cx.createLinearGradient(dx,dy,dx+dw,dy); g.addColorStop(0,'#2f3d3a'); g.addColorStop(1,'#243230'); cx.fillStyle=g; cx.fillRect(dx,dy,dw,dh);
+    cx.fillStyle='rgba(255,255,255,.7)'; cx.fillRect(dx+dw*0.72,dy+dh*0.45,dw*0.05,dh*0.12);
+    // gable vent
+    window2(cx,midX-ww*0.4,apexY+(eaveY-apexY)*0.4,ww*0.8,wh*0.5);
+    // house drop shadow
+    cx.fillStyle='rgba(0,0,0,.14)'; cx.beginPath(); cx.ellipse(midX,wallBot+H*0.01,hw*0.62,H*0.02,0,0,7); cx.fill();
+  }
+  function drawInterior(cx,W,H,tex){
+    const floorY=H*0.68, pScale=Math.min(W,H)/tex.width*0.5;
+    // ceiling + back wall base
+    cx.fillStyle='#efe7db'; cx.fillRect(0,0,W,floorY);
+    // left wall (perspective, plain warm)
+    const vpX=W*0.5;
+    cx.save(); poly(cx,[[0,0],[W*0.2,H*0.12],[W*0.2,floorY-H*0.06],[0,floorY]]); const gg=cx.createLinearGradient(0,0,W*0.2,0); gg.addColorStop(0,'#d8cebd'); gg.addColorStop(1,'#e8e0d2'); cx.fillStyle=gg; cx.fill(); cx.restore();
+    // back brick wall (accent — Riemchen)
+    const bx0=W*0.2, bx1=W, byTop=H*0.1, byBot=floorY-H*0.06;
+    cx.save(); cx.beginPath(); cx.rect(bx0,byTop,bx1-bx0,byBot-byTop); cx.clip();
+    cx.fillStyle=brickPattern(cx,tex,pScale)||'#8a6a58'; cx.fillRect(bx0,byTop,bx1-bx0,byBot-byTop);
+    // light falloff from left window
+    const lf=cx.createLinearGradient(bx0,0,bx1,0); lf.addColorStop(0,'rgba(255,245,225,.28)'); lf.addColorStop(.55,'rgba(0,0,0,0)'); lf.addColorStop(1,'rgba(0,0,0,.2)'); cx.fillStyle=lf; cx.fillRect(bx0,byTop,bx1-bx0,byBot-byTop);
+    cx.restore();
+    // floor (wood, perspective)
+    let fg=cx.createLinearGradient(0,floorY,0,H); fg.addColorStop(0,'#b99a76'); fg.addColorStop(1,'#8f7255'); cx.fillStyle=fg; cx.fillRect(0,floorY,W,H-floorY);
+    cx.strokeStyle='rgba(0,0,0,.10)'; cx.lineWidth=1;
+    for(let i=1;i<7;i++){ const y=floorY+(H-floorY)*(i/7); cx.beginPath(); cx.moveTo(0,y); cx.lineTo(W,y); cx.stroke(); }
+    // large framed picture on brick wall
+    const px=bx0+(bx1-bx0)*0.5, pw=(bx1-bx0)*0.26, ph=(byBot-byTop)*0.42, py=byTop+(byBot-byTop)*0.16;
+    cx.fillStyle='#1c1b19'; cx.fillRect(px,py,pw,ph); cx.fillStyle='#c9b79a'; cx.fillRect(px+pw*0.06,py+ph*0.06,pw*0.88,ph*0.88);
+    // hanging pendant lamp
+    cx.strokeStyle='#333'; cx.lineWidth=2; cx.beginPath(); cx.moveTo(W*0.62,byTop); cx.lineTo(W*0.62,H*0.3); cx.stroke();
+    cx.fillStyle='#2b2a28'; cx.beginPath(); cx.moveTo(W*0.585,H*0.34); cx.lineTo(W*0.655,H*0.34); cx.lineTo(W*0.63,H*0.3); cx.lineTo(W*0.61,H*0.3); cx.closePath(); cx.fill();
+    // sofa
+    const sfy=floorY-H*0.02, sfx=W*0.16, sfw=W*0.44;
+    cx.fillStyle='rgba(0,0,0,.13)'; cx.beginPath(); cx.ellipse(sfx+sfw/2,floorY+H*0.12,sfw*0.56,H*0.03,0,0,7); cx.fill();
+    cx.fillStyle='#8d6f63'; roundRect(cx,sfx,sfy-H*0.16,sfw,H*0.18,12); cx.fill();
+    cx.fillStyle='#a2867a'; roundRect(cx,sfx+sfw*0.03,sfy-H*0.11,sfw*0.44,H*0.09,10); cx.fill(); roundRect(cx,sfx+sfw*0.52,sfy-H*0.11,sfw*0.44,H*0.09,10); cx.fill();
+    // plant
+    const plx=W*0.9; cx.fillStyle='#7a5b45'; cx.fillRect(plx,floorY-H*0.02,W*0.05,H*0.09);
+    cx.fillStyle='#4f7a4a'; [[-0.02,-0.12],[0.02,-0.13],[0,-0.16]].forEach(o=>{ cx.beginPath(); cx.ellipse(plx+W*0.025+o[0]*W,floorY-H*0.02+o[1]*H,W*0.02,H*0.06,0,0,7); cx.fill(); });
+  }
+  function roundRect(cx,x,y,w,h,r){ cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.closePath(); }
   function refreshWall(){
     const host=$('#mixPreview'); if(!host) return;
     if(!mix.length){ host.innerHTML=''; return; }
@@ -589,7 +680,24 @@
     const dpr=Math.min(2,window.devicePixelRatio||1);
     cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
     const cx=cv.getContext('2d'); cx.setTransform(dpr,0,0,dpr,0,0);
-    ensureImgObjs(map=>{ cx.setTransform(dpr,0,0,dpr,0,0); paintWall(cx,W,H,map); });
+    ensureImgObjs(map=>{
+      cx.setTransform(dpr,0,0,dpr,0,0);
+      if(mixView==='wall'){ paintWall(cx,W,H,map); return; }
+      const TS=Math.round(Math.max(W,H)*0.9);
+      const tex=document.createElement('canvas'); tex.width=TS; tex.height=TS;
+      paintWall(tex.getContext('2d'),TS,TS,map);
+      if(mixView==='facade') drawFacade(cx,W,H,tex); else drawInterior(cx,W,H,tex);
+    });
+  }
+  function buildViewToggle(){
+    const el=$('#mixView'); if(!el) return;
+    if(!mix.length){ el.hidden=true; el.innerHTML=''; return; }
+    const M=MIX();
+    const opts=[['wall',M.view_wall[lang]],['facade',M.view_facade[lang]],['interior',M.view_interior[lang]]];
+    el.hidden=false;
+    el.innerHTML=opts.map(o=>`<button class="mixview__b${o[0]===mixView?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('');
+    el.querySelectorAll('.mixview__b').forEach(b=>b.onclick=()=>{ mixView=b.dataset.v;
+      el.querySelectorAll('.mixview__b').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWall(); });
   }
   function updatePcts(){ const total=mix.reduce((a,m)=>a+m.weight,0)||1;
     $$('#mixList .mixratio__pct').forEach(s=>{ s.textContent=Math.round(mix[+s.dataset.i].weight/total*100)+'%'; }); }
@@ -600,10 +708,15 @@
   function exportWall(){
     if(!mix.length) return;
     const fam=mixShape||'brick';
-    const CW=1600, CH=(fam==='hex'||fam==='oct'||fam==='square')?1600:1150;
+    const scene=(mixView==='facade'||mixView==='interior');
+    const CW=1600, CH=scene?1120:((fam==='hex'||fam==='oct'||fam==='square')?1600:1150);
     const cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
     const cx=cv.getContext('2d');
-    ensureImgObjs(map=>{ paintWall(cx,CW,CH,map);
+    ensureImgObjs(map=>{
+      if(scene){ const TS=Math.round(Math.max(CW,CH)*0.9); const tex=document.createElement('canvas'); tex.width=TS; tex.height=TS;
+        paintWall(tex.getContext('2d'),TS,TS,map);
+        if(mixView==='facade') drawFacade(cx,CW,CH,tex); else drawInterior(cx,CW,CH,tex);
+      } else paintWall(cx,CW,CH,map);
       cv.toBlob(bl=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='klinkerbox-mischung.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); },'image/png'); });
   }
   const seg=(name,opts,cur)=>`<div class="mixseg" data-seg="${name}">${opts.map(o=>
@@ -614,6 +727,7 @@
     $('#mixShuffle').textContent=M.shuffle[lang]; $('#mixClear').textContent=M.clear[lang];
     { const ex=$('#mixExport'); if(ex) ex.textContent=M.export[lang]; }
     $('#mixCatLabel').textContent=mixCat?catName(mixCat):M.hint[lang];
+    buildViewToggle();
     const prev=$('#mixPreview'), list=$('#mixList');
     if(!mix.length){
       const sugs=getSuggestions();

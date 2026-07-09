@@ -406,9 +406,18 @@ a.cinfo__val:hover{color:var(--clay)}
 .mixer__head{margin-bottom:.6rem}
 .mixer__title{font-family:"Fraunces",serif;font-weight:500;font-size:1.45rem;margin-bottom:.1rem}
 .mixer__cat{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--clay);font-weight:600}
+.mixer__stage{flex:1;min-width:0;position:relative;display:flex}
 .mixer__preview{flex:1;min-width:0;border-radius:14px;overflow:hidden;border:1px solid var(--line);background:#221f1c;display:flex;align-items:center}
 .mixer__preview .mixwall{width:100%}
 .mixcanvas{display:block;width:100%;height:100%;object-fit:cover}
+/* configurator view toggle (Muster / Fassade / Innenraum) */
+.mixview{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:3;display:flex;gap:.25rem;
+  background:rgba(20,18,16,.62);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.14);border-radius:100px;padding:.28rem}
+.mixview[hidden]{display:none}
+.mixview__b{font:inherit;font-size:.82rem;font-weight:600;color:rgba(255,255,255,.72);background:none;border:none;cursor:pointer;
+  padding:.4rem .9rem;border-radius:100px;transition:.2s;white-space:nowrap}
+.mixview__b:hover{color:#fff}
+.mixview__b.is-active{background:var(--clay);color:#fff}
 .mixer__empty{padding:2.6rem 1.5rem;text-align:center;color:var(--ink-soft);font-size:.95rem}
 /* empty-state ready-made suggestions */
 .mixsuggest{width:100%;align-self:stretch;padding:clamp(1.1rem,3vw,1.8rem);overflow:auto;max-height:100%}

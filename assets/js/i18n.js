@@ -195,6 +195,9 @@ window.SUBS = {
 // Colour mixer
 window.MIX = {
   title:  {de:"Farbmixer", fr:"Mélangeur de couleurs", it:"Mixer colori", en:"Colour mixer"},
+  view_wall:    {de:"Muster", fr:"Motif", it:"Motivo", en:"Pattern"},
+  view_facade:  {de:"Fassade", fr:"Façade", it:"Facciata", en:"Façade"},
+  view_interior:{de:"Innenraum", fr:"Intérieur", it:"Interno", en:"Interior"},
   add:    {de:"Zum Mixer", fr:"Ajouter au mélangeur", it:"Aggiungi al mixer", en:"Add to mixer"},
   added:  {de:"Im Mixer ✓", fr:"Dans le mélangeur ✓", it:"Nel mixer ✓", en:"In mixer ✓"},
   hint:   {de:"Steine derselben Kategorie und Form kombinieren.", fr:"Combinez des pièces de même catégorie et forme.", it:"Combina pezzi di stessa categoria e forma.", en:"Combine pieces of the same category and shape."},
