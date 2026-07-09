@@ -332,7 +332,7 @@
   // ---- configurator surfaces: Fassade (Mauerklinker) + Boden (Pflaster/Tonplatten), inside & out ----
   function blankZone(){ return {mix:[],cat:null,shape:null,bond:'run',bed:'normal',head:'normal',joint:'#9d988f',order:0,layout:[],seq:[0],wild:[]}; }
   let zoneData={exterior_facade:blankZone(),exterior_floor:blankZone(),interior_facade:blankZone(),interior_floor:blankZone()};
-  let activeZone='exterior_facade', mixScene='exterior', mixSurface='facade';
+  let activeZone='exterior_facade', mixScene='exterior', mixSurface='facade', mixBuilding='efh';
   const sceneNow=()=> (mixView==='interior')?'interior':(mixView==='exterior')?'exterior':mixScene;
   const zoneKey=(scene,surf)=> scene+'_'+surf;
   const surfaceOf=cat=> (cat==='mauer')?'facade':'floor';   // Mauerklinker → Fassade · Pflaster/Tonplatten → Boden
@@ -619,43 +619,61 @@
   function shade(cx,x,y,w,h,c0,c1){ const g=cx.createLinearGradient(x,y,x,y+h); g.addColorStop(0,c0); g.addColorStop(1,c1); cx.fillStyle=g; cx.fillRect(x,y,w,h); }
   function surfFill(cx,tex,scale,fallback){ return (tex && brickPattern(cx,tex,scale)) || fallback; }
   function drawFacade(cx,W,H,fTex,pTex){
-    // sky + ground
+    // sky + ground (shared)
     let g=cx.createLinearGradient(0,0,0,H*0.75); g.addColorStop(0,'#bcdcef'); g.addColorStop(1,'#e9f2f6'); cx.fillStyle=g; cx.fillRect(0,0,W,H);
     const groundY=H*0.74; g=cx.createLinearGradient(0,groundY,0,H); g.addColorStop(0,'#aebd86'); g.addColorStop(1,'#93a56c'); cx.fillStyle=g; cx.fillRect(0,groundY,W,H-groundY);
-    const midX=W/2, hw=W*0.60, hx0=midX-hw/2, hx1=midX+hw/2, eaveY=H*0.36, wallBot=groundY, apexY=H*0.14;
-    const tw=(fTex||pTex||{width:400}).width, fS=Math.min(W,H)/((fTex||{width:tw}).width)*0.62, pS=Math.min(W,H)/((pTex||{width:tw}).width)*0.72;
-    // paved path (foreground) — perspective trapezoid, paving mix (or neutral)
-    cx.save(); poly(cx,[[midX-W*0.09,wallBot],[midX+W*0.09,wallBot],[midX+W*0.28,H],[midX-W*0.28,H]]); cx.clip();
+    const midX=W/2;
+    const fS=Math.min(W,H)/((fTex||{width:400}).width)*0.62, pS=Math.min(W,H)/((pTex||{width:400}).width)*0.72;
+    // paved forecourt (Boden mix) — perspective trapezoid
+    cx.save(); poly(cx,[[midX-W*0.10,groundY],[midX+W*0.10,groundY],[midX+W*0.30,H],[midX-W*0.30,H]]); cx.clip();
     cx.fillStyle=surfFill(cx,pTex,pS,'#c9c3b7'); cx.fillRect(0,groundY,W,H-groundY);
     shade(cx,0,groundY,W,H-groundY,'rgba(0,0,0,0)','rgba(0,0,0,.28)'); cx.restore();
-    // roof (dark) — overhang triangle behind gable
-    cx.save(); poly(cx,[[hx0-W*0.05,eaveY+H*0.012],[hx1+W*0.05,eaveY+H*0.012],[midX,apexY-H*0.02]]);
-    g=cx.createLinearGradient(0,apexY,0,eaveY); g.addColorStop(0,'#4a4d51'); g.addColorStop(1,'#303234'); cx.fillStyle=g; cx.fill(); cx.restore();
-    // gable (brick triangle)
-    cx.save(); poly(cx,[[hx0,eaveY],[hx1,eaveY],[midX,apexY]]); cx.clip();
-    cx.fillStyle=surfFill(cx,fTex,fS,'#cfc8ba'); cx.fillRect(hx0,apexY,hw,eaveY-apexY);
-    shade(cx,hx0,apexY,hw,eaveY-apexY,'rgba(255,255,255,.05)','rgba(0,0,0,.14)'); cx.restore();
-    // facade (brick rectangle)
-    cx.save(); cx.beginPath(); cx.rect(hx0,eaveY,hw,wallBot-eaveY); cx.clip();
-    cx.fillStyle=surfFill(cx,fTex,fS,'#cfc8ba'); cx.fillRect(hx0,eaveY,hw,wallBot-eaveY);
-    // soft ambient occlusion
-    const ao=cx.createLinearGradient(hx0,0,hx1,0); ao.addColorStop(0,'rgba(0,0,0,.16)'); ao.addColorStop(.5,'rgba(0,0,0,0)'); ao.addColorStop(1,'rgba(0,0,0,.16)'); cx.fillStyle=ao; cx.fillRect(hx0,eaveY,hw,wallBot-eaveY);
-    shade(cx,hx0,eaveY,hw,wallBot-eaveY,'rgba(255,255,255,.06)','rgba(0,0,0,.12)'); cx.restore();
-    // eave fascia + ridge line
-    cx.fillStyle='#2c2e30'; cx.fillRect(hx0-W*0.02,eaveY-H*0.014,hw+W*0.04,H*0.02);
-    // windows + door
-    const ww=hw*0.19, wh=(wallBot-eaveY)*0.26, uY=eaveY+(wallBot-eaveY)*0.12, lY=eaveY+(wallBot-eaveY)*0.52;
-    window2(cx,hx0+hw*0.13,uY,ww,wh); window2(cx,hx1-hw*0.13-ww,uY,ww,wh);
-    window2(cx,hx0+hw*0.13,lY,ww,wh);
-    // door
-    const dw=hw*0.2, dh=(wallBot-eaveY)*0.42, dx=hx1-hw*0.13-dw, dy=wallBot-dh;
-    cx.fillStyle='#efe9df'; cx.fillRect(dx-dw*0.08,dy-dh*0.03,dw*1.16,dh*1.03);
-    g=cx.createLinearGradient(dx,dy,dx+dw,dy); g.addColorStop(0,'#2f3d3a'); g.addColorStop(1,'#243230'); cx.fillStyle=g; cx.fillRect(dx,dy,dw,dh);
-    cx.fillStyle='rgba(255,255,255,.7)'; cx.fillRect(dx+dw*0.72,dy+dh*0.45,dw*0.05,dh*0.12);
-    // gable vent
-    window2(cx,midX-ww*0.4,apexY+(eaveY-apexY)*0.4,ww*0.8,wh*0.5);
-    // house drop shadow
-    cx.fillStyle='rgba(0,0,0,.14)'; cx.beginPath(); cx.ellipse(midX,wallBot+H*0.01,hw*0.62,H*0.02,0,0,7); cx.fill();
+    // helpers
+    const fillFacade=(x0,y0,w,h)=>{ cx.save(); cx.beginPath(); cx.rect(x0,y0,w,h); cx.clip();
+      cx.fillStyle=surfFill(cx,fTex,fS,'#cfc8ba'); cx.fillRect(x0,y0,w,h);
+      const ao=cx.createLinearGradient(x0,0,x0+w,0); ao.addColorStop(0,'rgba(0,0,0,.16)'); ao.addColorStop(.5,'rgba(0,0,0,0)'); ao.addColorStop(1,'rgba(0,0,0,.16)'); cx.fillStyle=ao; cx.fillRect(x0,y0,w,h);
+      shade(cx,x0,y0,w,h,'rgba(255,255,255,.06)','rgba(0,0,0,.12)'); cx.restore(); };
+    const drawDoor=(dx,dy,dw,dh)=>{ cx.fillStyle='#efe9df'; cx.fillRect(dx-dw*0.08,dy-dh*0.03,dw*1.16,dh*1.03);
+      const dg=cx.createLinearGradient(dx,dy,dx+dw,dy); dg.addColorStop(0,'#2f3d3a'); dg.addColorStop(1,'#243230'); cx.fillStyle=dg; cx.fillRect(dx,dy,dw,dh);
+      cx.fillStyle='rgba(255,255,255,.7)'; cx.fillRect(dx+dw*0.72,dy+dh*0.45,dw*0.05,dh*0.12); };
+    const dropShadow=(cxn,w2)=>{ cx.fillStyle='rgba(0,0,0,.14)'; cx.beginPath(); cx.ellipse(cxn,groundY+H*0.012,w2,H*0.02,0,0,7); cx.fill(); };
+    const fascia=(x0,w,y,t)=>{ cx.fillStyle='#2c2e30'; cx.fillRect(x0-W*0.02,y,w+W*0.04,t); };
+
+    if(mixBuilding==='villa'){
+      const hw=W*0.60, hx0=midX-hw/2, hx1=hx0+hw, eaveY=H*0.24, roofTop=H*0.145, gy=groundY-eaveY;
+      cx.save(); poly(cx,[[hx0-W*0.04,eaveY],[hx1+W*0.04,eaveY],[hx1-W*0.11,roofTop],[hx0+W*0.11,roofTop]]);
+      g=cx.createLinearGradient(0,roofTop,0,eaveY); g.addColorStop(0,'#4a4d51'); g.addColorStop(1,'#33363a'); cx.fillStyle=g; cx.fill(); cx.restore();
+      fillFacade(hx0,eaveY,hw,gy); fascia(hx0,hw,eaveY-H*0.012,H*0.016);
+      const ww=hw*0.19, wh=gy*0.19;
+      for(let r=0;r<3;r++){ const y=eaveY+gy*(0.1+r*0.29);
+        [0.1,0.405,0.71].forEach((cxp,ci)=>{ if(r===2&&ci===1) return; window2(cx,hx0+hw*cxp,y,ww,wh); }); }
+      const dw=hw*0.16, dh=gy*0.34; drawDoor(midX-dw/2,groundY-dh,dw,dh); dropShadow(midX,hw*0.6);
+    } else if(mixBuilding==='bungalow'){
+      const hw=W*0.82, hx0=midX-hw/2, eaveY=H*0.5, gy=groundY-eaveY;
+      cx.fillStyle='#3a3d40'; cx.fillRect(hx0-W*0.04,eaveY-H*0.028,hw+W*0.08,H*0.028);   // flat roof slab + overhang
+      fillFacade(hx0,eaveY,hw,gy);
+      const ww=hw*0.14, wh=gy*0.5, wy=eaveY+gy*0.22;
+      [0.05,0.24,0.62,0.81].forEach(cxp=>window2(cx,hx0+hw*cxp,wy,ww,wh));
+      const dw=hw*0.1, dh=gy*0.72; drawDoor(hx0+hw*0.44,groundY-dh,dw,dh); dropShadow(midX,hw*0.55);
+    } else if(mixBuilding==='office'){
+      const hw=W*0.70, hx0=midX-hw/2, eaveY=H*0.16, gy=groundY-eaveY;
+      fillFacade(hx0,eaveY,hw,gy); fascia(hx0,hw,eaveY-H*0.02,H*0.024);   // parapet
+      const cols=4, rows=4, gpx=hw*0.035, gpy=gy*0.05, cw=(hw*0.9-(cols+1)*gpx)/cols, ch=(gy*0.82-(rows+1)*gpy)/rows, gx0=hx0+hw*0.05, gy0=eaveY+gy*0.05;
+      for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) window2(cx,gx0+gpx+c*(cw+gpx),gy0+gpy+r*(ch+gpy),cw,ch);
+      const dw=hw*0.2, dh=gy*0.12; drawDoor(midX-dw/2,groundY-dh,dw,dh); dropShadow(midX,hw*0.55);
+    } else { // efh (Einfamilienhaus) — gabled
+      const hw=W*0.56, hx0=midX-hw/2, hx1=hx0+hw, eaveY=H*0.36, apexY=H*0.14, gy=groundY-eaveY;
+      cx.save(); poly(cx,[[hx0-W*0.05,eaveY+H*0.012],[hx1+W*0.05,eaveY+H*0.012],[midX,apexY-H*0.02]]);
+      g=cx.createLinearGradient(0,apexY,0,eaveY); g.addColorStop(0,'#4a4d51'); g.addColorStop(1,'#303234'); cx.fillStyle=g; cx.fill(); cx.restore();
+      cx.save(); poly(cx,[[hx0,eaveY],[hx1,eaveY],[midX,apexY]]); cx.clip();
+      cx.fillStyle=surfFill(cx,fTex,fS,'#cfc8ba'); cx.fillRect(hx0,apexY,hw,eaveY-apexY);
+      shade(cx,hx0,apexY,hw,eaveY-apexY,'rgba(255,255,255,.05)','rgba(0,0,0,.14)'); cx.restore();
+      fillFacade(hx0,eaveY,hw,gy); fascia(hx0,hw,eaveY-H*0.014,H*0.02);
+      const ww=hw*0.19, wh=gy*0.26, uY=eaveY+gy*0.12, lY=eaveY+gy*0.52;
+      window2(cx,hx0+hw*0.13,uY,ww,wh); window2(cx,hx1-hw*0.13-ww,uY,ww,wh); window2(cx,hx0+hw*0.13,lY,ww,wh);
+      const dw=hw*0.2, dh=gy*0.42; drawDoor(hx1-hw*0.13-dw,groundY-dh,dw,dh);
+      window2(cx,midX-ww*0.4,apexY+(eaveY-apexY)*0.4,ww*0.8,wh*0.5); dropShadow(midX,hw*0.62);
+    }
   }
   function drawInterior(cx,W,H,tex,floorTex){
     const floorY=H*0.68, pScale=Math.min(W,H)/((tex||{width:400}).width)*0.5;
@@ -843,14 +861,18 @@
       <div class="mixjoint"><span>${M.head[lang]}</span>${seg('head',[['glue',M.j_glue[lang]],['narrow',M.j_narrow[lang]],['normal',M.j_normal[lang]]],mixHead)}</div></div>`;
     const jcol=`<div class="mixgrp"><div class="mixgrp__h">${M.jcolor[lang]}</div>
       <div class="mixmortars">${MORTARS.map(c=>`<button class="mixmortar${c[1]===mixJoint?' is-active':''}" style="background:${c[1]}" data-hex="${c[1]}" title="${c[0]}"></button>`).join('')}</div></div>`;
-    list.innerHTML=ratio+order+bond+joints+jcol;
+    // building type — only relevant in the exterior view
+    const bld=(mixView==='exterior')
+      ? `<div class="mixgrp"><div class="mixgrp__h">${M.building[lang]}</div>${seg('bld',[['efh',M.b_efh[lang]],['villa',M.b_villa[lang]],['bungalow',M.b_bungalow[lang]],['office',M.b_office[lang]]],mixBuilding)}</div>`
+      : '';
+    list.innerHTML=bld+ratio+order+bond+joints+jcol;
     // handlers
     list.querySelectorAll('.mixratio__sl').forEach(sl=>sl.oninput=()=>{ mix[+sl.dataset.i].weight=+sl.value; genLayout(); updatePcts(); refreshWall(); });
     list.querySelectorAll('.mixchip__x').forEach(b=>b.onclick=()=>{ const p=P.find(x=>x.id===b.dataset.id); if(p) removeFromMixer(p); });
     $('#mixOrderSl').oninput=e=>{ mixOrder=+e.target.value/100; refreshWall(); };
     list.querySelectorAll('.mixseg').forEach(s=>s.querySelectorAll('.mixseg__b').forEach(b=>b.onclick=()=>{
       const v=b.dataset.v, name=s.dataset.seg;
-      if(name==='bond') mixBond=v; else if(name==='bed') mixBed=v; else if(name==='head') mixHead=v;
+      if(name==='bond') mixBond=v; else if(name==='bed') mixBed=v; else if(name==='head') mixHead=v; else if(name==='bld') mixBuilding=v;
       s.querySelectorAll('.mixseg__b').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWall();
     }));
     list.querySelectorAll('.mixmortar').forEach(b=>b.onclick=()=>{ mixJoint=b.dataset.hex;
