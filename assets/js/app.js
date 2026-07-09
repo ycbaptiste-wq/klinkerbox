@@ -82,7 +82,9 @@
   const sizeLabel = p => isMulti(p) ? I[lang].multiformats : (isAllFmt(p) ? I[lang].allformats : p.size);
   // hand-produced ranges (tumbled / water-struck / hand-moulded clinker)
   const HANDMADE_IDS=new Set(['m132','m133','m240','m241','m242','m243','m244','m245','p11']);
+  const NOT_HANDMADE=new Set(['m136','m146']);        // C1LF / N1LF — not hand-struck
   function isHandmade(p){
+    if(NOT_HANDMADE.has(p.id)) return false;
     if(HANDMADE_IDS.has(p.id)) return true;          // products whose photos carried the HAND-MADE stamp
     if(p.series==='SeptimA' || p.series==='Ancienne Belgique') return true;
     if(p.series==='Nature 7' || p.series==='Nature 10') return true;
