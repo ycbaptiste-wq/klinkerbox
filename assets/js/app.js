@@ -600,9 +600,9 @@
       drawUnit(cx,im,gap+c*(tw+gap),gap+r*(tw+gap),tw,tw,b,poly); }
   }
   // ---- CONFIGURATOR SCENES: apply the live klinker mix to a building ----
-  function brickPattern(cx,tex,scale){
+  function brickPattern(cx,tex,scale,scaleY){
     const pat=cx.createPattern(tex,'repeat');
-    if(pat && pat.setTransform){ try{ pat.setTransform(new DOMMatrix([scale,0,0,scale,0,0])); }catch(e){} }
+    if(pat && pat.setTransform){ try{ pat.setTransform(new DOMMatrix([scale,0,0,(scaleY||scale),0,0])); }catch(e){} }
     return pat;
   }
   const poly=(cx,pts)=>{ cx.beginPath(); pts.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1])); cx.closePath(); };
@@ -711,6 +711,64 @@
     cx.fillStyle='#4f7a4a'; [[-0.02,-0.12],[0.02,-0.13],[0,-0.16]].forEach(o=>{ cx.beginPath(); cx.ellipse(plx+W*0.025+o[0]*W,floorY-H*0.02+o[1]*H,W*0.02,H*0.06,0,0,7); cx.fill(); });
   }
   function roundRect(cx,x,y,w,h,r){ cx.beginPath(); cx.moveTo(x+r,y); cx.arcTo(x+w,y,x+w,y+h,r); cx.arcTo(x+w,y+h,x,y+h,r); cx.arcTo(x,y+h,x,y,r); cx.arcTo(x,y,x+w,y,r); cx.closePath(); }
+  // ---- photo scenes: project the live mix onto a real render (Muhr-style material swap) ----
+  // masks are normalized [0..1] image coordinates; openings are redrawn from the photo on top
+  const SCENES={
+    efh:{ src:'assets/img/scenes/efh.jpg',
+      facade:{x0:0.195,y0:0.328,x1:0.805,y1:0.740},
+      openings:[
+        [0.263,0.330,0.392,0.472],[0.461,0.330,0.537,0.452],[0.650,0.330,0.732,0.472],
+        [0.263,0.562,0.392,0.790],[0.650,0.562,0.732,0.700],[0.435,0.570,0.568,0.815]
+      ],
+      floor:[[0.105,0.800],[0.895,0.800],[0.960,0.952],[0.040,0.952]],
+      floorExtra:[[0.418,0.780],[0.582,0.780],[0.582,0.805],[0.418,0.805]],
+      facadeTiles:7, floorTiles:8, floorSquash:0.35 }
+  };
+  const sceneImgCache={};
+  function loadSceneImg(cfg,cb){
+    const c=sceneImgCache[cfg.src];
+    if(c && c.complete && c.naturalWidth){ cb(c); return; }
+    const im=new Image();
+    im.onload=()=>{ sceneImgCache[cfg.src]=im; cb(im); };
+    im.onerror=()=>cb(null);
+    im.src=cfg.src;
+  }
+  function drawPhotoScene(cx,W,H,img,cfg,fTex,pTex){
+    // cover-fit the photo
+    const s=Math.max(W/img.naturalWidth,H/img.naturalHeight);
+    const dw=img.naturalWidth*s, dh=img.naturalHeight*s, ox=(W-dw)/2, oy=(H-dh)/2;
+    cx.drawImage(img,ox,oy,dw,dh);
+    const mx=nx=>ox+nx*dw, my=ny=>oy+ny*dh;
+    // facade: multiply the brick texture into the wall so the photo's shading stays
+    if(fTex){
+      const f=cfg.facade, fx=mx(f.x0), fy=my(f.y0), fw=mx(f.x1)-fx, fh=my(f.y1)-fy;
+      const ps=fw/((cfg.facadeTiles||7)*fTex.width);
+      cx.save(); cx.beginPath(); cx.rect(fx,fy,fw,fh); cx.clip();
+      cx.globalCompositeOperation='multiply';
+      cx.fillStyle=brickPattern(cx,fTex,ps)||'#a08070'; cx.fillRect(fx,fy,fw,fh);
+      cx.restore();
+      // restore windows / door / porch from the photo
+      (cfg.openings||[]).forEach(o=>{
+        const sx=o[0]*img.naturalWidth, sy=o[1]*img.naturalHeight,
+              sw=(o[2]-o[0])*img.naturalWidth, sh=(o[3]-o[1])*img.naturalHeight;
+        cx.drawImage(img,sx,sy,sw,sh, mx(o[0]),my(o[1]),(o[2]-o[0])*dw,(o[3]-o[1])*dh);
+      });
+    }
+    // forecourt: multiply the paving texture, vertically squashed for perspective
+    if(pTex){
+      const fills=[cfg.floor].concat(cfg.floorExtra?[cfg.floorExtra]:[]);
+      fills.forEach(pg=>{
+        const xs=pg.map(p=>mx(p[0])), ys=pg.map(p=>my(p[1]));
+        const w=Math.max(...xs)-Math.min(...xs);
+        const ps=w/((cfg.floorTiles||8)*pTex.width);
+        cx.save(); cx.beginPath(); pg.forEach((p,i)=>i?cx.lineTo(mx(p[0]),my(p[1])):cx.moveTo(mx(p[0]),my(p[1]))); cx.closePath(); cx.clip();
+        cx.globalCompositeOperation='multiply';
+        cx.fillStyle=brickPattern(cx,pTex,ps,ps*(cfg.floorSquash||0.35))||'#a08070';
+        cx.fillRect(Math.min(...xs),Math.min(...ys),w,Math.max(...ys)-Math.min(...ys));
+        cx.restore();
+      });
+    }
+  }
   function refreshWall(){
     const host=$('#mixPreview'); if(!host) return;
     const sceneView=(mixView==='exterior'||mixView==='interior');
@@ -731,8 +789,11 @@
       if(!sceneView){ paintWall(cx,W,H,map); return; }
       const TS=Math.round(Math.max(W,H)*0.9), sc=(mixView==='interior')?'interior':'exterior';
       const facadeTex=zoneTex(zoneKey(sc,'facade'),TS,map), floorTex=zoneTex(zoneKey(sc,'floor'),TS,map);
-      if(mixView==='interior') drawInterior(cx,W,H,facadeTex,floorTex);
-      else drawFacade(cx,W,H,facadeTex,floorTex);
+      if(mixView==='interior'){ drawInterior(cx,W,H,facadeTex,floorTex); return; }
+      const photo=SCENES[mixBuilding];
+      if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,W,H,img,photo,facadeTex,floorTex);
+        else drawFacade(cx,W,H,facadeTex,floorTex); }); return; }
+      drawFacade(cx,W,H,facadeTex,floorTex);
     }, allP);
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -795,11 +856,15 @@
     const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
     mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
     ensureImgObjs(map=>{
+      const save=()=>cv.toBlob(bl=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='klinkerbox-mischung.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); },'image/png');
       if(scene){ const TS=Math.round(Math.max(CW,CH)*0.9), sc=(mixView==='interior')?'interior':'exterior';
         const fT=zoneTex(zoneKey(sc,'facade'),TS,map), flT=zoneTex(zoneKey(sc,'floor'),TS,map);
-        if(mixView==='interior') drawInterior(cx,CW,CH,fT,flT); else drawFacade(cx,CW,CH,fT,flT);
+        if(mixView==='interior'){ drawInterior(cx,CW,CH,fT,flT); save(); return; }
+        const photo=SCENES[mixBuilding];
+        if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,CW,CH,img,photo,fT,flT); else drawFacade(cx,CW,CH,fT,flT); save(); }); return; }
+        drawFacade(cx,CW,CH,fT,flT);
       } else paintWall(cx,CW,CH,map);
-      cv.toBlob(bl=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='klinkerbox-mischung.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); },'image/png'); });
+      save(); });
   }
   const seg=(name,opts,cur)=>`<div class="mixseg" data-seg="${name}">${opts.map(o=>
     `<button class="mixseg__b${o[0]===cur?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
