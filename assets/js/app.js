@@ -540,9 +540,10 @@
     const jx=b?((b.x-50)/100)*(dw-w):0, jy=b?((b.y-50)/100)*(dh-h):0;
     cx.drawImage(im,x+(w-dw)/2-jx,y+(h-dh)/2-jy,dw,dh); cx.filter='none'; cx.restore();
   }
+  let texJointMul=1;                                   // scene textures use finer joints
   function paintWall(cx,W,H,map){
     cx.clearRect(0,0,W,H); cx.fillStyle=mixJoint; cx.fillRect(0,0,W,H);
-    const fam=mixShape||'brick', sc=W/560;
+    const fam=mixShape||'brick', sc=W/560*texJointMul;
     const bed=Math.max(1,JW[mixBed]*sc), head=Math.max(1,JW[mixHead]*sc);
     if(fam==='hex') return paintHex(cx,W,H,map,bed);
     if(fam==='oct') return paintOct(cx,W,H,map,Math.max(3*sc,bed));
@@ -722,7 +723,7 @@
       ],
       floor:[[0.105,0.800],[0.895,0.800],[0.960,0.952],[0.040,0.952]],
       floorExtra:[[0.418,0.780],[0.582,0.780],[0.582,0.805],[0.418,0.805]],
-      facadeTiles:7, floorTiles:8, floorSquash:0.35 }
+      cropBottom:0.955, facadeTiles:7, floorTiles:8 }
   };
   const sceneImgCache={};
   function loadSceneImg(cfg,cb){
@@ -733,12 +734,45 @@
     im.onerror=()=>cb(null);
     im.src=cfg.src;
   }
+  // perspective ground: rows shrink toward the vanishing point (mode-7 style strips)
+  function paintGroundPersp(cx,pg,tex,tiles){
+    if(pg.length<3) return;
+    const yT=Math.min(...pg.map(p=>p[1])), yB=Math.max(...pg.map(p=>p[1]));
+    const xTL=Math.min(...pg.filter(p=>p[1]<(yT+yB)/2).map(p=>p[0])), xTR=Math.max(...pg.filter(p=>p[1]<(yT+yB)/2).map(p=>p[0]));
+    const xBL=Math.min(...pg.filter(p=>p[1]>=(yT+yB)/2).map(p=>p[0])), xBR=Math.max(...pg.filter(p=>p[1]>=(yT+yB)/2).map(p=>p[0]));
+    // vanishing y from the converging side edges (fallback: well above the strip)
+    const wT=xTR-xTL, wB=xBR-xBL, dh0=yB-yT;
+    const yh = (wB>wT+1) ? (yT - dh0*wT/(wB-wT)) : (yT - dh0*2.5);
+    const xL=y=> xBL+(xTL-xBL)*(yB-y)/dh0, xR=y=> xBR+(xTR-xBR)*(yB-y)/dh0;
+    const repW=wB/tiles;                                   // one texture repeat at the near edge
+    const C=(yB-yh)*(yB-yh)/(repW*0.5);                    // dv=1 repeat ≙ repW*0.5 px at the bottom
+    cx.save(); cx.beginPath(); pg.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1])); cx.closePath(); cx.clip();
+    cx.globalCompositeOperation='multiply';
+    const TH=tex.height, TW=tex.width, step=2;
+    for(let y=yT;y<yB;y+=step){
+      const y2=Math.min(yB,y+step);
+      let v0=C/(y2-yh), v1=C/(y-yh);                       // texture v-range for this strip (v grows with depth)
+      if(v1-v0>1) v1=v0+1;
+      const sy=((v0%1)+1)%1*TH, sh=Math.max(1,(v1-v0)*TH);
+      const l=xL(y), r=xR(y), colW=(r-l)/tiles;
+      for(let c=0;c<tiles;c++){
+        if(sy+sh<=TH) cx.drawImage(tex,0,sy,TW,sh, l+c*colW,y,colW,y2-y);
+        else {                                              // wrap across the texture edge
+          const h1=TH-sy, f=h1/sh;
+          cx.drawImage(tex,0,sy,TW,h1, l+c*colW,y,colW,(y2-y)*f);
+          cx.drawImage(tex,0,0,TW,sh-h1, l+c*colW,y+(y2-y)*f,colW,(y2-y)*(1-f));
+        }
+      }
+    }
+    cx.restore();
+  }
   function drawPhotoScene(cx,W,H,img,cfg,fTex,pTex){
-    // cover-fit the photo
-    const s=Math.max(W/img.naturalWidth,H/img.naturalHeight);
-    const dw=img.naturalWidth*s, dh=img.naturalHeight*s, ox=(W-dw)/2, oy=(H-dh)/2;
-    cx.drawImage(img,ox,oy,dw,dh);
-    const mx=nx=>ox+nx*dw, my=ny=>oy+ny*dh;
+    // cover-fit the photo, optionally cropping the bottom (e.g. gravel strip)
+    const crop=cfg.cropBottom||1, sH=img.naturalHeight*crop;
+    const s=Math.max(W/img.naturalWidth,H/sH);
+    const dw=img.naturalWidth*s, dh=sH*s, ox=(W-dw)/2, oy=(H-dh)/2;
+    cx.drawImage(img,0,0,img.naturalWidth,sH,ox,oy,dw,dh);
+    const mx=nx=>ox+nx*dw, my=ny=>oy+(ny/crop)*dh;
     // facade: multiply the brick texture into the wall so the photo's shading stays
     if(fTex){
       const f=cfg.facade, fx=mx(f.x0), fy=my(f.y0), fw=mx(f.x1)-fx, fh=my(f.y1)-fy;
@@ -751,22 +785,13 @@
       (cfg.openings||[]).forEach(o=>{
         const sx=o[0]*img.naturalWidth, sy=o[1]*img.naturalHeight,
               sw=(o[2]-o[0])*img.naturalWidth, sh=(o[3]-o[1])*img.naturalHeight;
-        cx.drawImage(img,sx,sy,sw,sh, mx(o[0]),my(o[1]),(o[2]-o[0])*dw,(o[3]-o[1])*dh);
+        cx.drawImage(img,sx,sy,sw,sh, mx(o[0]),my(o[1]),(o[2]-o[0])*dw,my(o[3])-my(o[1]));
       });
     }
-    // forecourt: multiply the paving texture, vertically squashed for perspective
+    // forecourt: true perspective rows, multiplied so the photo's light stays
     if(pTex){
       const fills=[cfg.floor].concat(cfg.floorExtra?[cfg.floorExtra]:[]);
-      fills.forEach(pg=>{
-        const xs=pg.map(p=>mx(p[0])), ys=pg.map(p=>my(p[1]));
-        const w=Math.max(...xs)-Math.min(...xs);
-        const ps=w/((cfg.floorTiles||8)*pTex.width);
-        cx.save(); cx.beginPath(); pg.forEach((p,i)=>i?cx.lineTo(mx(p[0]),my(p[1])):cx.moveTo(mx(p[0]),my(p[1]))); cx.closePath(); cx.clip();
-        cx.globalCompositeOperation='multiply';
-        cx.fillStyle=brickPattern(cx,pTex,ps,ps*(cfg.floorSquash||0.35))||'#a08070';
-        cx.fillRect(Math.min(...xs),Math.min(...ys),w,Math.max(...ys)-Math.min(...ys));
-        cx.restore();
-      });
+      fills.forEach(pg=>paintGroundPersp(cx,pg.map(p=>[mx(p[0]),my(p[1])]),pTex,cfg.floorTiles||8));
     }
   }
   function refreshWall(){
@@ -805,8 +830,10 @@
       mix=z.mix;mixCat=z.cat;mixShape=z.shape;mixBond=z.bond;mixBed=z.bed;mixHead=z.head;mixJoint=z.joint;mixOrder=z.order;mixLayout=z.layout;mixSeq=z.seq;wildOff=z.wild;
       if(!mixLayout.length){ genLayout(); z.layout=mixLayout; z.seq=mixSeq; z.wild=wildOff; }
       tex=document.createElement('canvas'); tex.width=size; tex.height=size;
+      texJointMul=0.55;                                // finer joints at scene scale
       paintWall(tex.getContext('2d'),size,size,map);
     } finally {
+      texJointMul=1;
       [mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff]=B;   // always restore active zone
     }
     return tex;
