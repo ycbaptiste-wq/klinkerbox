@@ -718,12 +718,21 @@
     efh:{ src:'assets/img/scenes/efh.jpg',
       facade:{x0:0.195,y0:0.328,x1:0.805,y1:0.740},
       openings:[
-        [0.263,0.330,0.392,0.472],[0.461,0.330,0.537,0.452],[0.650,0.330,0.732,0.472],
-        [0.263,0.562,0.392,0.790],[0.650,0.562,0.732,0.700],[0.435,0.570,0.568,0.815]
+        [0.270,0.336,0.386,0.462],[0.466,0.336,0.532,0.446],[0.655,0.336,0.727,0.462],
+        [0.270,0.568,0.386,0.788],[0.655,0.568,0.727,0.695],[0.446,0.578,0.557,0.815]
       ],
       floor:[[0.105,0.800],[0.895,0.800],[0.960,0.952],[0.040,0.952]],
       floorExtra:[[0.418,0.780],[0.582,0.780],[0.582,0.805],[0.418,0.805]],
-      cropBottom:0.955, facadeTiles:7, floorTiles:8 }
+      cropBottom:0.955, facadeTiles:7, floorTiles:8 },
+    interior:{ src:'assets/img/scenes/wohnzimmer.jpg',
+      facade:{x0:0.202,y0:0.135,x1:0.806,y1:0.728},          // accent wall (Riemchen)
+      openings:[
+        // sofa silhouette down to the seat frame (floor tiles run underneath)
+        [0.287,0.652, 0.735,0.652, 0.752,0.672, 0.752,0.870, 0.266,0.870, 0.266,0.672],
+        [0.895,0.540,1.0,0.850]                                        // console + vase
+      ],
+      floor:[[0.0,0.780],[0.20,0.722],[1.0,0.718],[1.0,1.0],[0.0,1.0]],
+      floorHorizon:0.42, facadeTiles:3.5, floorTiles:4 }
   };
   const sceneImgCache={};
   function loadSceneImg(cfg,cb){
@@ -735,14 +744,14 @@
     im.src=cfg.src;
   }
   // perspective ground: rows shrink toward the vanishing point (mode-7 style strips)
-  function paintGroundPersp(cx,pg,tex,tiles){
+  function paintGroundPersp(cx,pg,tex,tiles,horizon){
     if(pg.length<3) return;
     const yT=Math.min(...pg.map(p=>p[1])), yB=Math.max(...pg.map(p=>p[1]));
     const xTL=Math.min(...pg.filter(p=>p[1]<(yT+yB)/2).map(p=>p[0])), xTR=Math.max(...pg.filter(p=>p[1]<(yT+yB)/2).map(p=>p[0]));
     const xBL=Math.min(...pg.filter(p=>p[1]>=(yT+yB)/2).map(p=>p[0])), xBR=Math.max(...pg.filter(p=>p[1]>=(yT+yB)/2).map(p=>p[0]));
-    // vanishing y from the converging side edges (fallback: well above the strip)
+    // vanishing y: explicit horizon, else from the converging side edges
     const wT=xTR-xTL, wB=xBR-xBL, dh0=yB-yT;
-    const yh = (wB>wT+1) ? (yT - dh0*wT/(wB-wT)) : (yT - dh0*2.5);
+    const yh = (horizon!=null) ? horizon : (wB>wT+1) ? (yT - dh0*wT/(wB-wT)) : (yT - dh0*2.5);
     const xL=y=> xBL+(xTL-xBL)*(yB-y)/dh0, xR=y=> xBR+(xTR-xBR)*(yB-y)/dh0;
     const repW=wB/tiles;                                   // one texture repeat at the near edge
     const C=(yB-yh)*(yB-yh)/(repW*0.5);                    // dv=1 repeat ≙ repW*0.5 px at the bottom
@@ -781,18 +790,28 @@
       cx.globalCompositeOperation='multiply';
       cx.fillStyle=brickPattern(cx,fTex,ps)||'#a08070'; cx.fillRect(fx,fy,fw,fh);
       cx.restore();
-      // restore windows / door / porch from the photo
-      (cfg.openings||[]).forEach(o=>{
-        const sx=o[0]*img.naturalWidth, sy=o[1]*img.naturalHeight,
-              sw=(o[2]-o[0])*img.naturalWidth, sh=(o[3]-o[1])*img.naturalHeight;
-        cx.drawImage(img,sx,sy,sw,sh, mx(o[0]),my(o[1]),(o[2]-o[0])*dw,my(o[3])-my(o[1]));
-      });
     }
-    // forecourt: true perspective rows, multiplied so the photo's light stays
+    // floor: true perspective rows, multiplied so the photo's light stays
     if(pTex){
+      const hz=(cfg.floorHorizon!=null)?my(cfg.floorHorizon):null;
       const fills=[cfg.floor].concat(cfg.floorExtra?[cfg.floorExtra]:[]);
-      fills.forEach(pg=>paintGroundPersp(cx,pg.map(p=>[mx(p[0]),my(p[1])]),pTex,cfg.floorTiles||8));
+      fills.forEach(pg=>paintGroundPersp(cx,pg.map(p=>[mx(p[0]),my(p[1])]),pTex,cfg.floorTiles||8,hz));
     }
+    // windows / door / furniture — restore from the photo over both surfaces
+    // rect: [x0,y0,x1,y1] · polygon silhouette: flat list [x0,y0,x1,y1,x2,y2,...]
+    if(fTex||pTex){ (cfg.openings||[]).forEach(o=>{
+      let x0,y0,x1,y1;
+      if(o.length>4){
+        const xs=[],ys=[]; for(let i=0;i<o.length;i+=2){ xs.push(o[i]); ys.push(o[i+1]); }
+        x0=Math.min(...xs); x1=Math.max(...xs); y0=Math.min(...ys); y1=Math.max(...ys);
+        cx.save(); cx.beginPath();
+        for(let i=0;i<o.length;i+=2){ const px2=mx(o[i]),py2=my(o[i+1]); i?cx.lineTo(px2,py2):cx.moveTo(px2,py2); }
+        cx.closePath(); cx.clip();
+      } else { [x0,y0,x1,y1]=o; }
+      cx.drawImage(img, x0*img.naturalWidth,y0*img.naturalHeight,(x1-x0)*img.naturalWidth,(y1-y0)*img.naturalHeight,
+        mx(x0),my(y0),(x1-x0)*dw,my(y1)-my(y0));
+      if(o.length>4) cx.restore();
+    }); }
   }
   function refreshWall(){
     const host=$('#mixPreview'); if(!host) return;
@@ -814,11 +833,12 @@
       if(!sceneView){ paintWall(cx,W,H,map); return; }
       const TS=Math.round(Math.max(W,H)*0.9), sc=(mixView==='interior')?'interior':'exterior';
       const facadeTex=zoneTex(zoneKey(sc,'facade'),TS,map), floorTex=zoneTex(zoneKey(sc,'floor'),TS,map);
-      if(mixView==='interior'){ drawInterior(cx,W,H,facadeTex,floorTex); return; }
-      const photo=SCENES[mixBuilding];
+      const photo=(mixView==='interior')?SCENES.interior:SCENES[mixBuilding];
       if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,W,H,img,photo,facadeTex,floorTex);
+        else if(mixView==='interior') drawInterior(cx,W,H,facadeTex,floorTex);
         else drawFacade(cx,W,H,facadeTex,floorTex); }); return; }
-      drawFacade(cx,W,H,facadeTex,floorTex);
+      if(mixView==='interior') drawInterior(cx,W,H,facadeTex,floorTex);
+      else drawFacade(cx,W,H,facadeTex,floorTex);
     }, allP);
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -886,10 +906,10 @@
       const save=()=>cv.toBlob(bl=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='klinkerbox-mischung.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); },'image/png');
       if(scene){ const TS=Math.round(Math.max(CW,CH)*0.9), sc=(mixView==='interior')?'interior':'exterior';
         const fT=zoneTex(zoneKey(sc,'facade'),TS,map), flT=zoneTex(zoneKey(sc,'floor'),TS,map);
-        if(mixView==='interior'){ drawInterior(cx,CW,CH,fT,flT); save(); return; }
-        const photo=SCENES[mixBuilding];
-        if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,CW,CH,img,photo,fT,flT); else drawFacade(cx,CW,CH,fT,flT); save(); }); return; }
-        drawFacade(cx,CW,CH,fT,flT);
+        const photo=(mixView==='interior')?SCENES.interior:SCENES[mixBuilding];
+        if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,CW,CH,img,photo,fT,flT);
+          else if(mixView==='interior') drawInterior(cx,CW,CH,fT,flT); else drawFacade(cx,CW,CH,fT,flT); save(); }); return; }
+        if(mixView==='interior') drawInterior(cx,CW,CH,fT,flT); else drawFacade(cx,CW,CH,fT,flT);
       } else paintWall(cx,CW,CH,map);
       save(); });
   }
@@ -1119,6 +1139,8 @@
       else if(e.key==='ArrowLeft' && lbGallery.length>1) showLb(lbIndex-1);
       else if(e.key==='ArrowRight' && lbGallery.length>1) showLb(lbIndex+1);
     });
+    let rsT; window.addEventListener('resize',()=>{ if($('#mixer').hidden) return;
+      clearTimeout(rsT); rsT=setTimeout(refreshWall,120); });   // re-render preview on window resize
     const nav=$('#nav'); const onScroll=()=>nav.classList.toggle('scrolled', window.scrollY>20);
     window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
     $('#year').textContent=new Date().getFullYear();
