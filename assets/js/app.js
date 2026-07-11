@@ -541,9 +541,10 @@
     cx.drawImage(im,x+(w-dw)/2-jx,y+(h-dh)/2-jy,dw,dh); cx.filter='none'; cx.restore();
   }
   let texJointMul=1;                                   // scene textures use finer joints
+  let texDiv=1;                                        // >1 → smaller bricks (full-wall texture without tiling)
   function paintWall(cx,W,H,map){
     cx.clearRect(0,0,W,H); cx.fillStyle=mixJoint; cx.fillRect(0,0,W,H);
-    const fam=mixShape||'brick', sc=W/560*texJointMul;
+    const fam=mixShape||'brick', sc=W/560*texJointMul/texDiv;
     const bed=Math.max(1,JW[mixBed]*sc), head=Math.max(1,JW[mixHead]*sc);
     if(fam==='hex') return paintHex(cx,W,H,map,bed);
     if(fam==='oct') return paintOct(cx,W,H,map,Math.max(3*sc,bed));
@@ -553,7 +554,7 @@
     return paintCourses(cx,W,H,map,fam,bed,head);
   }
   function paintCourses(cx,W,H,map,fam,bed,head){
-    const bw=W*(FAM_BW[fam]||15.6)/100, bh=bw/(FAM_AR[fam]||3.4);
+    const bw=W*(FAM_BW[fam]||15.6)/100/texDiv, bh=bw/(FAM_AR[fam]||3.4);
     const rows=Math.ceil(H/(bh+bed))+1, cols=Math.ceil(W/(bw+head))+2, sq=(fam==='square');
     for(let r=0;r<rows;r++){ const off=(sq?0:bondOffset(r))*(bw+head), y=r*(bh+bed);
       for(let c=-1;c<cols;c++){ const {im,b}=pickCell(map,c,r); drawUnit(cx,im,c*(bw+head)-off,y,bw,bh,b); } }
@@ -824,7 +825,18 @@
     }
     cx.restore();
   }
-  function drawPhotoScene(cx,W,H,img,cfg,fTex,pTex){
+  // feather the brick alpha mask so key edges blend instead of cutting hard
+  function featherAlpha(od,Wp,Hp){
+    const N=Wp*Hp, a=new Uint8Array(N), tmp=new Float32Array(N), R=2, D=R*2+1;
+    for(let p=0,i=3;p<N;p++,i+=4) a[p]=od[i];
+    for(let y=0;y<Hp;y++){ const row=y*Wp; let s=0;
+      for(let k=-R;k<=R;k++) s+=a[row+Math.min(Wp-1,Math.max(0,k))];
+      for(let x=0;x<Wp;x++){ tmp[row+x]=s/D; s+=a[row+Math.min(Wp-1,x+R+1)]-a[row+Math.max(0,x-R)]; } }
+    for(let x=0;x<Wp;x++){ let s=0;
+      for(let k=-R;k<=R;k++) s+=tmp[Math.min(Hp-1,Math.max(0,k))*Wp+x];
+      for(let y=0;y<Hp;y++){ od[(y*Wp+x)*4+3]=s/D; s+=tmp[Math.min(Hp-1,y+R+1)*Wp+x]-tmp[Math.max(0,y-R)*Wp+x]; } }
+  }
+  function drawPhotoScene(cx,W,H,img,cfg,fTexMaker,pTex){
     // cover-fit the photo, optionally cropping the bottom (e.g. gravel strip)
     const crop=cfg.cropBottom||1, sH=img.naturalHeight*crop;
     const s=Math.max(W/img.naturalWidth,H/sH);
@@ -834,12 +846,17 @@
     // facade(s): colour-key each wall face — light plaster becomes brick, dark glass /
     // roof / door stay from the photo. Brick keeps the photo's shading (multiply).
     // face = rect {x0,y0,x1,y1} or polygon flat list [x0,y0,x1,y1,...]
-    if(fTex){
+    if(fTexMaker){
       const facs=cfg.facades||[cfg.facade];
-      let maxW=0; facs.forEach(f=>{ const w=Array.isArray(f)
-        ? (Math.max(...f.filter((_,i)=>i%2===0))-Math.min(...f.filter((_,i)=>i%2===0)))*dw
-        : (f.x1-f.x0)*dw; if(w>maxW)maxW=w; });
-      const ps=maxW/((cfg.facadeTiles||7)*fTex.width);
+      // union bbox of all wall faces → ONE continuous texture (no tiling, no visible repeat)
+      let ux0=1,uy0=1,ux1=0,uy1=0;
+      facs.forEach(f=>{ const xs=Array.isArray(f)?f.filter((_,i)=>i%2===0):[f.x0,f.x1];
+        const ys=Array.isArray(f)?f.filter((_,i)=>i%2===1):[f.y0,f.y1];
+        ux0=Math.min(ux0,...xs); ux1=Math.max(ux1,...xs); uy0=Math.min(uy0,...ys); uy1=Math.max(uy1,...ys); });
+      const UX=mx(ux0), UY=my(uy0), UW=Math.max(2,mx(ux1)-UX), UH=Math.max(2,my(uy1)-UY);
+      const fTex=fTexMaker(UW,UH,cfg.facadeTiles||7);
+      if(!fTex) { /* no facade mix */ }
+      else {
       const key=cfg.key||{};
       const lumT=key.lum!=null?key.lum:118, satT=key.sat!=null?key.sat:0.26, blueT=key.blue!=null?key.blue:20;
       facs.forEach(f=>{
@@ -853,10 +870,9 @@
         const sx=nx0*img.naturalWidth, sy=ny0*img.naturalHeight, sw=(nx1-nx0)*img.naturalWidth, sh=(ny1-ny0)*img.naturalHeight;
         lc.drawImage(img,sx,sy,sw,sh,0,0,Wp,Hp);
         let photo; try{ photo=lc.getImageData(0,0,Wp,Hp).data; }catch(e){ photo=null; }
-        // brick over the photo region (multiply keeps shadows), aligned to the whole facade
+        // brick over the photo region (multiply keeps shadows), continuous across all faces
         lc.globalCompositeOperation='multiply';
-        lc.save(); lc.translate(-(X-mx(0)),-(Y-my(0)));
-        lc.fillStyle=brickPattern(lc,fTex,ps)||'#a08070'; lc.fillRect(X-mx(0),Y-my(0),Wp,Hp); lc.restore();
+        lc.drawImage(fTex, X-UX, Y-UY, Wp, Hp, 0, 0, Wp, Hp);
         lc.globalCompositeOperation='source-over';
         if(photo){
           const out=lc.getImageData(0,0,Wp,Hp), od=out.data, N=Wp*Hp;
@@ -888,11 +904,13 @@
             }
           }
           for(let p=0,i=3;p<N;p++,i+=4){ if(!plaster[p]||win[p]) od[i]=0; }  // brick only on plaster outside openings
+          featherAlpha(od,Wp,Hp);                                            // soften key edges (no hard cutouts)
           lc.putImageData(out,0,0);
         }
         cx.save(); cx.beginPath(); polyN.forEach((p,i)=>{const Xp=mx(p[0]),Yp=my(p[1]); i?cx.lineTo(Xp,Yp):cx.moveTo(Xp,Yp);}); cx.closePath(); cx.clip();
         cx.drawImage(lay,X,Y); cx.restore();
       });
+      }
     }
     // floor: perspective pavers, then multiply the photo floor so light/shadows stay
     if(pTex){
@@ -906,7 +924,7 @@
     // restore fixed elements (furniture / objects) from the photo — only where the colour
     // key can't separate them (light-on-light interiors). Exterior glass is kept by the key.
     // rect: [x0,y0,x1,y1] · polygon silhouette: flat list [x0,y0,x1,y1,x2,y2,...]
-    if((fTex||pTex) && cfg.restore){ (cfg.openings||[]).forEach(o=>{
+    if((fTexMaker||pTex) && cfg.restore){ (cfg.openings||[]).forEach(o=>{
       let x0,y0,x1,y1;
       if(o.length>4){
         const xs=[],ys=[]; for(let i=0;i<o.length;i+=2){ xs.push(o[i]); ys.push(o[i+1]); }
@@ -944,7 +962,8 @@
       const TS=Math.round(Math.max(W,H)*0.9), sc=(mixView==='interior')?'interior':'exterior';
       const facadeTex=zoneTex(zoneKey(sc,'facade'),TS,map), floorTex=zoneTex(zoneKey(sc,'floor'),TS,map);
       const photo=(mixView==='interior')?SCENES.interior:SCENES[mixBuilding];
-      if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,W,H,img,photo,facadeTex,floorTex);
+      const fMaker=(w,h,div)=>zoneTexFull(zoneKey(sc,'facade'),w,h,div,map);
+      if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,W,H,img,photo,fMaker,floorTex);
         else if(mixView==='interior') drawInterior(cx,W,H,facadeTex,floorTex);
         else drawFacade(cx,W,H,facadeTex,floorTex); }); return; }
       if(mixView==='interior') drawInterior(cx,W,H,facadeTex,floorTex);
@@ -965,6 +984,23 @@
     } finally {
       texJointMul=1;
       [mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff]=B;   // always restore active zone
+    }
+    return tex;
+  }
+  // full-size wall texture (no tiling → no visible repeat): div = brick-size divisor
+  function zoneTexFull(name,w,h,div,map){
+    const z=zoneData[name]; if(!z.mix.length) return null;
+    const B=[mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff];
+    let tex=null;
+    try{
+      mix=z.mix;mixCat=z.cat;mixShape=z.shape;mixBond=z.bond;mixBed=z.bed;mixHead=z.head;mixJoint=z.joint;mixOrder=z.order;mixLayout=z.layout;mixSeq=z.seq;wildOff=z.wild;
+      if(!mixLayout.length){ genLayout(); z.layout=mixLayout; z.seq=mixSeq; z.wild=wildOff; }
+      tex=document.createElement('canvas'); tex.width=Math.max(2,Math.round(w)); tex.height=Math.max(2,Math.round(h));
+      texJointMul=0.55; texDiv=div;
+      paintWall(tex.getContext('2d'),tex.width,tex.height,map);
+    } finally {
+      texJointMul=1; texDiv=1;
+      [mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff]=B;
     }
     return tex;
   }
@@ -1015,7 +1051,8 @@
       if(scene){ const TS=Math.round(Math.max(CW,CH)*0.9), sc=(mixView==='interior')?'interior':'exterior';
         const fT=zoneTex(zoneKey(sc,'facade'),TS,map), flT=zoneTex(zoneKey(sc,'floor'),TS,map);
         const photo=(mixView==='interior')?SCENES.interior:SCENES[mixBuilding];
-        if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,CW,CH,img,photo,fT,flT);
+        const fMk=(w,h,div)=>zoneTexFull(zoneKey(sc,'facade'),w,h,div,map);
+        if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,CW,CH,img,photo,fMk,flT);
           else if(mixView==='interior') drawInterior(cx,CW,CH,fT,flT); else drawFacade(cx,CW,CH,fT,flT); save(); }); return; }
         if(mixView==='interior') drawInterior(cx,CW,CH,fT,flT); else drawFacade(cx,CW,CH,fT,flT);
       } else paintWall(cx,CW,CH,map);
