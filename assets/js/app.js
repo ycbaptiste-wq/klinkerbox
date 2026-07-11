@@ -740,7 +740,7 @@
         [0.408,0.452,0.808,0.703],[0.115,0.655,0.36,0.755],[0.335,0.655,0.425,0.775]
       ],
       floor:[[0.155,0.735],[0.845,0.735],[0.97,1.0],[0.03,1.0]],
-      facadeTiles:8.5, floorTiles:5, floorHorizon:0.665 },
+      facadeTiles:8.5, floorTiles:5, floorHorizon:0.665, key:{lum:98,blue:55} },
     office:{ src:'assets/img/scenes/office.jpg',
       facade:{x0:0.107,y0:0.202,x1:0.896,y1:0.852},
       openings:[
@@ -751,7 +751,7 @@
         [0.075,0.775,0.375,0.888],[0.63,0.775,0.93,0.888]
       ],
       floor:[[0.0,0.868],[1.0,0.868],[1.0,1.0],[0.0,1.0]],
-      facadeTiles:11, floorTiles:6, floorHorizon:0.80 },
+      facadeTiles:11, floorTiles:6, floorHorizon:0.80, key:{lum:108,blue:45} },
     friesen:{ src:'assets/img/scenes/friesen.jpg',
       facades:[
         {x0:0.107,y0:0.565,x1:0.893,y1:0.816},
@@ -928,10 +928,13 @@
     if(!sceneView && !mixLayout.length) genLayout();
     let cv=host.querySelector('canvas.mixcanvas');
     if(!cv){ host.innerHTML=''; cv=document.createElement('canvas'); cv.className='mixcanvas'; host.appendChild(cv); }
-    const W=Math.max(220,host.clientWidth||host.getBoundingClientRect().width|0);
-    const H=Math.max(220,host.clientHeight||host.getBoundingClientRect().height|0);
-    const dpr=Math.min(2,window.devicePixelRatio||1);
-    cv.width=W*dpr; cv.height=H*dpr; cv.style.width=W+'px'; cv.style.height=H+'px';
+    const dW=Math.max(220,host.clientWidth||host.getBoundingClientRect().width|0);
+    const dH=Math.max(220,host.clientHeight||host.getBoundingClientRect().height|0);
+    // cap the internal render size (scene color-keying is costly) → CSS scales up to the display
+    const MAXR=sceneView?1000:1400, r=Math.min(1,MAXR/dW);
+    const W=Math.round(dW*r), H=Math.round(dH*r);
+    const dpr=sceneView?1:Math.min(2,window.devicePixelRatio||1);
+    cv.width=W*dpr; cv.height=H*dpr; cv.style.width=dW+'px'; cv.style.height=dH+'px';
     const cx=cv.getContext('2d'); cx.setTransform(dpr,0,0,dpr,0,0);
     const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
     mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
