@@ -772,14 +772,14 @@
       floor:[[0.06,0.845],[0.94,0.845],[1.0,1.0],[0.0,1.0]],
       facadeTiles:8, floorTiles:5, floorHorizon:0.775 },
     interior:{ src:'assets/img/scenes/wohnzimmer.jpg',
-      facade:{x0:0.202,y0:0.135,x1:0.806,y1:0.728},          // accent wall (Riemchen)
+      facade:{x0:0.190,y0:0.100,x1:0.823,y1:0.732},          // accent wall (Riemchen), full coverage
       openings:[
         // sofa silhouette down to the seat frame (floor tiles run underneath)
-        [0.287,0.652, 0.735,0.652, 0.752,0.672, 0.752,0.870, 0.266,0.870, 0.266,0.672],
-        [0.895,0.540,1.0,0.850]                                        // console + vase
+        [0.287,0.650, 0.735,0.650, 0.752,0.672, 0.752,0.875, 0.266,0.875, 0.266,0.672],
+        [0.828,0.520,1.0,0.860]                                        // right wall recess + console + vase
       ],
       floor:[[0.0,0.780],[0.20,0.722],[1.0,0.718],[1.0,1.0],[0.0,1.0]],
-      floorHorizon:0.42, facadeTiles:3.5, floorPavers:9, restore:true, key:{lum:70,sat:0.42,blue:60} }
+      floorHorizon:0.44, facadeTiles:6, floorPavers:15, restore:true, key:{lum:70,sat:0.42,blue:60} }
   };
   const sceneImgCache={};
   function loadSceneImg(cfg,cb){
@@ -859,11 +859,35 @@
         lc.fillStyle=brickPattern(lc,fTex,ps)||'#a08070'; lc.fillRect(X-mx(0),Y-my(0),Wp,Hp); lc.restore();
         lc.globalCompositeOperation='source-over';
         if(photo){
-          const out=lc.getImageData(0,0,Wp,Hp), od=out.data;
-          for(let i=0;i<od.length;i+=4){
+          const out=lc.getImageData(0,0,Wp,Hp), od=out.data, N=Wp*Hp;
+          const darkT=key.dark!=null?key.dark:110;
+          const plaster=new Uint8Array(N), dark=new Uint8Array(N);
+          for(let p=0,i=0;p<N;p++,i+=4){
             const r=photo[i],g=photo[i+1],b=photo[i+2], lum=(r+g+b)/3, mxc=Math.max(r,g,b),mnc=Math.min(r,g,b), sat=mxc?(mxc-mnc)/mxc:0;
-            if(!(lum>lumT && sat<satT && b<=r+blueT)) od[i+3]=0;      // keep brick only on light neutral plaster
+            plaster[p]=(lum>lumT && sat<satT && b<=r+blueT)?1:0;
+            dark[p]=(lum<darkT)?1:0;                                   // glass / door / dark reveals
           }
+          const win=new Uint8Array(N);
+          if(!cfg.restore){   // exteriors: keep whole window/door boxes (connected dark regions) + frame
+            const seen=new Uint8Array(N), st=new Int32Array(N); let sp;
+            const M=Math.round(Math.min(Wp,Hp)*(key.frame!=null?key.frame:0.026)), minA=N*0.0008;
+            for(let s=0;s<N;s++){
+              if(!dark[s]||seen[s]) continue;
+              let minx=Wp,miny=Hp,maxx=0,maxy=0,area=0; sp=0; st[sp++]=s; seen[s]=1;
+              while(sp){ const q=st[--sp], x=q%Wp, y=(q/Wp)|0; area++;
+                if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+                if(x>0&&dark[q-1]&&!seen[q-1]){seen[q-1]=1;st[sp++]=q-1;}
+                if(x<Wp-1&&dark[q+1]&&!seen[q+1]){seen[q+1]=1;st[sp++]=q+1;}
+                if(y>0&&dark[q-Wp]&&!seen[q-Wp]){seen[q-Wp]=1;st[sp++]=q-Wp;}
+                if(y<Hp-1&&dark[q+Wp]&&!seen[q+Wp]){seen[q+Wp]=1;st[sp++]=q+Wp;}
+              }
+              const bw=maxx-minx, bh=maxy-miny;
+              if(area<minA || bw>Wp*0.55 || bh>Hp*0.9) continue;       // skip noise & roof-sized blobs
+              const ax=Math.max(0,minx-M),ay=Math.max(0,miny-M),bx=Math.min(Wp-1,maxx+M),by=Math.min(Hp-1,maxy+Math.round(M*1.5));
+              for(let y=ay;y<=by;y++){ const row=y*Wp; for(let x=ax;x<=bx;x++) win[row+x]=1; }
+            }
+          }
+          for(let p=0,i=3;p<N;p++,i+=4){ if(!plaster[p]||win[p]) od[i]=0; }  // brick only on plaster outside openings
           lc.putImageData(out,0,0);
         }
         cx.save(); cx.beginPath(); polyN.forEach((p,i)=>{const Xp=mx(p[0]),Yp=my(p[1]); i?cx.lineTo(Xp,Yp):cx.moveTo(Xp,Yp);}); cx.closePath(); cx.clip();
@@ -955,9 +979,7 @@
   }
   function buildViewToggle(){
     const el=$('#mixView'); if(!el) return;
-    const anyMix=Object.keys(zoneData).some(z=>zoneData[z].mix.length)||mix.length;
-    if(!anyMix){ el.hidden=true; el.innerHTML=''; return; }
-    const M=MIX();
+    const M=MIX();   // always visible → pick surface (Aussen/Innen · Fassade/Boden) before adding
     const views=[['wall',M.view_wall[lang]],['exterior',M.view_ext[lang]],['interior',M.view_int[lang]]];
     let html=`<div class="mixview__row">${views.map(o=>`<button class="mixview__b${o[0]===mixView?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
     if(mixView==='exterior'||mixView==='interior'){

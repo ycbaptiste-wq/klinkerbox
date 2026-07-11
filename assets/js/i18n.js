@@ -194,7 +194,7 @@ window.SUBS = {
 
 // Colour mixer
 window.MIX = {
-  title:  {de:"Farbmixer", fr:"Mélangeur de couleurs", it:"Mixer colori", en:"Colour mixer"},
+  title:  {de:"Konfigurator", fr:"Configurateur", it:"Configuratore", en:"Configurator"},
   view_wall:    {de:"Muster", fr:"Motif", it:"Motivo", en:"Pattern"},
   view_ext:     {de:"Aussen", fr:"Extérieur", it:"Esterno", en:"Exterior"},
   view_int:     {de:"Innen", fr:"Intérieur", it:"Interno", en:"Interior"},
@@ -206,6 +206,7 @@ window.MIX = {
   b_villa:      {de:"Stadtvilla", fr:"Villa urbaine", it:"Villa urbana", en:"Town villa"},
   b_bungalow:   {de:"Bungalow", fr:"Bungalow", it:"Bungalow", en:"Bungalow"},
   b_office:     {de:"Bürogebäude", fr:"Immeuble de bureaux", it:"Edificio per uffici", en:"Office building"},
+  b_friesen:    {de:"Friesenhaus", fr:"Maison frisonne", it:"Casa frisone", en:"Frisian house"},
   add:    {de:"Zum Mixer", fr:"Ajouter au mélangeur", it:"Aggiungi al mixer", en:"Add to mixer"},
   added:  {de:"Im Mixer ✓", fr:"Dans le mélangeur ✓", it:"Nel mixer ✓", en:"In mixer ✓"},
   hint:   {de:"Steine derselben Kategorie und Form kombinieren.", fr:"Combinez des pièces de même catégorie et forme.", it:"Combina pezzi di stessa categoria e forma.", en:"Combine pieces of the same category and shape."},
