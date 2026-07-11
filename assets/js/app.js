@@ -723,7 +723,54 @@
       ],
       floor:[[0.105,0.800],[0.895,0.800],[0.960,0.952],[0.040,0.952]],
       floorExtra:[[0.418,0.780],[0.582,0.780],[0.582,0.805],[0.418,0.805]],
-      cropBottom:0.955, facadeTiles:7, floorTiles:8 },
+      cropBottom:0.955, facadeTiles:7, floorTiles:5, floorHorizon:0.735 },
+    villa:{ src:'assets/img/scenes/villa.jpg',
+      facade:{x0:0.140,y0:0.328,x1:0.860,y1:0.805},
+      openings:[
+        [0.206,0.352,0.260,0.542],[0.323,0.352,0.377,0.542],[0.469,0.352,0.523,0.542],[0.615,0.352,0.669,0.542],[0.731,0.352,0.785,0.542],
+        [0.206,0.615,0.260,0.810],[0.323,0.615,0.377,0.810],[0.615,0.615,0.669,0.810],[0.731,0.615,0.785,0.810],
+        [0.408,0.545,0.592,0.815],[0.385,0.810,0.615,0.958]
+      ],
+      floor:[[0.0,0.90],[1.0,0.90],[1.0,1.0],[0.0,1.0]],
+      facadeTiles:7.5, floorTiles:6, floorHorizon:0.84 },
+    bungalow:{ src:'assets/img/scenes/bungalow.jpg',
+      facade:{x0:0.166,y0:0.332,x1:0.833,y1:0.705},
+      openings:[
+        [0.088,0.383,0.405,0.452],[0.236,0.487,0.267,0.700],[0.296,0.452,0.365,0.700],
+        [0.408,0.452,0.808,0.703],[0.115,0.655,0.36,0.755],[0.335,0.655,0.425,0.775]
+      ],
+      floor:[[0.155,0.735],[0.845,0.735],[0.97,1.0],[0.03,1.0]],
+      facadeTiles:8.5, floorTiles:5, floorHorizon:0.665 },
+    office:{ src:'assets/img/scenes/office.jpg',
+      facade:{x0:0.107,y0:0.202,x1:0.896,y1:0.852},
+      openings:[
+        [0.131,0.242,0.232,0.406],[0.259,0.242,0.359,0.406],[0.385,0.242,0.487,0.406],[0.513,0.242,0.615,0.406],[0.640,0.242,0.740,0.406],[0.767,0.242,0.867,0.406],
+        [0.131,0.451,0.232,0.621],[0.259,0.451,0.359,0.621],[0.385,0.451,0.487,0.621],[0.513,0.451,0.615,0.621],[0.640,0.451,0.740,0.621],[0.767,0.451,0.867,0.621],
+        [0.131,0.660,0.232,0.848],[0.259,0.660,0.359,0.848],[0.640,0.660,0.740,0.848],[0.767,0.660,0.867,0.848],
+        [0.385,0.635,0.615,0.850],
+        [0.075,0.775,0.375,0.888],[0.63,0.775,0.93,0.888]
+      ],
+      floor:[[0.0,0.868],[1.0,0.868],[1.0,1.0],[0.0,1.0]],
+      facadeTiles:11, floorTiles:6, floorHorizon:0.80 },
+    friesen:{ src:'assets/img/scenes/friesen.jpg',
+      facades:[
+        {x0:0.107,y0:0.565,x1:0.893,y1:0.816},
+        {x0:0.393,y0:0.298,x1:0.607,y1:0.567},
+        [0.5,0.132, 0.603,0.300, 0.397,0.300],
+        {x0:0.228,y0:0.345,x1:0.312,y1:0.475},
+        {x0:0.688,y0:0.345,x1:0.772,y1:0.475}
+      ],
+      openings:[
+        [0.177,0.592,0.246,0.745],[0.297,0.592,0.365,0.745],[0.636,0.592,0.704,0.745],[0.756,0.592,0.825,0.745],
+        [0.457,0.585,0.543,0.825],
+        [0.431,0.345,0.487,0.470],[0.513,0.345,0.569,0.470],
+        [0.238,0.352,0.303,0.472],[0.697,0.352,0.762,0.472],
+        [0.44,0.815,0.56,0.852],
+        [0.055,0.775,0.40,0.888],[0.60,0.775,0.945,0.888],
+        [0.0,0.925,0.16,1.0],[0.84,0.925,1.0,1.0]
+      ],
+      floor:[[0.06,0.845],[0.94,0.845],[1.0,1.0],[0.0,1.0]],
+      facadeTiles:8, floorTiles:5, floorHorizon:0.775 },
     interior:{ src:'assets/img/scenes/wohnzimmer.jpg',
       facade:{x0:0.202,y0:0.135,x1:0.806,y1:0.728},          // accent wall (Riemchen)
       openings:[
@@ -732,7 +779,7 @@
         [0.895,0.540,1.0,0.850]                                        // console + vase
       ],
       floor:[[0.0,0.780],[0.20,0.722],[1.0,0.718],[1.0,1.0],[0.0,1.0]],
-      floorHorizon:0.42, facadeTiles:3.5, floorTiles:4 }
+      floorHorizon:0.42, facadeTiles:3.5, floorPavers:9, restore:true, key:{lum:70,sat:0.42,blue:60} }
   };
   const sceneImgCache={};
   function loadSceneImg(cfg,cb){
@@ -743,34 +790,36 @@
     im.onerror=()=>cb(null);
     im.src=cfg.src;
   }
-  // perspective ground: rows shrink toward the vanishing point (mode-7 style strips)
-  function paintGroundPersp(cx,pg,tex,tiles,horizon){
+  // perspective paving: real pavers in a running bond that foreshorten with depth,
+  // coloured by sampling the floor mix texture. Reads clearly as laid stones.
+  function paintGroundPavers(cx,pg,tex,nx,horizonY){
     if(pg.length<3) return;
-    const yT=Math.min(...pg.map(p=>p[1])), yB=Math.max(...pg.map(p=>p[1]));
-    const xTL=Math.min(...pg.filter(p=>p[1]<(yT+yB)/2).map(p=>p[0])), xTR=Math.max(...pg.filter(p=>p[1]<(yT+yB)/2).map(p=>p[0]));
-    const xBL=Math.min(...pg.filter(p=>p[1]>=(yT+yB)/2).map(p=>p[0])), xBR=Math.max(...pg.filter(p=>p[1]>=(yT+yB)/2).map(p=>p[0]));
-    // vanishing y: explicit horizon, else from the converging side edges
-    const wT=xTR-xTL, wB=xBR-xBL, dh0=yB-yT;
-    const yh = (horizon!=null) ? horizon : (wB>wT+1) ? (yT - dh0*wT/(wB-wT)) : (yT - dh0*2.5);
-    const xL=y=> xBL+(xTL-xBL)*(yB-y)/dh0, xR=y=> xBR+(xTR-xBR)*(yB-y)/dh0;
-    const repW=wB/tiles;                                   // one texture repeat at the near edge
-    const C=(yB-yh)*(yB-yh)/(repW*0.5);                    // dv=1 repeat ≙ repW*0.5 px at the bottom
+    const ys=pg.map(p=>p[1]), yNear=Math.max(...ys), yFar=Math.min(...ys);
+    if(yNear-yFar<4) return;
+    const srt=[...pg].sort((a,b)=>a[1]-b[1]);
+    const farE=[srt[0],srt[1]].sort((a,b)=>a[0]-b[0]), nearE=[srt[srt.length-2],srt[srt.length-1]].sort((a,b)=>a[0]-b[0]);
+    const [farL,farR]=farE, [nearL,nearR]=nearE;
+    const yh = (horizonY!=null) ? Math.min(horizonY,yFar-2) : yFar-(yNear-yFar)*1.4;
+    const lerpX=(A,B,y)=> A[0]+(B[0]-A[0])*((y-A[1])/((B[1]-A[1])||1));
+    const xL=y=> lerpX(farL,nearL,y), xR=y=> lerpX(farR,nearR,y);
+    const dNear=1/(yNear-yh), dFar=1/(yFar-yh);
+    const ny=Math.max(6,Math.round(nx*0.85));
+    // sample colours from the floor texture
+    let px=null; try{ px=tex.getContext('2d').getImageData(0,0,tex.width,tex.height).data; }catch(e){}
+    const sampleCol=()=>{ if(!px) return '#8a6a58'; const i=(Math.floor(Math.random()*(tex.width*tex.height)))*4;
+      const v=0.9+Math.random()*0.16; return 'rgb('+Math.min(255,px[i]*v|0)+','+Math.min(255,px[i+1]*v|0)+','+Math.min(255,px[i+2]*v|0)+')'; };
     cx.save(); cx.beginPath(); pg.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1])); cx.closePath(); cx.clip();
-    cx.globalCompositeOperation='multiply';
-    const TH=tex.height, TW=tex.width, step=2;
-    for(let y=yT;y<yB;y+=step){
-      const y2=Math.min(yB,y+step);
-      let v0=C/(y2-yh), v1=C/(y-yh);                       // texture v-range for this strip (v grows with depth)
-      if(v1-v0>1) v1=v0+1;
-      const sy=((v0%1)+1)%1*TH, sh=Math.max(1,(v1-v0)*TH);
-      const l=xL(y), r=xR(y), colW=(r-l)/tiles;
-      for(let c=0;c<tiles;c++){
-        if(sy+sh<=TH) cx.drawImage(tex,0,sy,TW,sh, l+c*colW,y,colW,y2-y);
-        else {                                              // wrap across the texture edge
-          const h1=TH-sy, f=h1/sh;
-          cx.drawImage(tex,0,sy,TW,h1, l+c*colW,y,colW,(y2-y)*f);
-          cx.drawImage(tex,0,0,TW,sh-h1, l+c*colW,y+(y2-y)*f,colW,(y2-y)*(1-f));
-        }
+    cx.fillStyle=mixJoint; cx.fillRect(Math.min(...pg.map(p=>p[0])),yFar,Math.max(...pg.map(p=>p[0]))-Math.min(...pg.map(p=>p[0])),yNear-yFar+1);
+    const yAt=d=> yh+1/d, j=1.1;
+    for(let r=0;r<ny;r++){
+      const yBot=yAt(dNear+(dFar-dNear)*r/ny), yTop=yAt(dNear+(dFar-dNear)*(r+1)/ny);
+      const off=(r%2)?0.5:0, lB=xL(yBot),rB=xR(yBot),lT=xL(yTop),rT=xR(yTop);
+      for(let c=-1;c<=nx;c++){
+        const u0=(c+off)/nx, u1=(c+1+off)/nx;
+        cx.fillStyle=sampleCol();
+        cx.beginPath();
+        cx.moveTo(lB+(rB-lB)*u0+j, yBot-j); cx.lineTo(lB+(rB-lB)*u1-j, yBot-j);
+        cx.lineTo(lT+(rT-lT)*u1-j, yTop+j); cx.lineTo(lT+(rT-lT)*u0+j, yTop+j); cx.closePath(); cx.fill();
       }
     }
     cx.restore();
@@ -782,24 +831,58 @@
     const dw=img.naturalWidth*s, dh=sH*s, ox=(W-dw)/2, oy=(H-dh)/2;
     cx.drawImage(img,0,0,img.naturalWidth,sH,ox,oy,dw,dh);
     const mx=nx=>ox+nx*dw, my=ny=>oy+(ny/crop)*dh;
-    // facade: multiply the brick texture into the wall so the photo's shading stays
+    // facade(s): colour-key each wall face — light plaster becomes brick, dark glass /
+    // roof / door stay from the photo. Brick keeps the photo's shading (multiply).
+    // face = rect {x0,y0,x1,y1} or polygon flat list [x0,y0,x1,y1,...]
     if(fTex){
-      const f=cfg.facade, fx=mx(f.x0), fy=my(f.y0), fw=mx(f.x1)-fx, fh=my(f.y1)-fy;
-      const ps=fw/((cfg.facadeTiles||7)*fTex.width);
-      cx.save(); cx.beginPath(); cx.rect(fx,fy,fw,fh); cx.clip();
-      cx.globalCompositeOperation='multiply';
-      cx.fillStyle=brickPattern(cx,fTex,ps)||'#a08070'; cx.fillRect(fx,fy,fw,fh);
-      cx.restore();
+      const facs=cfg.facades||[cfg.facade];
+      let maxW=0; facs.forEach(f=>{ const w=Array.isArray(f)
+        ? (Math.max(...f.filter((_,i)=>i%2===0))-Math.min(...f.filter((_,i)=>i%2===0)))*dw
+        : (f.x1-f.x0)*dw; if(w>maxW)maxW=w; });
+      const ps=maxW/((cfg.facadeTiles||7)*fTex.width);
+      const key=cfg.key||{};
+      const lumT=key.lum!=null?key.lum:118, satT=key.sat!=null?key.sat:0.26, blueT=key.blue!=null?key.blue:20;
+      facs.forEach(f=>{
+        let nxs,nys,polyN;
+        if(Array.isArray(f)){ nxs=[];nys=[];polyN=[]; for(let i=0;i<f.length;i+=2){ nxs.push(f[i]); nys.push(f[i+1]); polyN.push([f[i],f[i+1]]); } }
+        else { nxs=[f.x0,f.x1]; nys=[f.y0,f.y1]; polyN=[[f.x0,f.y0],[f.x1,f.y0],[f.x1,f.y1],[f.x0,f.y1]]; }
+        const nx0=Math.min(...nxs),nx1=Math.max(...nxs),ny0=Math.min(...nys),ny1=Math.max(...nys);
+        const X=mx(nx0),Y=my(ny0),Wp=Math.max(1,Math.round(mx(nx1)-X)),Hp=Math.max(1,Math.round(my(ny1)-Y));
+        const lay=document.createElement('canvas'); lay.width=Wp; lay.height=Hp;
+        const lc=lay.getContext('2d',{willReadFrequently:true});
+        const sx=nx0*img.naturalWidth, sy=ny0*img.naturalHeight, sw=(nx1-nx0)*img.naturalWidth, sh=(ny1-ny0)*img.naturalHeight;
+        lc.drawImage(img,sx,sy,sw,sh,0,0,Wp,Hp);
+        let photo; try{ photo=lc.getImageData(0,0,Wp,Hp).data; }catch(e){ photo=null; }
+        // brick over the photo region (multiply keeps shadows), aligned to the whole facade
+        lc.globalCompositeOperation='multiply';
+        lc.save(); lc.translate(-(X-mx(0)),-(Y-my(0)));
+        lc.fillStyle=brickPattern(lc,fTex,ps)||'#a08070'; lc.fillRect(X-mx(0),Y-my(0),Wp,Hp); lc.restore();
+        lc.globalCompositeOperation='source-over';
+        if(photo){
+          const out=lc.getImageData(0,0,Wp,Hp), od=out.data;
+          for(let i=0;i<od.length;i+=4){
+            const r=photo[i],g=photo[i+1],b=photo[i+2], lum=(r+g+b)/3, mxc=Math.max(r,g,b),mnc=Math.min(r,g,b), sat=mxc?(mxc-mnc)/mxc:0;
+            if(!(lum>lumT && sat<satT && b<=r+blueT)) od[i+3]=0;      // keep brick only on light neutral plaster
+          }
+          lc.putImageData(out,0,0);
+        }
+        cx.save(); cx.beginPath(); polyN.forEach((p,i)=>{const Xp=mx(p[0]),Yp=my(p[1]); i?cx.lineTo(Xp,Yp):cx.moveTo(Xp,Yp);}); cx.closePath(); cx.clip();
+        cx.drawImage(lay,X,Y); cx.restore();
+      });
     }
-    // floor: true perspective rows, multiplied so the photo's light stays
+    // floor: perspective pavers, then multiply the photo floor so light/shadows stay
     if(pTex){
       const hz=(cfg.floorHorizon!=null)?my(cfg.floorHorizon):null;
-      const fills=[cfg.floor].concat(cfg.floorExtra?[cfg.floorExtra]:[]);
-      fills.forEach(pg=>paintGroundPersp(cx,pg.map(p=>[mx(p[0]),my(p[1])]),pTex,cfg.floorTiles||8,hz));
+      const fills=[cfg.floor].concat(cfg.floorExtra?[cfg.floorExtra]:[]).map(pg=>pg.map(p=>[mx(p[0]),my(p[1])]));
+      fills.forEach(pg=>paintGroundPavers(cx,pg,pTex,cfg.floorPavers||16,hz));
+      cx.save(); cx.beginPath(); fills.forEach(pg=>{ pg.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1])); cx.closePath(); });
+      cx.clip(); cx.globalCompositeOperation='multiply'; cx.globalAlpha=0.72;
+      cx.drawImage(img,0,0,img.naturalWidth,sH,ox,oy,dw,dh); cx.restore();
     }
-    // windows / door / furniture — restore from the photo over both surfaces
+    // restore fixed elements (furniture / objects) from the photo — only where the colour
+    // key can't separate them (light-on-light interiors). Exterior glass is kept by the key.
     // rect: [x0,y0,x1,y1] · polygon silhouette: flat list [x0,y0,x1,y1,x2,y2,...]
-    if(fTex||pTex){ (cfg.openings||[]).forEach(o=>{
+    if((fTex||pTex) && cfg.restore){ (cfg.openings||[]).forEach(o=>{
       let x0,y0,x1,y1;
       if(o.length>4){
         const xs=[],ys=[]; for(let i=0;i<o.length;i+=2){ xs.push(o[i]); ys.push(o[i+1]); }
@@ -975,7 +1058,7 @@
       <div class="mixmortars">${MORTARS.map(c=>`<button class="mixmortar${c[1]===mixJoint?' is-active':''}" style="background:${c[1]}" data-hex="${c[1]}" title="${c[0]}"></button>`).join('')}</div></div>`;
     // building type — only relevant in the exterior view
     const bld=(mixView==='exterior')
-      ? `<div class="mixgrp"><div class="mixgrp__h">${M.building[lang]}</div>${seg('bld',[['efh',M.b_efh[lang]],['villa',M.b_villa[lang]],['bungalow',M.b_bungalow[lang]],['office',M.b_office[lang]]],mixBuilding)}</div>`
+      ? `<div class="mixgrp"><div class="mixgrp__h">${M.building[lang]}</div>${seg('bld',[['efh',M.b_efh[lang]],['villa',M.b_villa[lang]],['bungalow',M.b_bungalow[lang]],['office',M.b_office[lang]],['friesen',M.b_friesen[lang]]],mixBuilding)}</div>`
       : '';
     list.innerHTML=bld+ratio+order+bond+joints+jcol;
     // handlers
