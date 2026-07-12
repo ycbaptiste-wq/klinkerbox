@@ -716,7 +716,7 @@
   // ---- photo scenes: project the live mix onto a real render (Muhr-style material swap) ----
   // masks are normalized [0..1] image coordinates; openings are redrawn from the photo on top
   const SCENES={
-    efh:{ src:'assets/img/scenes/efh.jpg',
+    efh:{ src:'assets/img/scenes/efh.jpg', mask:'assets/img/scenes/efh-mask.png',
       facade:{x0:0.195,y0:0.328,x1:0.805,y1:0.740},
       openings:[
         [0.270,0.336,0.386,0.462],[0.466,0.336,0.532,0.446],[0.655,0.336,0.727,0.462],
@@ -725,7 +725,7 @@
       floor:[[0.105,0.800],[0.895,0.800],[0.960,0.952],[0.040,0.952]],
       floorExtra:[[0.418,0.780],[0.582,0.780],[0.582,0.805],[0.418,0.805]],
       cropBottom:0.955, facadeTiles:7, floorTiles:5, floorHorizon:0.735 },
-    villa:{ src:'assets/img/scenes/villa.jpg',
+    villa:{ src:'assets/img/scenes/villa.jpg', mask:'assets/img/scenes/villa-mask.png',
       facade:{x0:0.140,y0:0.328,x1:0.860,y1:0.805},
       openings:[
         [0.206,0.352,0.260,0.542],[0.323,0.352,0.377,0.542],[0.469,0.352,0.523,0.542],[0.615,0.352,0.669,0.542],[0.731,0.352,0.785,0.542],
@@ -733,8 +733,8 @@
         [0.408,0.545,0.592,0.815],[0.385,0.810,0.615,0.958]
       ],
       floor:[[0.0,0.90],[1.0,0.90],[1.0,1.0],[0.0,1.0]],
-      facadeTiles:7.5, floorTiles:6, floorHorizon:0.84 },
-    bungalow:{ src:'assets/img/scenes/bungalow.jpg',
+      facadeTiles:7.5, floorTiles:6, floorHorizon:0.78 },
+    bungalow:{ src:'assets/img/scenes/bungalow.jpg', mask:'assets/img/scenes/bungalow-mask.png',
       facade:{x0:0.166,y0:0.332,x1:0.833,y1:0.705},
       openings:[
         [0.088,0.383,0.405,0.452],[0.236,0.487,0.267,0.700],[0.296,0.452,0.365,0.700],
@@ -742,7 +742,7 @@
       ],
       floor:[[0.155,0.735],[0.845,0.735],[0.97,1.0],[0.03,1.0]],
       facadeTiles:8.5, floorTiles:5, floorHorizon:0.665, key:{lum:98,blue:55} },
-    office:{ src:'assets/img/scenes/office.jpg',
+    office:{ src:'assets/img/scenes/office.jpg', mask:'assets/img/scenes/office-mask.png',
       facade:{x0:0.107,y0:0.202,x1:0.896,y1:0.852},
       openings:[
         [0.131,0.242,0.232,0.406],[0.259,0.242,0.359,0.406],[0.385,0.242,0.487,0.406],[0.513,0.242,0.615,0.406],[0.640,0.242,0.740,0.406],[0.767,0.242,0.867,0.406],
@@ -753,7 +753,7 @@
       ],
       floor:[[0.0,0.868],[1.0,0.868],[1.0,1.0],[0.0,1.0]],
       facadeTiles:11, floorTiles:6, floorHorizon:0.80, key:{lum:108,blue:45} },
-    friesen:{ src:'assets/img/scenes/friesen.jpg',
+    friesen:{ src:'assets/img/scenes/friesen.jpg', mask:'assets/img/scenes/friesen-mask.png',
       facades:[
         {x0:0.107,y0:0.565,x1:0.893,y1:0.816},
         {x0:0.393,y0:0.298,x1:0.607,y1:0.567},
@@ -772,7 +772,7 @@
       ],
       floor:[[0.06,0.845],[0.94,0.845],[1.0,1.0],[0.0,1.0]],
       facadeTiles:8, floorTiles:5, floorHorizon:0.775 },
-    interior:{ src:'assets/img/scenes/wohnzimmer.jpg',
+    interior:{ src:'assets/img/scenes/wohnzimmer.jpg', mask:'assets/img/scenes/wohnzimmer-mask.png',
       facade:{x0:0.190,y0:0.100,x1:0.823,y1:0.732},          // accent wall (Riemchen), full coverage
       openings:[
         // sofa silhouette down to the seat frame (floor tiles run underneath)
@@ -783,6 +783,21 @@
       floorHorizon:0.44, facadeTiles:6, floorPavers:15, restore:true, key:{lum:70,sat:0.42,blue:60} }
   };
   const sceneImgCache={};
+  function loadImgUrl(src,cb){
+    const c=sceneImgCache[src];
+    if(c && c.complete && c.naturalWidth){ cb(c); return; }
+    const im=new Image();
+    im.onload=()=>{ sceneImgCache[src]=im; cb(im); };
+    im.onerror=()=>cb(null);
+    im.src=src;
+  }
+  // load scene photo + its wall/floor mask (R=wall, G=floor)
+  function loadScene(cfg,cb){
+    loadImgUrl(cfg.src,img=>{
+      if(!img){ cb(null,null); return; }
+      if(cfg.mask) loadImgUrl(cfg.mask,mk=>cb(img,mk)); else cb(img,null);
+    });
+  }
   function loadSceneImg(cfg,cb){
     const c=sceneImgCache[cfg.src];
     if(c && c.complete && c.naturalWidth){ cb(c); return; }
@@ -836,7 +851,7 @@
       for(let k=-R;k<=R;k++) s+=tmp[Math.min(Hp-1,Math.max(0,k))*Wp+x];
       for(let y=0;y<Hp;y++){ od[(y*Wp+x)*4+3]=s/D; s+=tmp[Math.min(Hp-1,y+R+1)*Wp+x]-tmp[Math.max(0,y-R)*Wp+x]; } }
   }
-  function drawPhotoScene(cx,W,H,img,cfg,fTexMaker,pTex){
+  function drawPhotoScene(cx,W,H,img,cfg,fTexMaker,pTex,mImg){
     // cover-fit the photo, optionally cropping the bottom (e.g. gravel strip)
     const crop=cfg.cropBottom||1, sH=img.naturalHeight*crop;
     const s=Math.max(W/img.naturalWidth,H/sH);
@@ -870,11 +885,26 @@
         const sx=nx0*img.naturalWidth, sy=ny0*img.naturalHeight, sw=(nx1-nx0)*img.naturalWidth, sh=(ny1-ny0)*img.naturalHeight;
         lc.drawImage(img,sx,sy,sw,sh,0,0,Wp,Hp);
         let photo; try{ photo=lc.getImageData(0,0,Wp,Hp).data; }catch(e){ photo=null; }
-        // brick over the photo region (multiply keeps shadows), continuous across all faces
+        // precise wall mask (R channel) built per scene — replaces the colour key
+        let maskData=null;
+        if(mImg){
+          const mc=document.createElement('canvas'); mc.width=Wp; mc.height=Hp;
+          const mcx=mc.getContext('2d',{willReadFrequently:true});
+          mcx.drawImage(mImg, nx0*mImg.naturalWidth, ny0*mImg.naturalHeight,
+            (nx1-nx0)*mImg.naturalWidth, (ny1-ny0)*mImg.naturalHeight, 0,0,Wp,Hp);
+          try{ maskData=mcx.getImageData(0,0,Wp,Hp).data; }catch(e){ maskData=null; }
+        }
+        // brick over the photo region: a light direct pass keeps the brick colour strong
+        // even on very light plaster, then multiply carries the photo's shadows.
+        lc.globalAlpha=0.35; lc.drawImage(fTex, X-UX, Y-UY, Wp, Hp, 0, 0, Wp, Hp); lc.globalAlpha=1;
         lc.globalCompositeOperation='multiply';
         lc.drawImage(fTex, X-UX, Y-UY, Wp, Hp, 0, 0, Wp, Hp);
         lc.globalCompositeOperation='source-over';
-        if(photo){
+        if(maskData){
+          const out=lc.getImageData(0,0,Wp,Hp), od=out.data, N=Wp*Hp;
+          for(let p=0,i=3;p<N;p++,i+=4) od[i]=maskData[p*4];           // wall alpha = mask red (bilinear = soft edge)
+          lc.putImageData(out,0,0);
+        } else if(photo){
           const out=lc.getImageData(0,0,Wp,Hp), od=out.data, N=Wp*Hp;
           const darkT=key.dark!=null?key.dark:110;
           const plaster=new Uint8Array(N), dark=new Uint8Array(N);
@@ -912,14 +942,29 @@
       });
       }
     }
-    // floor: perspective pavers, then multiply the photo floor so light/shadows stay
+    // floor: perspective pavers, then multiply the photo floor so light/shadows stay.
+    // With a scene mask, the pavers are clipped to the exact paved area (G channel).
     if(pTex){
       const hz=(cfg.floorHorizon!=null)?my(cfg.floorHorizon):null;
       const fills=[cfg.floor].concat(cfg.floorExtra?[cfg.floorExtra]:[]).map(pg=>pg.map(p=>[mx(p[0]),my(p[1])]));
-      fills.forEach(pg=>paintGroundPavers(cx,pg,pTex,cfg.floorPavers||16,hz));
-      cx.save(); cx.beginPath(); fills.forEach(pg=>{ pg.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1])); cx.closePath(); });
-      cx.clip(); cx.globalCompositeOperation='multiply'; cx.globalAlpha=0.72;
-      cx.drawImage(img,0,0,img.naturalWidth,sH,ox,oy,dw,dh); cx.restore();
+      const flr=document.createElement('canvas'); flr.width=W; flr.height=H;
+      const fc=flr.getContext('2d');
+      fills.forEach(pg=>paintGroundPavers(fc,pg,pTex,cfg.floorPavers||16,hz));
+      fc.save(); fc.beginPath(); fills.forEach(pg=>{ pg.forEach((p,i)=>i?fc.lineTo(p[0],p[1]):fc.moveTo(p[0],p[1])); fc.closePath(); });
+      fc.clip(); fc.globalCompositeOperation='multiply'; fc.globalAlpha=0.85;
+      fc.drawImage(img,0,0,img.naturalWidth,sH,ox,oy,dw,dh); fc.restore();
+      if(mImg){
+        const gm=document.createElement('canvas'); gm.width=W; gm.height=H;
+        const gc=gm.getContext('2d',{willReadFrequently:true});
+        gc.drawImage(mImg,0,0,mImg.naturalWidth,mImg.naturalHeight*crop,ox,oy,dw,dh);
+        let id=null; try{ id=gc.getImageData(0,0,W,H); }catch(e){}
+        if(id){ const d=id.data;
+          for(let i=0;i<d.length;i+=4){ d[i+3]=d[i+1]; d[i]=d[i+1]=d[i+2]=255; }   // alpha = mask green
+          gc.putImageData(id,0,0);
+          fc.globalCompositeOperation='destination-in'; fc.globalAlpha=1; fc.drawImage(gm,0,0);
+        }
+      }
+      cx.drawImage(flr,0,0);
     }
     // restore fixed elements (furniture / objects) from the photo — only where the colour
     // key can't separate them (light-on-light interiors). Exterior glass is kept by the key.
@@ -963,7 +1008,7 @@
       const facadeTex=zoneTex(zoneKey(sc,'facade'),TS,map), floorTex=zoneTex(zoneKey(sc,'floor'),TS,map);
       const photo=(mixView==='interior')?SCENES.interior:SCENES[mixBuilding];
       const fMaker=(w,h,div)=>zoneTexFull(zoneKey(sc,'facade'),w,h,div,map);
-      if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,W,H,img,photo,fMaker,floorTex);
+      if(photo){ loadScene(photo,(img,mk)=>{ if(img) drawPhotoScene(cx,W,H,img,photo,fMaker,floorTex,mk);
         else if(mixView==='interior') drawInterior(cx,W,H,facadeTex,floorTex);
         else drawFacade(cx,W,H,facadeTex,floorTex); }); return; }
       if(mixView==='interior') drawInterior(cx,W,H,facadeTex,floorTex);
@@ -1052,7 +1097,7 @@
         const fT=zoneTex(zoneKey(sc,'facade'),TS,map), flT=zoneTex(zoneKey(sc,'floor'),TS,map);
         const photo=(mixView==='interior')?SCENES.interior:SCENES[mixBuilding];
         const fMk=(w,h,div)=>zoneTexFull(zoneKey(sc,'facade'),w,h,div,map);
-        if(photo){ loadSceneImg(photo,img=>{ if(img) drawPhotoScene(cx,CW,CH,img,photo,fMk,flT);
+        if(photo){ loadScene(photo,(img,mk)=>{ if(img) drawPhotoScene(cx,CW,CH,img,photo,fMk,flT,mk);
           else if(mixView==='interior') drawInterior(cx,CW,CH,fT,flT); else drawFacade(cx,CW,CH,fT,flT); save(); }); return; }
         if(mixView==='interior') drawInterior(cx,CW,CH,fT,flT); else drawFacade(cx,CW,CH,fT,flT);
       } else paintWall(cx,CW,CH,map);
