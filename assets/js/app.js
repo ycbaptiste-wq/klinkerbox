@@ -820,10 +820,14 @@
     const xL=y=> lerpX(farL,nearL,y), xR=y=> lerpX(farR,nearR,y);
     const dNear=1/(yNear-yh), dFar=1/(yFar-yh);
     const ny=Math.max(6,Math.round(nx*0.85));
-    // sample colours from the floor texture
-    let px=null; try{ px=tex.getContext('2d').getImageData(0,0,tex.width,tex.height).data; }catch(e){}
+    // sample colours from the floor texture — biased toward its mean so adjacent
+    // pavers vary gently (laid stones) instead of a chaotic patchwork
+    let px=null,mr=138,mg=106,mb=88; try{ px=tex.getContext('2d').getImageData(0,0,tex.width,tex.height).data;
+      let sr=0,sg=0,sb=0,n=px.length/4; for(let i=0;i<px.length;i+=4){sr+=px[i];sg+=px[i+1];sb+=px[i+2];} mr=sr/n;mg=sg/n;mb=sb/n; }catch(e){}
     const sampleCol=()=>{ if(!px) return '#8a6a58'; const i=(Math.floor(Math.random()*(tex.width*tex.height)))*4;
-      const v=0.9+Math.random()*0.16; return 'rgb('+Math.min(255,px[i]*v|0)+','+Math.min(255,px[i+1]*v|0)+','+Math.min(255,px[i+2]*v|0)+')'; };
+      const k=0.5, v=0.94+Math.random()*0.1;   // blend 50% to mean, light shade jitter
+      const r=(px[i]*(1-k)+mr*k)*v, g=(px[i+1]*(1-k)+mg*k)*v, b=(px[i+2]*(1-k)+mb*k)*v;
+      return 'rgb('+Math.min(255,r|0)+','+Math.min(255,g|0)+','+Math.min(255,b|0)+')'; };
     cx.save(); cx.beginPath(); pg.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1])); cx.closePath(); cx.clip();
     cx.fillStyle=mixJoint; cx.fillRect(Math.min(...pg.map(p=>p[0])),yFar,Math.max(...pg.map(p=>p[0]))-Math.min(...pg.map(p=>p[0])),yNear-yFar+1);
     const yAt=d=> yh+1/d, j=1.1;
