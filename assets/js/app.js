@@ -773,8 +773,8 @@
       floor:[[0.06,0.845],[0.94,0.845],[1.0,1.0],[0.0,1.0]],
       facadeTiles:8, floorTiles:5, floorHorizon:0.775 },
     interior:{ src:'assets/img/scenes/wohnzimmer.jpg', mask:'assets/img/scenes/wohnzimmer-mask.png',
-      // whole back wall = glass-door reveal (0.174) → right image edge (1.0), ceiling (0.155) → floor line (0.80)
-      facade:{x0:0.174,y0:0.155,x1:1.0,y1:0.808},
+      // whole back wall = glass-door reveal (0.174) → right image edge (1.0), ceiling (0.155) → floor line (~0.81)
+      facade:{x0:0.174,y0:0.155,x1:1.0,y1:0.813},
       openings:[
         // NOTE: the sofa is NOT an opening — its pixel-accurate silhouette (rounded arms,
         // draped blanket incl. fringe, tight legs) is carved directly into the mask's
@@ -786,8 +786,9 @@
         // vase on the console (tight taper so the brick fills right up to it)
         [0.926,0.574, 0.941,0.574, 0.941,0.596, 0.951,0.612, 0.951,0.646, 0.917,0.646, 0.917,0.612, 0.926,0.596]
       ],
-      // interior floor only; left edge follows the glass-door sill so the outdoor area stays untiled
-      floor:[[0.20,0.793],[0.808,0.797],[1.0,0.808],[1.0,1.0],[0.0,1.0],[0.0,0.975],[0.024,0.94],[0.096,0.882],[0.156,0.83]],
+      // paver paint region — slightly LARGER than the mask's G area on every edge; the
+      // G channel (destination-in) trims it to the exact wall line + window-rail diagonal
+      floor:[[0.19,0.790],[0.85,0.793],[0.92,0.806],[1.0,0.803],[1.0,1.0],[0.0,1.0],[0.0,0.947],[0.02,0.933],[0.05,0.902],[0.08,0.877],[0.11,0.852],[0.14,0.828],[0.17,0.804],[0.185,0.797]],
       floorHorizon:0.47, facadeTiles:9, floorPavers:15, restore:true, key:{lum:70,sat:0.42,blue:60} }
   };
   const sceneImgCache={};
