@@ -776,13 +776,10 @@
       // whole back wall = glass-door reveal (0.174) → right image edge (1.0), ceiling (0.155) → floor line (0.80)
       facade:{x0:0.174,y0:0.155,x1:1.0,y1:0.808},
       openings:[
-        // sofa traced to its silhouette: back cushions top (0.640), a step down over each
-        // arm (wall above the arms stays brick), base underside with two tight leg tabs.
-        // Floor tiles run under the frame and take the sofa's contact shadow (multiply).
-        [0.288,0.640, 0.700,0.640, 0.722,0.702, 0.757,0.702, 0.757,0.850,
-         0.708,0.850, 0.708,0.886, 0.697,0.886, 0.697,0.850,
-         0.317,0.850, 0.317,0.885, 0.303,0.885, 0.303,0.850,
-         0.266,0.850, 0.266,0.705],
+        // NOTE: the sofa is NOT an opening — its pixel-accurate silhouette (rounded arms,
+        // draped blanket incl. fringe, tight legs) is carved directly into the mask's
+        // R/G channels, so brick and floor tiles stop exactly at its contour and the
+        // photo (with its own contact shadow) shows through.
         // console table as an L (top slab + left leg panel) — the open space under the top
         // stays brick/tiles (in shadow); brick fills the wall above and beside it
         [0.884,0.642, 1.0,0.642, 1.0,0.665, 0.910,0.665, 0.910,0.856, 0.884,0.856],
