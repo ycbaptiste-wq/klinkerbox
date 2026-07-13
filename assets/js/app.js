@@ -773,21 +773,25 @@
       floor:[[0.06,0.845],[0.94,0.845],[1.0,1.0],[0.0,1.0]],
       facadeTiles:8, floorTiles:5, floorHorizon:0.775 },
     interior:{ src:'assets/img/scenes/wohnzimmer.jpg', mask:'assets/img/scenes/wohnzimmer-mask.png',
-      // accent wall = ceiling line (0.156) → floor line (0.797), left corner (0.205) → right corner (0.808)
-      facade:{x0:0.205,y0:0.156,x1:0.808,y1:0.797},
+      // whole back wall = glass-door reveal (0.174) → right image edge (1.0), ceiling (0.155) → floor line (0.80)
+      facade:{x0:0.174,y0:0.155,x1:1.0,y1:0.808},
       openings:[
-        // sofa traced tight to its silhouette: back cushions, a step down over each arm
-        // (so the wall above the arms stays brick), then the base underside with two leg
-        // tabs. Floor tiles run under the frame between the legs and take the sofa's own
-        // contact shadow from the photo (multiply); only the frame + legs are restored.
-        [0.300,0.663, 0.700,0.663, 0.722,0.702, 0.757,0.702, 0.757,0.850,
+        // sofa traced to its silhouette: back cushions top (0.640), a step down over each
+        // arm (wall above the arms stays brick), base underside with two tight leg tabs.
+        // Floor tiles run under the frame and take the sofa's contact shadow (multiply).
+        [0.288,0.640, 0.700,0.640, 0.722,0.702, 0.757,0.702, 0.757,0.850,
          0.708,0.850, 0.708,0.886, 0.697,0.886, 0.697,0.850,
          0.317,0.850, 0.317,0.885, 0.303,0.885, 0.303,0.850,
          0.266,0.850, 0.266,0.705],
-        [0.820,0.550,1.0,0.830]                                        // right recess + console + vase
+        // console table as an L (top slab + left leg panel) — the open space under the top
+        // stays brick/tiles (in shadow); brick fills the wall above and beside it
+        [0.884,0.642, 1.0,0.642, 1.0,0.665, 0.910,0.665, 0.910,0.856, 0.884,0.856],
+        // vase on the console (tight taper so the brick fills right up to it)
+        [0.926,0.574, 0.941,0.574, 0.941,0.596, 0.951,0.612, 0.951,0.646, 0.917,0.646, 0.917,0.612, 0.926,0.596]
       ],
-      floor:[[0.0,0.797],[1.0,0.797],[1.0,1.0],[0.0,1.0]],   // whole floor, far edge = wall/floor line
-      floorHorizon:0.47, facadeTiles:6, floorPavers:15, restore:true, key:{lum:70,sat:0.42,blue:60} }
+      // interior floor only; left edge follows the glass-door sill so the outdoor area stays untiled
+      floor:[[0.20,0.793],[0.808,0.797],[1.0,0.808],[1.0,1.0],[0.0,1.0],[0.0,0.975],[0.024,0.94],[0.096,0.882],[0.156,0.83]],
+      floorHorizon:0.47, facadeTiles:9, floorPavers:15, restore:true, key:{lum:70,sat:0.42,blue:60} }
   };
   const sceneImgCache={};
   function loadImgUrl(src,cb){
