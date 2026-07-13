@@ -1027,6 +1027,21 @@
       }, allP);
       return;
     }
+    // Aussen-Ansicht "Bungalow": echter 3D-Bau (Fassade + Terrasse als Texturen)
+    if(mixView==='exterior' && mixBuilding==='bungalow' && window.Bungalow3D && window.Bungalow3D.available()){
+      const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
+      mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
+      ensureImgObjs(map=>{
+        if(mixView!=='exterior'||mixBuilding!=='bungalow') return;
+        const facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,660,20,map);   // 13m Front
+        const sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,660,12.5,map);   // 8m Seiten
+        const fShape=(zoneData[zoneKey('exterior','floor')]||{}).shape||'brick';
+        const fDiv=(fShape==='hex'||fShape==='oct')?30:(fShape==='square'?14:11);   // 14m Terrasse
+        const floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,fDiv,map);
+        if(window.Bungalow3D.mount(host)) window.Bungalow3D.setTextures(facadeCv,sideCv,floorCv);
+      }, allP);
+      return;
+    }
     if(!sceneView && !mixLayout.length) genLayout();
     let cv=host.querySelector('canvas.mixcanvas');
     if(!cv){ host.innerHTML=''; cv=document.createElement('canvas'); cv.className='mixcanvas'; host.appendChild(cv); }
@@ -1054,8 +1069,9 @@
       else drawFacade(cx,W,H,facadeTex,floorTex);
     }, allP);
   }
-  // 3D-Modul lädt asynchron (ES-Module) → Innen-Ansicht neu rendern, sobald bereit
+  // 3D-Module laden asynchron (ES-Module) → betroffene Ansicht neu rendern, sobald bereit
   window.addEventListener('room3d-ready',()=>{ if(mixView==='interior') refreshWall(); });
+  window.addEventListener('bungalow3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='bungalow') refreshWall(); });
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
   function zoneTex(name,size,map){
     const z=zoneData[name]; if(!z.mix.length) return null;
@@ -1128,9 +1144,13 @@
     const scene=(mixView==='exterior'||mixView==='interior');
     if(!mix.length && !scene) return;
     const CW=1600, CH=scene?1120:((fam==='hex'||fam==='oct'||fam==='square')?1600:1150);
-    // Innen: hochaufgelöstes Standbild direkt aus dem 3D-Raum
+    // Innen/Bungalow: hochaufgelöstes Standbild direkt aus der 3D-Szene
     if(mixView==='interior' && window.Room3D && window.Room3D.available()){
       const url=window.Room3D.snapshot(CW,CH);
+      if(url){ const a=document.createElement('a'); a.href=url; a.download='klinkerbox-mischung.png'; a.click(); return; }
+    }
+    if(mixView==='exterior' && mixBuilding==='bungalow' && window.Bungalow3D && window.Bungalow3D.available()){
+      const url=window.Bungalow3D.snapshot(CW,CH);
       if(url){ const a=document.createElement('a'); a.href=url; a.download='klinkerbox-mischung.png'; a.click(); return; }
     }
     const cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
