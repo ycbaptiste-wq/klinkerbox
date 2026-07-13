@@ -1016,12 +1016,14 @@
       mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
       ensureImgObjs(map=>{
         if(mixView!=='interior') return;              // Ansicht wurde inzwischen gewechselt
-        const wallCv=zoneTexFull(zoneKey('interior','facade'),1800,1000,9,map);
-        // Massstab je Steinformat: Riegel ~21cm, Quadrat ~28cm, Hex/Okto ~19cm
+        // Rückwand 6.4m + rechte Wand 8.4m (eigene Textur → kein Kachel-Nahtfehler)
+        const wallCv=zoneTexFull(zoneKey('interior','facade'),1800,850,10,map);
+        const wallSideCv=zoneTexFull(zoneKey('interior','facade'),2100,760,13,map);
+        // Massstab je Steinformat: Riegel ~20cm, Quadrat ~28cm, Hex/Okto ~22cm
         const fShape=(zoneData[zoneKey('interior','floor')]||{}).shape||'brick';
-        const fDiv=(fShape==='hex'||fShape==='oct')?12:(fShape==='square'?3:4);
-        const floorCv=zoneTexFull(zoneKey('interior','floor'),1400,1600,fDiv,map);
-        if(window.Room3D.mount(host)) window.Room3D.setTextures(wallCv,floorCv);
+        const fDiv=(fShape==='hex'||fShape==='oct')?12:(fShape==='square'?7:5);
+        const floorCv=zoneTexFull(zoneKey('interior','floor'),1600,2100,fDiv,map);
+        if(window.Room3D.mount(host)) window.Room3D.setTextures(wallCv,wallSideCv,floorCv);
       }, allP);
       return;
     }
