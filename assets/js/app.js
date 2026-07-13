@@ -946,27 +946,31 @@
       });
       }
     }
-    // floor: perspective pavers, then multiply the photo floor so light/shadows stay.
-    // With a scene mask, the pavers are clipped to the exact paved area (G channel).
+    // floor: recolour the photo's REAL paving with the floor mix (no drawn grid → no
+    // radial joint lines). Keeps the photo's stones, joints, shadows and perspective.
     if(pTex){
-      const hz=(cfg.floorHorizon!=null)?my(cfg.floorHorizon):null;
+      // mix colour(s), lightened toward white so multiply tints rather than darkens
+      let cl=document.createElement('canvas'); cl.width=W; cl.height=H;
+      const clc=cl.getContext('2d');
       const fills=[cfg.floor].concat(cfg.floorExtra?[cfg.floorExtra]:[]).map(pg=>pg.map(p=>[mx(p[0]),my(p[1])]));
+      let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9; fills.forEach(pg=>pg.forEach(p=>{bx0=Math.min(bx0,p[0]);by0=Math.min(by0,p[1]);bx1=Math.max(bx1,p[0]);by1=Math.max(by1,p[1]);}));
+      clc.drawImage(pTex,bx0,by0,bx1-bx0,by1-by0);                       // large soft mix-colour regions
+      clc.fillStyle='rgba(255,255,255,0.34)'; clc.fillRect(0,0,W,H);     // lighten the tint
       const flr=document.createElement('canvas'); flr.width=W; flr.height=H;
       const fc=flr.getContext('2d');
-      fills.forEach(pg=>paintGroundPavers(fc,pg,pTex,cfg.floorPavers||16,hz));
-      fc.save(); fc.beginPath(); fills.forEach(pg=>{ pg.forEach((p,i)=>i?fc.lineTo(p[0],p[1]):fc.moveTo(p[0],p[1])); fc.closePath(); });
-      fc.clip(); fc.globalCompositeOperation='multiply'; fc.globalAlpha=0.85;
-      fc.drawImage(img,0,0,img.naturalWidth,sH,ox,oy,dw,dh); fc.restore();
+      fc.drawImage(cl,0,0);
+      fc.globalCompositeOperation='multiply';                            // real paving geometry + light
+      fc.drawImage(img,0,0,img.naturalWidth,sH,ox,oy,dw,dh);
+      fc.globalCompositeOperation='destination-in';                      // keep only the paved area
       if(mImg){
         const gm=document.createElement('canvas'); gm.width=W; gm.height=H;
         const gc=gm.getContext('2d',{willReadFrequently:true});
         gc.drawImage(mImg,0,0,mImg.naturalWidth,mImg.naturalHeight*crop,ox,oy,dw,dh);
         let id=null; try{ id=gc.getImageData(0,0,W,H); }catch(e){}
-        if(id){ const d=id.data;
-          for(let i=0;i<d.length;i+=4){ d[i+3]=d[i+1]; d[i]=d[i+1]=d[i+2]=255; }   // alpha = mask green
-          gc.putImageData(id,0,0);
-          fc.globalCompositeOperation='destination-in'; fc.globalAlpha=1; fc.drawImage(gm,0,0);
-        }
+        if(id){ const d=id.data; for(let i=0;i<d.length;i+=4){ d[i+3]=d[i+1]; d[i]=d[i+1]=d[i+2]=255; }
+          gc.putImageData(id,0,0); fc.drawImage(gm,0,0); }
+      } else {
+        fc.beginPath(); fills.forEach(pg=>{ pg.forEach((p,i)=>i?fc.lineTo(p[0],p[1]):fc.moveTo(p[0],p[1])); fc.closePath(); }); fc.fill();
       }
       cx.drawImage(flr,0,0);
     }
