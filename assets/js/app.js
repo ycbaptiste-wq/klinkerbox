@@ -773,14 +773,21 @@
       floor:[[0.06,0.845],[0.94,0.845],[1.0,1.0],[0.0,1.0]],
       facadeTiles:8, floorTiles:5, floorHorizon:0.775 },
     interior:{ src:'assets/img/scenes/wohnzimmer.jpg', mask:'assets/img/scenes/wohnzimmer-mask.png',
-      facade:{x0:0.190,y0:0.100,x1:0.823,y1:0.732},          // accent wall (Riemchen), full coverage
+      // accent wall = ceiling line (0.156) → floor line (0.797), left corner (0.205) → right corner (0.808)
+      facade:{x0:0.205,y0:0.156,x1:0.808,y1:0.797},
       openings:[
-        // sofa silhouette down to the seat frame (floor tiles run underneath)
-        [0.287,0.650, 0.735,0.650, 0.752,0.672, 0.752,0.875, 0.266,0.875, 0.266,0.672],
-        [0.828,0.520,1.0,0.860]                                        // right wall recess + console + vase
+        // sofa traced tight to its silhouette: back cushions, a step down over each arm
+        // (so the wall above the arms stays brick), then the base underside with two leg
+        // tabs. Floor tiles run under the frame between the legs and take the sofa's own
+        // contact shadow from the photo (multiply); only the frame + legs are restored.
+        [0.300,0.663, 0.700,0.663, 0.722,0.702, 0.757,0.702, 0.757,0.850,
+         0.708,0.850, 0.708,0.886, 0.697,0.886, 0.697,0.850,
+         0.317,0.850, 0.317,0.885, 0.303,0.885, 0.303,0.850,
+         0.266,0.850, 0.266,0.705],
+        [0.820,0.550,1.0,0.830]                                        // right recess + console + vase
       ],
-      floor:[[0.0,0.780],[0.20,0.722],[1.0,0.718],[1.0,1.0],[0.0,1.0]],
-      floorHorizon:0.44, facadeTiles:6, floorPavers:15, restore:true, key:{lum:70,sat:0.42,blue:60} }
+      floor:[[0.0,0.797],[1.0,0.797],[1.0,1.0],[0.0,1.0]],   // whole floor, far edge = wall/floor line
+      floorHorizon:0.47, facadeTiles:6, floorPavers:15, restore:true, key:{lum:70,sat:0.42,blue:60} }
   };
   const sceneImgCache={};
   function loadImgUrl(src,cb){
