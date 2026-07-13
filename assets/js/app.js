@@ -589,14 +589,14 @@
   }
   // pointy-top hexagon honeycomb (Bienenwabe)
   function paintHex(cx,W,H,map,gap){
-    const cols=7, w=W/(cols+0.5), R=w/Math.sqrt(3), hgt=2*R, vp=1.5*R, rows=Math.ceil(H/vp)+2;
+    const cols=Math.max(7,Math.round(7*texDiv/3)), w=W/(cols+0.5), R=w/Math.sqrt(3), hgt=2*R, vp=1.5*R, rows=Math.ceil(H/vp)+2;
     const poly=[[0.5,0],[1,0.25],[1,0.75],[0.5,1],[0,0.75],[0,0.25]];
     for(let r=-1;r<rows;r++){ const cy=r*vp, xoff=((r%2)?w/2:0);
       for(let c=-1;c<=cols;c++){ const cxc=c*w+xoff, cell=pickCell(map,c,r);
         drawUnit(cx,cell.im,cxc-w/2+gap/2,cy-hgt/2+gap/2,w-gap,hgt-gap,cell.b,poly); } }
   }
   function paintOct(cx,W,H,map,gap){
-    const n=8, tw=(W-(n+1)*gap)/n, rows=Math.ceil(H/(tw+gap))+1;
+    const n=Math.max(8,Math.round(8*texDiv/3)), tw=(W-(n+1)*gap)/n, rows=Math.ceil(H/(tw+gap))+1;
     const poly=[[0.3,0],[0.7,0],[1,0.3],[1,0.7],[0.7,1],[0.3,1],[0,0.7],[0,0.3]];
     for(let r=0;r<rows;r++) for(let c=0;c<n;c++){ const {im,b}=pickCell(map,c,r);
       drawUnit(cx,im,gap+c*(tw+gap),gap+r*(tw+gap),tw,tw,b,poly); }
@@ -1009,6 +1009,22 @@
     const sceneView=(mixView==='exterior'||mixView==='interior');
     if(!mix.length && !sceneView){ host.innerHTML=''; return; }
     saveActive();
+    // Innen-Ansicht: echter 3D-Raum (WebGL) — Wand/Boden sind reale Flächen,
+    // Perspektive/Schatten/Sofabeine stimmen physikalisch (kein Masken-Foto mehr)
+    if(mixView==='interior' && window.Room3D && window.Room3D.available()){
+      const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
+      mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
+      ensureImgObjs(map=>{
+        if(mixView!=='interior') return;              // Ansicht wurde inzwischen gewechselt
+        const wallCv=zoneTexFull(zoneKey('interior','facade'),1800,1000,9,map);
+        // Massstab je Steinformat: Riegel ~21cm, Quadrat ~28cm, Hex/Okto ~19cm
+        const fShape=(zoneData[zoneKey('interior','floor')]||{}).shape||'brick';
+        const fDiv=(fShape==='hex'||fShape==='oct')?12:(fShape==='square'?3:4);
+        const floorCv=zoneTexFull(zoneKey('interior','floor'),1400,1600,fDiv,map);
+        if(window.Room3D.mount(host)) window.Room3D.setTextures(wallCv,floorCv);
+      }, allP);
+      return;
+    }
     if(!sceneView && !mixLayout.length) genLayout();
     let cv=host.querySelector('canvas.mixcanvas');
     if(!cv){ host.innerHTML=''; cv=document.createElement('canvas'); cv.className='mixcanvas'; host.appendChild(cv); }
@@ -1036,6 +1052,8 @@
       else drawFacade(cx,W,H,facadeTex,floorTex);
     }, allP);
   }
+  // 3D-Modul lädt asynchron (ES-Module) → Innen-Ansicht neu rendern, sobald bereit
+  window.addEventListener('room3d-ready',()=>{ if(mixView==='interior') refreshWall(); });
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
   function zoneTex(name,size,map){
     const z=zoneData[name]; if(!z.mix.length) return null;
@@ -1108,6 +1126,11 @@
     const scene=(mixView==='exterior'||mixView==='interior');
     if(!mix.length && !scene) return;
     const CW=1600, CH=scene?1120:((fam==='hex'||fam==='oct'||fam==='square')?1600:1150);
+    // Innen: hochaufgelöstes Standbild direkt aus dem 3D-Raum
+    if(mixView==='interior' && window.Room3D && window.Room3D.available()){
+      const url=window.Room3D.snapshot(CW,CH);
+      if(url){ const a=document.createElement('a'); a.href=url; a.download='klinkerbox-mischung.png'; a.click(); return; }
+    }
     const cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
     const cx=cv.getContext('2d');
     const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
