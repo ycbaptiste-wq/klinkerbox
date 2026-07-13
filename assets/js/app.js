@@ -866,7 +866,18 @@
     // roof / door stay from the photo. Brick keeps the photo's shading (multiply).
     // face = rect {x0,y0,x1,y1} or polygon flat list [x0,y0,x1,y1,...]
     if(fTexMaker){
-      const facs=cfg.facades||[cfg.facade];
+      // when a precise mask exists, the brick region = the mask's red bounding box
+      // (so brick fills the whole wall — down to the plinth and out to the corners).
+      let facs=cfg.facades||[cfg.facade];
+      if(mImg){
+        const sc=document.createElement('canvas'); sc.width=220; sc.height=Math.max(2,Math.round(220*mImg.naturalHeight/mImg.naturalWidth));
+        const scx=sc.getContext('2d',{willReadFrequently:true}); scx.drawImage(mImg,0,0,sc.width,sc.height);
+        let md=null; try{ md=scx.getImageData(0,0,sc.width,sc.height).data; }catch(e){}
+        if(md){ let x0=sc.width,y0=sc.height,x1=0,y1=0,any=false;
+          for(let y=0;y<sc.height;y++){ const r=y*sc.width; for(let x=0;x<sc.width;x++){ if(md[(r+x)*4]>40){ any=true; if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y; } } }
+          if(any) facs=[{x0:x0/sc.width,y0:y0/sc.height,x1:(x1+1)/sc.width,y1:(y1+1)/sc.height}];
+        }
+      }
       // union bbox of all wall faces → ONE continuous texture (no tiling, no visible repeat)
       let ux0=1,uy0=1,ux1=0,uy1=0;
       facs.forEach(f=>{ const xs=Array.isArray(f)?f.filter((_,i)=>i%2===0):[f.x0,f.x1];
@@ -946,31 +957,24 @@
       });
       }
     }
-    // floor: recolour the photo's REAL paving with the floor mix (no drawn grid → no
-    // radial joint lines). Keeps the photo's stones, joints, shadows and perspective.
+    // floor: perspective pavers coloured by the mix, then multiply the photo floor so
+    // its light/shadows/perspective stay. Clipped to the paved area (mask G channel).
     if(pTex){
-      // mix colour(s), lightened toward white so multiply tints rather than darkens
-      let cl=document.createElement('canvas'); cl.width=W; cl.height=H;
-      const clc=cl.getContext('2d');
+      const hz=(cfg.floorHorizon!=null)?my(cfg.floorHorizon):null;
       const fills=[cfg.floor].concat(cfg.floorExtra?[cfg.floorExtra]:[]).map(pg=>pg.map(p=>[mx(p[0]),my(p[1])]));
-      let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9; fills.forEach(pg=>pg.forEach(p=>{bx0=Math.min(bx0,p[0]);by0=Math.min(by0,p[1]);bx1=Math.max(bx1,p[0]);by1=Math.max(by1,p[1]);}));
-      clc.drawImage(pTex,bx0,by0,bx1-bx0,by1-by0);                       // large soft mix-colour regions
-      clc.fillStyle='rgba(255,255,255,0.34)'; clc.fillRect(0,0,W,H);     // lighten the tint
       const flr=document.createElement('canvas'); flr.width=W; flr.height=H;
       const fc=flr.getContext('2d');
-      fc.drawImage(cl,0,0);
-      fc.globalCompositeOperation='multiply';                            // real paving geometry + light
-      fc.drawImage(img,0,0,img.naturalWidth,sH,ox,oy,dw,dh);
-      fc.globalCompositeOperation='destination-in';                      // keep only the paved area
+      fills.forEach(pg=>paintGroundPavers(fc,pg,pTex,cfg.floorPavers||16,hz));
+      fc.save(); fc.beginPath(); fills.forEach(pg=>{ pg.forEach((p,i)=>i?fc.lineTo(p[0],p[1]):fc.moveTo(p[0],p[1])); fc.closePath(); });
+      fc.clip(); fc.globalCompositeOperation='multiply'; fc.globalAlpha=0.85;
+      fc.drawImage(img,0,0,img.naturalWidth,sH,ox,oy,dw,dh); fc.restore();
       if(mImg){
         const gm=document.createElement('canvas'); gm.width=W; gm.height=H;
         const gc=gm.getContext('2d',{willReadFrequently:true});
         gc.drawImage(mImg,0,0,mImg.naturalWidth,mImg.naturalHeight*crop,ox,oy,dw,dh);
         let id=null; try{ id=gc.getImageData(0,0,W,H); }catch(e){}
         if(id){ const d=id.data; for(let i=0;i<d.length;i+=4){ d[i+3]=d[i+1]; d[i]=d[i+1]=d[i+2]=255; }
-          gc.putImageData(id,0,0); fc.drawImage(gm,0,0); }
-      } else {
-        fc.beginPath(); fills.forEach(pg=>{ pg.forEach((p,i)=>i?fc.lineTo(p[0],p[1]):fc.moveTo(p[0],p[1])); fc.closePath(); }); fc.fill();
+          gc.putImageData(id,0,0); fc.globalCompositeOperation='destination-in'; fc.globalAlpha=1; fc.drawImage(gm,0,0); }
       }
       cx.drawImage(flr,0,0);
     }
