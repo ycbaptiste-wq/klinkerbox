@@ -1029,7 +1029,7 @@
       return;
     }
     // Aussen-Ansicht: 3D-Gebäude (Bungalow + EFH) — Fassade/Boden als echte Texturen
-    const EXT3D=(mixBuilding==='bungalow')?window.Bungalow3D:(mixBuilding==='efh')?window.Efh3D:(mixBuilding==='villa')?window.Villa3D:(mixBuilding==='office')?window.Office3D:null;
+    const EXT3D=(mixBuilding==='bungalow')?window.Bungalow3D:(mixBuilding==='efh')?window.Efh3D:(mixBuilding==='villa')?window.Villa3D:(mixBuilding==='office')?window.Office3D:(mixBuilding==='friesen')?window.Friesen3D:null;
     if(mixView==='exterior' && EXT3D && EXT3D.available()){
       const bld=mixBuilding;
       const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
@@ -1037,7 +1037,7 @@
       ensureImgObjs(map=>{
         if(mixView!=='exterior'||mixBuilding!==bld) return;
         const fShape=(zoneData[zoneKey('exterior','floor')]||{}).shape||'brick';
-        let facadeCv,sideCv,floorCv;
+        let facadeCv,sideCv,floorCv,gableCv=null;
         if(bld==='bungalow'){
           facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,660,20,map);      // 13m Front
           sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,660,12.5,map);      // 8m Seiten
@@ -1053,13 +1053,19 @@
           sideCv=zoneTexFull(zoneKey('exterior','facade'),1800,1550,19,map);       // 12m Seiten
           const fDiv=(fShape==='hex'||fShape==='oct')?43:(fShape==='square'?21:15.5);// 21m Vorplatz
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1050,fDiv,map);
+        } else if(bld==='friesen'){
+          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,600,20,map);      // 13m EG-Front
+          gableCv=zoneTexFull(zoneKey('exterior','facade'),720,1500,5.6,map);      // 3.6m Zwerchgiebel
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),1800,600,14,map);        // 9m Seiten
+          const fDiv=(fShape==='hex'||fShape==='oct')?36:(fShape==='square'?17.5:13.3);// 17m Vorplatz
+          floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1230,fDiv,map);
         } else {                                                                   // EFH
           facadeCv=zoneTexFull(zoneKey('exterior','facade'),2000,1270,15,map);     // 9.6m Front
           sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,1700,12.5,map);     // 8m Giebelseite
           const fDiv=(fShape==='hex'||fShape==='oct')?26:(fShape==='square'?12:9.5);// 12m Vorplatz
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,fDiv,map);
         }
-        if(EXT3D.mount(host)) EXT3D.setTextures(facadeCv,sideCv,floorCv);
+        if(EXT3D.mount(host)) EXT3D.setTextures(facadeCv,sideCv,floorCv,gableCv);
       }, allP);
       return;
     }
@@ -1096,6 +1102,7 @@
   window.addEventListener('efh3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='efh') refreshWall(); });
   window.addEventListener('villa3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='villa') refreshWall(); });
   window.addEventListener('office3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='office') refreshWall(); });
+  window.addEventListener('friesen3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='friesen') refreshWall(); });
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
   function zoneTex(name,size,map){
     const z=zoneData[name]; if(!z.mix.length) return null;
@@ -1173,7 +1180,7 @@
       const url=window.Room3D.snapshot(CW,CH);
       if(url){ const a=document.createElement('a'); a.href=url; a.download='klinkerbox-mischung.png'; a.click(); return; }
     }
-    const EX3=(mixBuilding==='bungalow')?window.Bungalow3D:(mixBuilding==='efh')?window.Efh3D:(mixBuilding==='villa')?window.Villa3D:(mixBuilding==='office')?window.Office3D:null;
+    const EX3=(mixBuilding==='bungalow')?window.Bungalow3D:(mixBuilding==='efh')?window.Efh3D:(mixBuilding==='villa')?window.Villa3D:(mixBuilding==='office')?window.Office3D:(mixBuilding==='friesen')?window.Friesen3D:null;
     if(mixView==='exterior' && EX3 && EX3.available()){
       const url=EX3.snapshot(CW,CH);
       if(url){ const a=document.createElement('a'); a.href=url; a.download='klinkerbox-mischung.png'; a.click(); return; }
