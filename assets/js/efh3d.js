@@ -4,6 +4,7 @@
 // Giebelseiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 // Orbit + Zoom wie beim Bungalow/Innenraum.
 import * as THREE from './three.module.min.js';
+import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=35';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
@@ -81,12 +82,14 @@ function gableWallGeo(depth,eave,ridge){
 }
 // Fenster mit weissem Rahmen, Glas, Sims und dunklem Rollladen-Kasten
 function makeWindow(parent,x,y,w,h,glassM,withBox){
-  const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.10),mat(0xf2f1ee,0.6));
-  frame.position.set(x,y,0.05); parent.add(frame);
-  const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.14,h-0.14),glassM);
-  glass.position.set(x,y,0.105); parent.add(glass);
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.04),mat(0xf2f1ee,0.6));
+  frame.position.set(x,y,0.05); parent.add(frame);           // weisser Blendrahmen
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.14,h-0.14),interiorMaterial('home'));
+  inter.position.set(x,y,0.09); parent.add(inter);           // Innenraum (Durchblick)
+  const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.10,h-0.10),glassM);
+  glass.position.set(x,y,0.105); parent.add(glass);          // reflektierendes Glas
   const post=new THREE.Mesh(new THREE.BoxGeometry(0.06,h-0.12,0.02),mat(0xf2f1ee,0.6));
-  post.position.set(x,y,0.107); parent.add(post);
+  post.position.set(x,y,0.112); parent.add(post);
   const sill=new THREE.Mesh(new THREE.BoxGeometry(w+0.16,0.06,0.16),mat(0xe8e6e2,0.7));
   sill.position.set(x,y-h/2-0.03,0.08); sill.castShadow=true; parent.add(sill);
   if(withBox){
@@ -97,7 +100,7 @@ function makeWindow(parent,x,y,w,h,glassM,withBox){
 
 function buildScene(){
   scene=new THREE.Scene();
-  scene.environment=makeEnvironment();
+  scene.environment=buildEnv(renderer);
   scene.fog=new THREE.Fog(0xe9ebe9,55,110);
 
   { const cv=document.createElement('canvas'); cv.width=4; cv.height=512;
@@ -186,7 +189,7 @@ function buildScene(){
   vent.position.set(1.6,HR-0.6,-HD/2-1.4); scene.add(vent);
 
   // ---- Fenster (weisse Rahmen, dunkle Rollladen-Kästen) ----
-  const glassM=new THREE.MeshStandardMaterial({color:0x5b6a72,roughness:0.05,metalness:0.9,envMapIntensity:1.6});
+  const glassM=glassMaterial();
   const grp=new THREE.Group(); scene.add(grp);
   makeWindow(grp,-2.9,4.45,1.70,1.30,glassM,true);     // OG links
   makeWindow(grp, 0.0,4.50,0.95,1.15,glassM,true);     // OG mitte klein

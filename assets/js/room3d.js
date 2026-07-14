@@ -4,6 +4,7 @@
 // Stehleuchte, Deko. Per Maus/Touch drehbar (Orbit mit Grenzen), Zoom per
 // Rad. Environment-Lighting + Soft-Shadows für einen fotonahen Look.
 import * as THREE from './three.module.min.js';
+import { buildEnv } from './scene3d-lib.js?v=35';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let wallMat=null, wallSideMat=null, floorMat=null, maxAniso=8;
@@ -88,7 +89,7 @@ function makeEnvironment(){
 function buildScene(){
   scene=new THREE.Scene();
   scene.background=new THREE.Color(0xf1f0ee);
-  scene.environment=makeEnvironment();
+  scene.environment=buildEnv(renderer);
 
   const {W,H,D}=ROOM;
   const bump=fabricBump();

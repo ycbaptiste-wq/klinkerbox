@@ -347,6 +347,19 @@
   const FAM_AR={square:1, block:2.1, brick:3.4, strip:6};   // render aspect ratio (w/h)
   const FAM_BW={square:12.5, block:17, brick:15.6, strip:22};// tile width (% of row)
   const RECT_FAM=f=>f==='brick'||f==='block'||f==='strip'||f==='square';
+  // ---- echte Materialmasse (m) → korrekte texDiv, damit Stein-/Plattengrösse
+  // massstäblich zur realen Wand-/Bodenbreite passt (Fuge folgt automatisch) ----
+  const REAL={ brick:0.24, block:0.29, strip:0.24, pflaster:0.21, hex:0.22, oct:0.24, sq:0.30 };
+  // Fassade: Steinlänge bw_m = wM*FAM_BW/100/div  →  div = wM*FAM_BW/100/len
+  function facadeDiv(wM,fam){ fam=fam||'brick';
+    return Math.max(2, wM*(FAM_BW[fam]||15.6)/100/(REAL[fam]||0.24)); }
+  // Boden: je Verlege-Familie die passende div (siehe paintCourses/Hex/Oct/Square)
+  function floorDiv(wM,shape){
+    if(shape==='hex') return Math.max(7, (wM/REAL.hex)*(3/7));   // cols_hex = 7*div/3
+    if(shape==='oct') return Math.max(8, (wM/REAL.oct)*(3/8));   // n_oct    = 8*div/3
+    if(shape==='square') return Math.max(9, (wM/REAL.sq)/3);     // n_sq     = 3*div (nach Fix)
+    return Math.max(3, wM*15.6/100/REAL.pflaster);               // Pflaster (brick-Familie)
+  }
   function shapeFamily(p){
     const s=(p.size||'')+' '+((p.formats&&p.formats.join(' '))||'');
     if(p.cat==='tonplatten'){
@@ -561,7 +574,7 @@
       for(let c=-1;c<cols;c++){ const {im,b}=pickCell(map,c,r); drawUnit(cx,im,c*(bw+head)-off,y,bw,bh,b); } }
   }
   function paintSquare(cx,W,H,map,gap){
-    const n=9, tw=(W-(n+1)*gap)/n, rows=Math.ceil(H/(tw+gap))+1;
+    const n=Math.max(9,Math.round(3*texDiv)), tw=(W-(n+1)*gap)/n, rows=Math.ceil(H/(tw+gap))+1;
     for(let r=0;r<rows;r++) for(let c=0;c<n;c++){ const {im,b}=pickCell(map,c,r);
       drawUnit(cx,im,gap+c*(tw+gap),gap+r*(tw+gap),tw,tw,b); }
   }
@@ -1017,13 +1030,13 @@
       mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
       ensureImgObjs(map=>{
         if(mixView!=='interior') return;              // Ansicht wurde inzwischen gewechselt
-        // Rückwand 6.4m + rechte Wand 8.4m (eigene Textur → kein Kachel-Nahtfehler)
-        const wallCv=zoneTexFull(zoneKey('interior','facade'),1800,850,10,map);
-        const wallSideCv=zoneTexFull(zoneKey('interior','facade'),2100,760,13,map);
-        // Massstab je Steinformat: Riegel ~20cm, Quadrat ~28cm, Hex/Okto ~22cm
+        // Rückwand 6.4m + rechte Wand 8.4m (eigene Textur → kein Kachel-Nahtfehler),
+        // Steingrösse massstäblich (Riemchen ~24cm wie Vollstein)
+        const wFam=(zoneData[zoneKey('interior','facade')]||{}).shape||'brick';
+        const wallCv=zoneTexFull(zoneKey('interior','facade'),1800,850,facadeDiv(6.4,wFam),map);
+        const wallSideCv=zoneTexFull(zoneKey('interior','facade'),2100,760,facadeDiv(8.4,wFam),map);
         const fShape=(zoneData[zoneKey('interior','floor')]||{}).shape||'brick';
-        const fDiv=(fShape==='hex'||fShape==='oct')?12:(fShape==='square'?7:5);
-        const floorCv=zoneTexFull(zoneKey('interior','floor'),1600,2100,fDiv,map);
+        const floorCv=zoneTexFull(zoneKey('interior','floor'),1600,2100,floorDiv(6.4,fShape),map);
         if(window.Room3D.mount(host)) window.Room3D.setTextures(wallCv,wallSideCv,floorCv);
       }, allP);
       return;
@@ -1036,34 +1049,34 @@
       mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
       ensureImgObjs(map=>{
         if(mixView!=='exterior'||mixBuilding!==bld) return;
+        const fFam=(zoneData[zoneKey('exterior','facade')]||{}).shape||'brick';
         const fShape=(zoneData[zoneKey('exterior','floor')]||{}).shape||'brick';
+        // reale Masse je Gebäude (m): Front-Breite, Seiten-Tiefe, Vorplatz-Breite (+ Giebel)
+        const D={ bungalow:{fw:13,sw:8,pw:14}, villa:{fw:13,sw:10,pw:15},
+                  office:{fw:18,sw:12,pw:21}, friesen:{fw:13,sw:9,pw:17,gw:3.6}, efh:{fw:9.6,sw:8,pw:12} }[bld];
+        const fD=facadeDiv(D.fw,fFam), sD=facadeDiv(D.sw,fFam), flD=floorDiv(D.pw,fShape);
         let facadeCv,sideCv,floorCv,gableCv=null;
         if(bld==='bungalow'){
-          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,660,20,map);      // 13m Front
-          sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,660,12.5,map);      // 8m Seiten
-          const fDiv=(fShape==='hex'||fShape==='oct')?30:(fShape==='square'?14:11);// 14m Terrasse
-          floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,fDiv,map);
+          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,660,fD,map);
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,660,sD,map);
+          floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,flD,map);
         } else if(bld==='villa'){
-          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,1250,20,map);     // 13m Front (2 Geschosse)
-          sideCv=zoneTexFull(zoneKey('exterior','facade'),2000,1000,15.5,map);     // 10m Seiten
-          const fDiv=(fShape==='hex'||fShape==='oct')?31:(fShape==='square'?15:11.5);// 15m Vorplatz
-          floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,900,fDiv,map);
+          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,1250,fD,map);
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),2000,1000,sD,map);
+          floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,900,flD,map);
         } else if(bld==='office'){
-          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,1500,28,map);     // 18m Front (3 Geschosse)
-          sideCv=zoneTexFull(zoneKey('exterior','facade'),1800,1550,19,map);       // 12m Seiten
-          const fDiv=(fShape==='hex'||fShape==='oct')?43:(fShape==='square'?21:15.5);// 21m Vorplatz
-          floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1050,fDiv,map);
+          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,1500,fD,map);
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),1800,1550,sD,map);
+          floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1050,flD,map);
         } else if(bld==='friesen'){
-          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,600,20,map);      // 13m EG-Front
-          gableCv=zoneTexFull(zoneKey('exterior','facade'),720,1500,5.6,map);      // 3.6m Zwerchgiebel
-          sideCv=zoneTexFull(zoneKey('exterior','facade'),1800,600,14,map);        // 9m Seiten
-          const fDiv=(fShape==='hex'||fShape==='oct')?36:(fShape==='square'?17.5:13.3);// 17m Vorplatz
-          floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1230,fDiv,map);
+          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,600,fD,map);
+          gableCv=zoneTexFull(zoneKey('exterior','facade'),720,1500,facadeDiv(D.gw,fFam),map);
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),1800,600,sD,map);
+          floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1230,flD,map);
         } else {                                                                   // EFH
-          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2000,1270,15,map);     // 9.6m Front
-          sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,1700,12.5,map);     // 8m Giebelseite
-          const fDiv=(fShape==='hex'||fShape==='oct')?26:(fShape==='square'?12:9.5);// 12m Vorplatz
-          floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,fDiv,map);
+          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2000,1270,fD,map);
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,1700,sD,map);
+          floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,flD,map);
         }
         if(EXT3D.mount(host)) EXT3D.setTextures(facadeCv,sideCv,floorCv,gableCv);
       }, allP);

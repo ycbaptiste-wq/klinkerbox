@@ -4,6 +4,7 @@
 // Flachdach mit Attika, Vordach mit Stütze, dunkle Holztür, Glasfront,
 // Pflanzkübel, Kiesbeete, Gartenmauern, Himmel. Orbit + Zoom wie innen.
 import * as THREE from './three.module.min.js';
+import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=35';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
@@ -74,7 +75,7 @@ function makeEnvironment(){
 
 function buildScene(){
   scene=new THREE.Scene();
-  scene.environment=makeEnvironment();
+  scene.environment=buildEnv(renderer);
   scene.fog=new THREE.Fog(0xe9ebe9,46,90);
 
   // Himmel: grosse Kuppel mit vertikalem Verlauf (bedeckt-hell)
@@ -160,7 +161,7 @@ function buildScene(){
   door.position.set(-3.72,1.14,0.115); scene.add(door);
   const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.30,8),mat(0xb9bcbe,0.3,0.8));
   handle.position.set(-3.30,1.10,0.16); handle.rotation.x=Math.PI/2; scene.add(handle);
-  const glassM=new THREE.MeshStandardMaterial({color:0x5b6a72,roughness:0.04,metalness:0.9,envMapIntensity:1.7});
+  const glassM=glassMaterial();
   [[-4.62,1.14,0.5,2.28],[-2.98,1.14,0.42,2.28],[-3.9,2.43,2.7,0.22]].forEach(([x,y,w,h])=>{
     const g=new THREE.Mesh(new THREE.PlaneGeometry(w,h),glassM);
     g.position.set(x,y,0.105); scene.add(g);
@@ -168,21 +169,18 @@ function buildScene(){
 
   // ---- Glasfront rechts (Schiebetüren + Festverglasung, dunkle Rahmen) ----
   const bandX0=-0.9, bandX1=6.0, bandY=2.62;
-  const bandFrame=new THREE.Mesh(new THREE.BoxGeometry(bandX1-bandX0+0.16,bandY+0.12,0.09),mat(0x2e3134,0.5,0.2));
+  const bandFrame=new THREE.Mesh(new THREE.BoxGeometry(bandX1-bandX0+0.16,bandY+0.12,0.05),mat(0x2e3134,0.5,0.2));
   bandFrame.position.set((bandX0+bandX1)/2,(bandY)/2+0.02,0.045); scene.add(bandFrame);
+  // Wohnraum hinter der Glasfront (Durchblick)
+  const bandInt=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),interiorMaterial('home'));
+  bandInt.position.set((bandX0+bandX1)/2,bandY/2,0.085); scene.add(bandInt);
   const bandGlass=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),glassM);
   bandGlass.position.set((bandX0+bandX1)/2,bandY/2,0.10); scene.add(bandGlass);
   // Sprossen: Kämpfer + Pfosten
   const mull=(w,h,x,y)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.05),mat(0x26292c,0.5,0.2));
-    m.position.set(x,y,0.115); scene.add(m); };
+    m.position.set(x,y,0.12); scene.add(m); };
   mull(bandX1-bandX0,0.07,(bandX0+bandX1)/2,2.06);                  // Kämpfer
   [ -0.9+1.72, -0.9+3.45, -0.9+5.17 ].forEach(x=>mull(0.07,bandY-0.1,x,bandY/2));
-  // Vorhang-Andeutung hinter dem Glas
-  [[0.4],[4.3]].forEach(([x])=>{
-    const c=new THREE.Mesh(new THREE.PlaneGeometry(0.85,2.35),
-      new THREE.MeshBasicMaterial({color:0xe8e4dc,transparent:true,opacity:0.5}));
-    c.position.set(x,1.22,0.06); scene.add(c);
-  });
 
   // ---- Eingangspodest + Stufen + Betonbank ----
   const step1=new THREE.Mesh(new THREE.BoxGeometry(3.4,0.16,1.6),mat(0xc9c6c0,0.85));

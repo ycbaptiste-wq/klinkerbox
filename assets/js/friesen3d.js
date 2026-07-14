@@ -4,6 +4,7 @@
 // dunkle Paneel-Tür mit Oberlicht, Buchshecken + Dünengräser, Marsch-Kulisse.
 // Fassade (EG + Giebel + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
+import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=35';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, gableMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
@@ -94,27 +95,27 @@ function hipRoofGeo(w,d,rise,ridgeHalf){
   g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
-// Sprossenfenster: weisse Fasche + Rahmen, feines Sprossenraster
+// Sprossenfenster: weisse Fasche + Innenraum + reflektierendes Glas + Sprossen
 function friesenWindow(parent,x,y,w,h,glassM,z){
   const zz=z!=null?z:0;
   const sur=new THREE.Mesh(new THREE.BoxGeometry(w+0.22,h+0.22,0.05),mat(0xeceae6,0.7));
-  sur.position.set(x,y,zz+0.025); parent.add(sur);
-  const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.08),mat(0xf6f5f2,0.55));
-  frame.position.set(x,y,zz+0.04); parent.add(frame);
-  const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.10,h-0.10),glassM);
-  glass.position.set(x,y,zz+0.085); parent.add(glass);
+  sur.position.set(x,y,zz+0.03); parent.add(sur);              // weisser Blendrahmen
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w+0.02,h+0.02),interiorMaterial('home'));
+  inter.position.set(x,y,zz+0.056); parent.add(inter);         // Innenraum (Durchblick)
+  const glass=new THREE.Mesh(new THREE.PlaneGeometry(w+0.02,h+0.02),glassM);
+  glass.position.set(x,y,zz+0.088); parent.add(glass);         // reflektierendes Glas
   const mm=(mw,mh,mx,my)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(mw,mh,0.02),mat(0xf6f5f2,0.55));
-    m.position.set(mx,my,zz+0.09); parent.add(m); };
-  mm(0.055,h-0.08,x,y);                            // Mittelpfosten
-  mm(0.03,h-0.08,x-w*0.25,y); mm(0.03,h-0.08,x+w*0.25,y);
-  mm(w-0.08,0.03,x,y+h*0.22); mm(w-0.08,0.03,x,y-h*0.10);
+    m.position.set(mx,my,zz+0.098); parent.add(m); };
+  mm(0.05,h,x,y);                                  // Mittelpfosten
+  mm(0.03,h,x-w*0.25,y); mm(0.03,h,x+w*0.25,y);
+  mm(w,0.03,x,y+h*0.22); mm(w,0.03,x,y-h*0.10);
   const sill=new THREE.Mesh(new THREE.BoxGeometry(w+0.28,0.06,0.13),mat(0xe6e4e0,0.7));
   sill.position.set(x,y-h/2-0.14,zz+0.05); sill.castShadow=true; parent.add(sill);
 }
 
 function buildScene(){
   scene=new THREE.Scene();
-  scene.environment=makeEnvironment();
+  scene.environment=buildEnv(renderer);
   scene.fog=new THREE.Fog(0xe9ebe9,55,110);
 
   { const cv=document.createElement('canvas'); cv.width=4; cv.height=512;
@@ -220,7 +221,7 @@ function buildScene(){
   gBand.position.set(0,3.32,0.19); scene.add(gBand);
 
   // ---- Gauben links/rechts ----
-  const glassM=new THREE.MeshStandardMaterial({color:0x5b6a72,roughness:0.06,metalness:0.9,envMapIntensity:1.5});
+  const glassM=glassMaterial();
   [[-4.3],[4.3]].forEach(([x])=>{
     const box=new THREE.Mesh(new THREE.BoxGeometry(2.5,1.5,1.9),mat(0xd8d5d0,0.9));
     box.position.set(x,4.65,-1.15); box.castShadow=true; scene.add(box);

@@ -4,6 +4,7 @@
 // beleuchteter Lobby, grosser Vorplatz, Gräser-Beete, Stadt-Kulisse.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
+import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=35';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
@@ -62,10 +63,12 @@ function makeEnvironment(){
 }
 // Büro-Fenster: dunkler Rahmen, breite Scheibe links, schmale rechts mit Kämpfer
 function officeWindow(parent,x,y,w,h,glassM){
-  const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.10),mat(0x3a3e43,0.55,0.2));
-  frame.position.set(x,y,0.05); parent.add(frame);
-  const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.12,h-0.12),glassM);
-  glass.position.set(x,y,0.105); parent.add(glass);
+  const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.04),mat(0x3a3e43,0.55,0.2));
+  frame.position.set(x,y,0.05); parent.add(frame);           // dunkler Rahmen
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.12,h-0.12),interiorMaterial('office'));
+  inter.position.set(x,y,0.09); parent.add(inter);           // Büro-Innenraum (Durchblick)
+  const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.08,h-0.08),glassM);
+  glass.position.set(x,y,0.105); parent.add(glass);          // reflektierendes Glas
   const mull=(mw,mh,mx,my)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(mw,mh,0.03),mat(0x33373c,0.55,0.2));
     m.position.set(mx,my,0.11); parent.add(m); };
   const splitX=x-w/2+w*0.62;
@@ -77,7 +80,7 @@ function officeWindow(parent,x,y,w,h,glassM){
 
 function buildScene(){
   scene=new THREE.Scene();
-  scene.environment=makeEnvironment();
+  scene.environment=buildEnv(renderer);
   scene.fog=new THREE.Fog(0xe9ebe9,62,130);
 
   { const cv=document.createElement('canvas'); cv.width=4; cv.height=512;
@@ -142,7 +145,7 @@ function buildScene(){
   });
 
   // ---- Fenster: 6 Achsen × OG1/OG2 + EG-Verglasung ----
-  const glassM=new THREE.MeshStandardMaterial({color:0x5b6a72,roughness:0.05,metalness:0.9,envMapIntensity:1.6});
+  const glassM=glassMaterial();
   const wgrp=new THREE.Group(); scene.add(wgrp);
   const axes=[-7.35,-4.41,-1.47,1.47,4.41,7.35];
   [1,2].forEach(fl=>{

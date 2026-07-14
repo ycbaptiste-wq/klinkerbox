@@ -4,6 +4,7 @@
 // Portikus mit Freitreppe und Geländer, Buchs-Vorgarten mit Metallzaun.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
+import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=35';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
@@ -86,10 +87,10 @@ function hipRoofGeo(w,d,rise,ridgeHalf){
 function villaWindow(parent,x,y,w,h,glassM,pediment){
   const sur=new THREE.Mesh(new THREE.BoxGeometry(w+0.28,h+0.28,0.06),mat(0xeceae6,0.7));
   sur.position.set(x,y,0.03); parent.add(sur);
-  const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.08),mat(0xf4f3f0,0.6));
-  frame.position.set(x,y,0.05); parent.add(frame);
-  const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.12,h-0.12),glassM);
-  glass.position.set(x,y,0.095); parent.add(glass);
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),interiorMaterial('home'));
+  inter.position.set(x,y,0.055); parent.add(inter);          // Innenraum (Durchblick)
+  const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),glassM);
+  glass.position.set(x,y,0.088); parent.add(glass);           // reflektierendes Glas
   const mv=new THREE.Mesh(new THREE.BoxGeometry(0.05,h-0.1,0.02),mat(0xf4f3f0,0.6));
   mv.position.set(x,y,0.1); parent.add(mv);
   const mh=new THREE.Mesh(new THREE.BoxGeometry(w-0.1,0.05,0.02),mat(0xf4f3f0,0.6));
@@ -104,7 +105,7 @@ function villaWindow(parent,x,y,w,h,glassM,pediment){
 
 function buildScene(){
   scene=new THREE.Scene();
-  scene.environment=makeEnvironment();
+  scene.environment=buildEnv(renderer);
   scene.fog=new THREE.Fog(0xe9ebe9,55,110);
 
   { const cv=document.createElement('canvas'); cv.width=4; cv.height=512;
@@ -177,7 +178,7 @@ function buildScene(){
   dormer.position.set(0,8.45,-1.85); dormer.castShadow=true; scene.add(dormer);
   const dRoof=new THREE.Mesh(new THREE.BoxGeometry(3.6,0.12,2.1),mat(0x3b3e43,0.7));
   dRoof.position.set(0,9.31,-1.85); dRoof.castShadow=true; scene.add(dRoof);
-  const glassM=new THREE.MeshStandardMaterial({color:0x5b6a72,roughness:0.05,metalness:0.9,envMapIntensity:1.6});
+  const glassM=glassMaterial();
   [[-0.95],[0],[0.95]].forEach(([x])=>{
     const f=new THREE.Mesh(new THREE.BoxGeometry(0.78,1.1,0.06),mat(0xf4f3f0,0.6));
     f.position.set(x,8.42,-0.92); scene.add(f);
