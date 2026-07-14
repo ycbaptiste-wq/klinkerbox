@@ -44,8 +44,12 @@ a{color:inherit;text-decoration:none}
 .nav__inner{max-width:var(--maxw);height:100%;margin:0 auto;padding:0 clamp(18px,5vw,40px);
   display:flex;align-items:center;justify-content:space-between;gap:1.4rem}
 .nav__brand{display:flex;align-items:center}
-/* Logo auf eigenem weissen Chip → in jedem Farbschema (auch Darkmode) sauber lesbar */
-.nav__logo{height:40px;box-sizing:border-box;width:auto;background:#fff;padding:6px 11px;border-radius:9px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+/* Zwei Logo-Varianten (schwarz/weiss) — je nach TATSÄCHLICHEM Hintergrund
+   umgeschaltet (.dark-render wird per JS gesetzt) → auch im Darkmode sauber */
+.nav__logo{height:38px;width:auto;display:block}
+.nav__logo--dark{display:none}
+:root.dark-render .nav__logo--light{display:none}
+:root.dark-render .nav__logo--dark{display:block}
 .nav__name{font-size:1.05rem}
 .nav__links{display:flex;gap:2.1rem}
 .nav__links a{font-size:.92rem;color:var(--ink-soft);font-weight:500;position:relative;transition:color .25s}
@@ -395,8 +399,22 @@ a.cinfo__val:hover{color:var(--clay)}
 .mixfab__count[hidden]{display:none}
 /* one-off attention pulse — transform/opacity only, so it stays on the GPU (no scroll jank) */
 .mixfab::before{content:"";position:absolute;inset:-2px;border-radius:100px;border:2px solid rgba(176,73,47,.55);
-  pointer-events:none;transform-origin:center;animation:fabpulse 2.4s var(--ease) 3 both}
-@keyframes fabpulse{0%{opacity:.6;transform:scale(1)}70%,100%{opacity:0;transform:scale(1.4)}}
+  pointer-events:none;transform-origin:center;animation:fabpulse 2.8s var(--ease) infinite both}
+@keyframes fabpulse{0%{opacity:.55;transform:scale(1)}70%,100%{opacity:0;transform:scale(1.45)}}
+@media (prefers-reduced-motion: reduce){ .mixfab::before{animation:none} }
+/* Hero-CTA "3D-Konfigurator" hervorheben + Ladehinweis der 3D-Ansicht */
+.btn--config{position:relative}
+.btn--config::before{content:"";width:9px;height:9px;border-radius:50%;background:#fff;margin-right:.15rem;box-shadow:0 0 0 3px rgba(255,255,255,.35);animation:fade .6s var(--ease)}
+.mix3dload{display:flex;align-items:center;justify-content:center;height:100%;min-height:240px;color:#9a938c;font-size:.95rem;letter-spacing:.02em}
+/* Schnell-Auswahl direkt auf der Produktkarte (ohne Detailansicht) */
+.card__img{position:relative}
+.card__add{position:absolute;right:.55rem;bottom:.55rem;width:38px;height:38px;border-radius:50%;border:none;cursor:pointer;
+  background:var(--clay);color:#fff;font-size:1.5rem;line-height:1;display:grid;place-items:center;
+  box-shadow:0 6px 18px rgba(176,73,47,.4);opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s,background .2s}
+.card:hover .card__add,.card__add:focus-visible{opacity:1;transform:none}
+.card__add:hover{background:var(--clay-dark)}
+.card.in-mix .card__add{opacity:1;transform:none;background:#3f7a4e}
+@media (hover:none){ .card__add{opacity:1;transform:none} }
 .mixer{position:fixed;inset:0;z-index:120;background:rgba(15,12,10,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:24px;animation:fade .3s var(--ease)}
 .mixer[hidden]{display:none}
 .mixer__panel{position:relative;background:#fff;border-radius:var(--radius-lg);width:min(1400px,97vw);height:min(900px,95vh);
@@ -528,7 +546,7 @@ a.cinfo__val:hover{color:var(--clay)}
   .news__form .btn{grid-column:auto;grid-row:auto}
   .filters__group--size,.filters__group--search{width:100%}
   .select,.input{width:100%}
-  .nav__logo{height:34px;padding:5px 9px}
+  .nav__logo{height:32px}
   .grid{grid-template-columns:repeat(2,1fr)!important;gap:.7rem!important}
   .card__name{font-size:.95rem}
   .hero__cta{flex-direction:column;align-items:stretch}

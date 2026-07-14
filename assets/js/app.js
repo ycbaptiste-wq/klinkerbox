@@ -204,13 +204,18 @@
     c.dataset.pid=p.id;
     c.innerHTML=`
       <span class="card__mixbadge">${window.MIX.added[lang]}</span>
-      <div class="card__img"><img loading="lazy" decoding="async" src="${imgSrc(p)}" alt="${p.series} ${p.name}"></div>
+      <div class="card__img"><img loading="lazy" decoding="async" src="${imgSrc(p)}" alt="${p.series} ${p.name}">
+        <button type="button" class="card__add" aria-label="${window.MIX.add[lang]}" title="${window.MIX.add[lang]}">+</button></div>
       <div class="card__body">
         <div class="card__series">${p.series}</div>
         <div class="card__name">${p.name}</div>
         <div class="card__meta"><span class="card__swatch" style="background:${p.hex}"></span>${famLabel(p.family)} · ${sizeLabel(p)}</div>
       </div>`;
     c.onclick=()=>openLightbox(p);
+    const addBtn=c.querySelector('.card__add');
+    if(addBtn) addBtn.onclick=e=>{ e.stopPropagation(); const had=mixHas(p); addToMixer(p);
+      if(!had && !mixHas(p)) return;                 // z.B. Indoor-Platte in Aussen abgelehnt
+      toast((had?'':'✓ ')+p.series+' · '+p.name); };
     $('#grid').appendChild(c);
     requestAnimationFrame(()=>setTimeout(()=>c.classList.add('in'), Math.min(stagger*18,300)));
   }
@@ -220,7 +225,7 @@
     const n=btn.querySelector('.loadmore__n'); if(n) n.textContent=rem;
   }
   function loadMore(){
-    const from=mShown, to=Math.min(mShown+PAGE, mList.length);
+    const from=mShown, to=mList.length;              // alle restlichen Produkte der Kategorie zeigen
     for(let i=from;i<to;i++) makeCard(mList[i], i-from);
     mShown=to; updateMore();
   }
@@ -315,14 +320,24 @@
   function scrollToEl(el){ if(window.__lenis) window.__lenis.scrollTo(el,{offset:-10}); else el.scrollIntoView({behavior:'smooth',block:'start'}); }
   // drag / trackpad swipe to flip through a gallery
   function attachSwipe(el, prev, next){
-    if(!el) return; let sx=0, dragging=false, moved=0, wlock=0;
+    if(!el) return; let sx=0, tracking=false, dragging=false, moved=0, pid=null, wlock=0;
     const img=el.querySelector('img'); el.classList.add('lb-swipe');
-    el.addEventListener('pointerdown',e=>{ if(e.button!==0) return; dragging=true; sx=e.clientX; moved=0;
-      try{el.setPointerCapture(e.pointerId);}catch(_){} el.classList.add('lb-grabbing'); });
-    el.addEventListener('pointermove',e=>{ if(!dragging) return; moved=e.clientX-sx; if(img) img.style.transform=`translateX(${moved*0.28}px)`; });
-    const end=()=>{ if(!dragging) return; dragging=false; el.classList.remove('lb-grabbing'); if(img) img.style.transform='';
-      if(moved>45) prev(); else if(moved<-45) next(); };
-    el.addEventListener('pointerup',end); el.addEventListener('pointercancel',end); el.addEventListener('pointerleave',end);
+    // Pointer erst NACH echter Bewegung "capturen" — sonst schluckt der Container die
+    // Klicks auf die Pfeil-Buttons (bricht das Weiterklicken in manchen Browsern).
+    el.addEventListener('pointerdown',e=>{ if(e.button!==0) return;
+      if(e.target.closest && e.target.closest('button')) return;   // Buttons nie abfangen
+      tracking=true; dragging=false; sx=e.clientX; moved=0; pid=e.pointerId; });
+    el.addEventListener('pointermove',e=>{ if(!tracking) return; moved=e.clientX-sx;
+      if(!dragging && Math.abs(moved)>6){ dragging=true; try{el.setPointerCapture(pid);}catch(_){} el.classList.add('lb-grabbing'); }
+      if(dragging && img) img.style.transform=`translateX(${moved*0.28}px)`; });
+    const end=()=>{ if(!tracking) return; const wasDrag=dragging; tracking=false; dragging=false;
+      el.classList.remove('lb-grabbing'); if(img) img.style.transform='';
+      if(wasDrag){ if(moved>45) prev(); else if(moved<-45) next(); } };
+    el.addEventListener('pointerup',end); el.addEventListener('pointercancel',end);
+    // Touch-Fallback für Browser mit lückenhafter Pointer-Event-Unterstützung
+    el.addEventListener('touchstart',e=>{ if(e.touches.length===1){ sx=e.touches[0].clientX; tracking=true; moved=0; } },{passive:true});
+    el.addEventListener('touchmove',e=>{ if(tracking&&e.touches.length===1) moved=e.touches[0].clientX-sx; },{passive:true});
+    el.addEventListener('touchend',()=>{ if(!tracking) return; tracking=false; if(moved>45) prev(); else if(moved<-45) next(); });
     el.addEventListener('wheel',e=>{ if(Math.abs(e.deltaX)>Math.abs(e.deltaY)+2 && Math.abs(e.deltaX)>10){
       e.preventDefault(); const now=Date.now(); if(now-wlock<420) return; wlock=now; e.deltaX>0?next():prev(); } },{passive:false});
   }
@@ -351,15 +366,27 @@
   // ---- echte Materialmasse (m) → korrekte texDiv, damit Stein-/Plattengrösse
   // massstäblich zur realen Wand-/Bodenbreite passt (Fuge folgt automatisch) ----
   const REAL={ brick:0.24, block:0.29, strip:0.24, pflaster:0.21, hex:0.22, oct:0.24, sq:0.30 };
-  // Fassade: Steinlänge bw_m = wM*FAM_BW/100/div  →  div = wM*FAM_BW/100/len
-  function facadeDiv(wM,fam){ fam=fam||'brick';
-    return Math.max(2, wM*(FAM_BW[fam]||15.6)/100/(REAL[fam]||0.24)); }
+  // echte Sichtflächen-Masse eines Produkts aus dem "size"-Feld: {len, ar} (Meter · Länge/Höhe)
+  // → damit z.B. Infinitum/LF-Langformat länger & dünner rendern als Standard-Klinker (NF)
+  function fmtOf(p){ if(!p) return null;
+    const s=(p.size||'')+' '+((p.formats&&p.formats.join(' '))||'');
+    const nums=s.match(/\d+(?:[.,]\d+)?/g); if(!nums) return null;
+    const v=nums.map(n=>parseFloat(n.replace(',','.'))).filter(n=>n>2);
+    if(v.length<2) return null;
+    const cm=/\bcm\b/i.test(s) && !/\bmm\b/i.test(s), scale=cm?0.01:0.001;   // cm/mm → m
+    const len=Math.max.apply(null,v)*scale, hgt=Math.min.apply(null,v)*scale;
+    return { len:Math.min(0.62,Math.max(0.12,len)), ar:Math.min(9,Math.max(1,len/hgt)) };
+  }
+  function zoneFmt(name){ const z=zoneData[name]; return (z&&z.mix.length)?fmtOf(z.mix[0].p):null; }
+  // Fassade: Steinlänge bw_m = wM*FAM_BW/100/div  →  div = wM*FAM_BW/100/len (echte Länge wenn bekannt)
+  function facadeDiv(wM,fam,lenM){ fam=fam||'brick';
+    return Math.max(2, wM*(FAM_BW[fam]||15.6)/100/(lenM||REAL[fam]||0.24)); }
   // Boden: je Verlege-Familie die passende div (siehe paintCourses/Hex/Oct/Square)
-  function floorDiv(wM,shape){
+  function floorDiv(wM,shape,lenM){
     if(shape==='hex') return Math.max(7, (wM/REAL.hex)*(3/7));   // cols_hex = 7*div/3
     if(shape==='oct') return Math.max(8, (wM/REAL.oct)*(3/8));   // n_oct    = 8*div/3
     if(shape==='square') return Math.max(9, (wM/REAL.sq)/3);     // n_sq     = 3*div (nach Fix)
-    return Math.max(3, wM*15.6/100/REAL.pflaster);               // Pflaster (brick-Familie)
+    return Math.max(3, wM*15.6/100/(lenM||REAL.pflaster));       // Pflaster (brick-Familie)
   }
   function shapeFamily(p){
     const s=(p.size||'')+' '+((p.formats&&p.formats.join(' '))||'');
@@ -455,6 +482,8 @@
     t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),2600);
   }
   function addToMixer(p){
+    // Indoor-Tonplatten nur in der Innen-Ansicht zulassen (nicht auf dem Aussen-Vorplatz)
+    if(p.cat==='tonplatten' && p.sub==='Indoor' && mixView==='exterior'){ toast(MIX().indoor_only[lang]); return; }
     // route to the right surface: Mauerklinker → Fassade · Pflaster/Tonplatten → Boden
     const surf=surfaceOf(p.cat), target=zoneKey(sceneNow(),surf);
     if(target!==activeZone){ saveActive(); loadActive(target); mixSurface=surf; }
@@ -472,18 +501,39 @@
   function clearMixer(){ mix=[]; mixCat=null; mixShape=null; mixLayout=[]; mixBond='run'; saveActive(); updateFab(); renderMixer(); }
   // ---- ready-made suggestions for the empty mixer (same category + same shape) ----
   const SUGGEST_SPECS=[
-    {sf:'brick',cat:'pflaster',want:['terra','rot','braun'],
+    // ---- Fassade (Mauerklinker) ----
+    {sf:'brick',cat:'mauer',want:['rot','beige','braun'],
+      t:{de:'Mediterrane Fassade',fr:'Façade méditerranéenne',it:'Facciata mediterranea',en:'Mediterranean façade'}},
+    {sf:'brick',cat:'mauer',want:['beige','grau','braun'],
+      t:{de:'Sandstein-Töne',fr:'Tons grès',it:'Toni arenaria',en:'Sandstone tones'}},
+    {sf:'brick',cat:'mauer',want:['rot','braun','beige'],
+      t:{de:'Rotbunt Klassik',fr:'Rouge nuancé classique',it:'Rosso screziato',en:'Classic red blend'}},
+    {sf:'brick',cat:'mauer',want:['grau','braun'],
+      t:{de:'Anthrazit-Klinker',fr:'Brique anthracite',it:'Mattone antracite',en:'Anthracite brick'}},
+    {sf:'brick',cat:'mauer',want:['braun','beige','grau'],
+      t:{de:'Warme Erdtöne',fr:'Tons terreux',it:'Toni terrosi',en:'Warm earth tones'}},
+    {sf:'brick',cat:'mauer',want:['rot','grau','braun'],
+      t:{de:'Landhaus-Mischung',fr:'Mélange campagne',it:'Mix rustico',en:'Country blend'}},
+    // ---- Boden aussen (Pflasterklinker) ----
+    {sf:'brick',cat:'pflaster',want:['rot','braun','gelb'],
       t:{de:'Warmes Pflaster',fr:'Pavés chaleureux',it:'Pavimento caldo',en:'Warm paving'}},
     {sf:'brick',cat:'pflaster',want:['schwarz','grau','beige'],
       t:{de:'Anthrazit & Sand',fr:'Anthracite & sable',it:'Antracite & sabbia',en:'Anthracite & sand'}},
-    {sf:'brick',cat:'mauer',want:['terra','rot','beige'],
-      t:{de:'Mediterrane Fassade',fr:'Façade méditerranéenne',it:'Facciata mediterranea',en:'Mediterranean façade'}},
-    {sf:'brick',cat:'mauer',want:['beige','grau','terra'],
-      t:{de:'Sandstein-Töne',fr:'Tons grès',it:'Toni arenaria',en:'Sandstone tones'}},
+    {sf:'brick',cat:'pflaster',want:['rot','braun'],
+      t:{de:'Rotbraun-Pflaster',fr:'Pavés brun-rouge',it:'Pavimento rossobruno',en:'Red-brown paving'}},
+    {sf:'brick',cat:'pflaster',want:['grau','schwarz'],
+      t:{de:'Grau-Anthrazit',fr:'Gris anthracite',it:'Grigio antracite',en:'Grey & anthracite'}},
+    {sf:'brick',cat:'pflaster',want:['beige','gelb','braun'],
+      t:{de:'Sandbeige-Weg',fr:'Allée sable',it:'Vialetto sabbia',en:'Sandy path'}},
+    // ---- Boden innen (Tonplatten) ----
     {sf:'hex',cat:'tonplatten',want:['terra','braun','rot'],
       t:{de:'Terrakotta-Wabe',fr:'Nid d’abeille terracotta',it:'Favo terracotta',en:'Terracotta honeycomb'}},
+    {sf:'hex',cat:'tonplatten',want:['terra','rot'],
+      t:{de:'Rosé-Wabe',fr:'Nid d’abeille rosé',it:'Favo rosé',en:'Rosé honeycomb'}},
     {sf:'square',cat:'tonplatten',want:['terra','braun','beige'],
-      t:{de:'Sanfte Böden',fr:'Sols doux',it:'Pavimenti tenui',en:'Soft floors'}}
+      t:{de:'Sanfte Böden',fr:'Sols doux',it:'Pavimenti tenui',en:'Soft floors'}},
+    {sf:'square',cat:'tonplatten',want:['braun','terra'],
+      t:{de:'Sienna-Boden',fr:'Sol sienne',it:'Pavimento siena',en:'Sienna floor'}}
   ];
   let _suggest=null;
   function getSuggestions(){
@@ -498,8 +548,10 @@
   }
   // suggestions valid for the active surface (Fassade → Mauerklinker · Boden → Pflaster/Tonplatten)
   function surfSuggestions(){
-    const cats = mixSurface==='facade' ? ['mauer'] : ['pflaster','tonplatten'];
-    return getSuggestions().filter(s=>cats.includes(s.cat));
+    if(mixSurface==='facade') return getSuggestions().filter(s=>s.cat==='mauer');
+    // Boden: Indoor-Tonplatten nicht in der Aussen-Ansicht vorschlagen
+    return getSuggestions().filter(s=> (s.cat==='pflaster'||s.cat==='tonplatten') &&
+      (mixView!=='exterior' || s.cat==='pflaster' || s.products.every(p=>p.sub!=='Indoor')));
   }
   function loadSuggestion(s){ clearMixer(); s.products.forEach(p=>addToMixer(p)); renderMixer(); }
   // evenly-spaced ordered sequence that respects the mix ratio
@@ -569,7 +621,9 @@
     return paintCourses(cx,W,H,map,fam,bed,head);
   }
   function paintCourses(cx,W,H,map,fam,bed,head){
-    const bw=W*(FAM_BW[fam]||15.6)/100/texDiv, bh=bw/(FAM_AR[fam]||3.4);
+    // Seitenverhältnis aus der ECHTEN Steingrösse (falls parsebar), sonst Familien-Default
+    const rf=(mix&&mix.length)?fmtOf(mix[0].p):null, ar=(rf&&rf.ar)||FAM_AR[fam]||3.4;
+    const bw=W*(FAM_BW[fam]||15.6)/100/texDiv, bh=bw/ar;
     const rows=Math.ceil(H/(bh+bed))+1, cols=Math.ceil(W/(bw+head))+2, sq=(fam==='square');
     for(let r=0;r<rows;r++){ const off=(sq?0:bondOffset(r))*(bw+head), y=r*(bh+bed);
       for(let c=-1;c<cols;c++){ const {im,b}=pickCell(map,c,r); drawUnit(cx,im,c*(bw+head)-off,y,bw,bh,b); } }
@@ -1024,8 +1078,8 @@
     const sceneView=(mixView==='exterior'||mixView==='interior');
     if(!mix.length && !sceneView){ host.innerHTML=''; return; }
     saveActive();
-    // Innen-Ansicht: echter 3D-Raum (WebGL) — Wand/Boden sind reale Flächen,
-    // Perspektive/Schatten/Sofabeine stimmen physikalisch (kein Masken-Foto mehr)
+    // Innen-Ansicht: echter 3D-Raum (WebGL). Modul bei Bedarf laden.
+    if(mixView==='interior' && !window.Room3D){ load3D('interior',host); return; }
     if(mixView==='interior' && window.Room3D && window.Room3D.available()){
       const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
       mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
@@ -1034,15 +1088,17 @@
         // Rückwand 6.4m + rechte Wand 8.4m (eigene Textur → kein Kachel-Nahtfehler),
         // Steingrösse massstäblich (Riemchen ~24cm wie Vollstein)
         const wFam=(zoneData[zoneKey('interior','facade')]||{}).shape||'brick';
-        const wallCv=zoneTexFull(zoneKey('interior','facade'),1800,850,facadeDiv(6.4,wFam),map);
-        const wallSideCv=zoneTexFull(zoneKey('interior','facade'),2100,760,facadeDiv(8.4,wFam),map);
+        const wLen=(zoneFmt(zoneKey('interior','facade'))||{}).len, flLenI=(zoneFmt(zoneKey('interior','floor'))||{}).len;
+        const wallCv=zoneTexFull(zoneKey('interior','facade'),1800,850,facadeDiv(6.4,wFam,wLen),map);
+        const wallSideCv=zoneTexFull(zoneKey('interior','facade'),2100,760,facadeDiv(8.4,wFam,wLen),map);
         const fShape=(zoneData[zoneKey('interior','floor')]||{}).shape||'brick';
-        const floorCv=zoneTexFull(zoneKey('interior','floor'),1600,2100,floorDiv(6.4,fShape),map);
+        const floorCv=zoneTexFull(zoneKey('interior','floor'),1600,2100,floorDiv(6.4,fShape,flLenI),map);
         if(window.Room3D.mount(host)) window.Room3D.setTextures(wallCv,wallSideCv,floorCv);
       }, allP);
       return;
     }
-    // Aussen-Ansicht: 3D-Gebäude (Bungalow + EFH) — Fassade/Boden als echte Texturen
+    // Aussen-Ansicht: 3D-Gebäude — Fassade/Boden als echte Texturen. Modul bei Bedarf laden.
+    if(mixView==='exterior' && !window[GLOB3D[mixBuilding]]){ load3D(mixBuilding,host); return; }
     const EXT3D=(mixBuilding==='bungalow')?window.Bungalow3D:(mixBuilding==='efh')?window.Efh3D:(mixBuilding==='villa')?window.Villa3D:(mixBuilding==='office')?window.Office3D:(mixBuilding==='friesen')?window.Friesen3D:null;
     if(mixView==='exterior' && EXT3D && EXT3D.available()){
       const bld=mixBuilding;
@@ -1055,7 +1111,8 @@
         // reale Masse je Gebäude (m): Front-Breite, Seiten-Tiefe, Vorplatz-Breite (+ Giebel)
         const D={ bungalow:{fw:13,sw:8,pw:14}, villa:{fw:13,sw:10,pw:15},
                   office:{fw:18,sw:12,pw:21}, friesen:{fw:13,sw:9,pw:17,gw:3.6}, efh:{fw:9.6,sw:8,pw:12} }[bld];
-        const fD=facadeDiv(D.fw,fFam), sD=facadeDiv(D.sw,fFam), flD=floorDiv(D.pw,fShape);
+        const fLen=(zoneFmt(zoneKey('exterior','facade'))||{}).len, flLen=(zoneFmt(zoneKey('exterior','floor'))||{}).len;
+        const fD=facadeDiv(D.fw,fFam,fLen), sD=facadeDiv(D.sw,fFam,fLen), flD=floorDiv(D.pw,fShape,flLen);
         let facadeCv,sideCv,floorCv,gableCv=null;
         if(bld==='bungalow'){
           facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,660,fD,map);
@@ -1071,7 +1128,7 @@
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1050,flD,map);
         } else if(bld==='friesen'){
           facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,600,fD,map);
-          gableCv=zoneTexFull(zoneKey('exterior','facade'),720,1500,facadeDiv(D.gw,fFam),map);
+          gableCv=zoneTexFull(zoneKey('exterior','facade'),720,1500,facadeDiv(D.gw,fFam,fLen),map);
           sideCv=zoneTexFull(zoneKey('exterior','facade'),1800,600,sD,map);
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1230,flD,map);
         } else {                                                                   // EFH
@@ -1117,6 +1174,18 @@
   window.addEventListener('villa3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='villa') refreshWall(); });
   window.addEventListener('office3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='office') refreshWall(); });
   window.addEventListener('friesen3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='friesen') refreshWall(); });
+  // three.js + Szenen-Module werden ERST beim Öffnen der jeweiligen 3D-Ansicht geladen
+  // (nicht beim Seitenaufbau) → deutlich schnellerer Erststart.
+  const MOD3D={interior:'room3d',bungalow:'bungalow3d',efh:'efh3d',villa:'villa3d',office:'office3d',friesen:'friesen3d'};
+  const GLOB3D={interior:'Room3D',bungalow:'Bungalow3D',efh:'Efh3D',villa:'Villa3D',office:'Office3D',friesen:'Friesen3D'};
+  const _load3D={}, L3D={de:'3D wird geladen …',fr:'Chargement 3D …',it:'Caricamento 3D …',en:'Loading 3D …'};
+  function load3D(key,host){
+    if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
+    if(_load3D[key]) return; _load3D[key]=true;
+    // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=38', document.baseURI).href;
+    import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
+  }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
   function zoneTex(name,size,map){
     const z=zoneData[name]; if(!z.mix.length) return null;
@@ -1315,7 +1384,7 @@
         const card=e.target, v=card.__v;
         if(e.isIntersecting && !card.classList.contains('is-playing')){
           card.insertAdjacentHTML('afterbegin',
-            `<iframe src="https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&mute=1&loop=1&playlist=${v.id}&controls=1&rel=0&modestbranding=1&playsinline=1" title="${v.title}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>`);
+            `<iframe src="https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&mute=1&loop=1&playlist=${v.id}&controls=0&rel=0&modestbranding=1&iv_load_policy=3&fs=0&disablekb=1&playsinline=1" title="${v.title}" allow="autoplay; encrypted-media" loading="lazy"></iframe>`);
           card.classList.add('is-playing');
         }
       });
@@ -1457,6 +1526,7 @@
     $('#lightbox').onclick=e=>{ if(e.target.id==='lightbox') closeLightbox(); };
     $('#loadMore').onclick=loadMore;
     $('#mixFab').onclick=openMixer; $('#mixClose').onclick=closeMixer;
+    { const hc=$('#heroConfig'); if(hc) hc.onclick=openMixer; }
     $('#mixer').onclick=e=>{ if(e.target.id==='mixer') closeMixer(); };
     $('#mixClear').onclick=clearMixer; $('#mixShuffle').onclick=()=>{ genLayout(); renderMixer(); };
     $('#mixExport').onclick=exportWall;
@@ -1471,6 +1541,16 @@
       clearTimeout(rsT); rsT=setTimeout(refreshWall,120); });   // re-render preview on window resize
     const nav=$('#nav'); const onScroll=()=>nav.classList.toggle('scrolled', window.scrollY>20);
     window.addEventListener('scroll',onScroll,{passive:true}); onScroll();
+    // Logo an den TATSÄCHLICHEN Hintergrund anpassen (auch bei erzwungenem Darkmode):
+    // System-Farbe "Canvas" spiegelt die reale Darstellung wider (respektiert color-scheme).
+    const probe=document.createElement('div');
+    probe.style.cssText='position:fixed;left:-9px;top:-9px;width:1px;height:1px;background:Canvas;pointer-events:none';
+    document.body.appendChild(probe);
+    const syncLogoTheme=()=>{ const m=getComputedStyle(probe).backgroundColor.match(/\d+/g);
+      const dark=m && (0.299*+m[0]+0.587*+m[1]+0.114*+m[2])<128;
+      document.documentElement.classList.toggle('dark-render', !!dark); };
+    syncLogoTheme();
+    try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',syncLogoTheme); }catch(_){}
     $('#year').textContent=new Date().getFullYear();
   }
 
