@@ -1357,37 +1357,63 @@
     openModal();
   }
 
-  // ===================== FORMS (static → mailto) =====================
+  // ===================== FORMS (Web3Forms → info@klinkerbox.ch) =====================
+  // Access-Key ist öffentlich (nur Versand an die hinterlegte Mail) — darf im Code stehen.
+  const WEB3FORMS_KEY='1341c331-2d68-4390-bdcb-d9ed4c9ea7e6';
+  const FT={ sending:{de:'Wird gesendet…',fr:'Envoi en cours…',it:'Invio in corso…',en:'Sending…'},
+             err:{de:'Senden fehlgeschlagen. Bitte später erneut versuchen oder direkt an info@klinkerbox.ch.',
+                  fr:'Échec de l’envoi. Réessayez plus tard ou écrivez à info@klinkerbox.ch.',
+                  it:'Invio non riuscito. Riprova più tardi o scrivi a info@klinkerbox.ch.',
+                  en:'Sending failed. Please try again later or email info@klinkerbox.ch.'} };
+  const ft=k=>FT[k][lang]||FT[k].de;
+  async function web3send(payload){
+    const r=await fetch('https://api.web3forms.com/submit',{method:'POST',
+      headers:{'Content-Type':'application/json',Accept:'application/json'},
+      body:JSON.stringify(Object.assign({access_key:WEB3FORMS_KEY},payload))});
+    return r.json();
+  }
   function bindForms(){
     const cf=$('#contactForm');
-    if(cf) cf.onsubmit=e=>{
+    if(cf) cf.onsubmit=async e=>{
       e.preventDefault();
       const f=cf.elements;
-      if(f.website.value){ return; } // honeypot
+      if(f.website.value){ return; }                       // Honeypot
       if(!f.name.value.trim()||!f.email.value.trim()||!f.message.value.trim()){
         showHint($('#formHint'), I[lang].f_req, false); return;
       }
       const interests=$$('#interestChecks input:checked').map(c=>c.value).join(', ');
       const d=I[lang];
-      const body=[
-        `${d.f_name}: ${f.name.value}`,
-        `${d.f_company}: ${f.company.value}`,
-        `${d.f_phone}: ${f.phone.value}`,
-        `${d.f_email}: ${f.email.value}`,
-        `${d.f_projaddr}: ${f.projaddr.value}`,
-        `${d.f_interest}: ${interests}`,
-        '',`${d.f_message}:`, f.message.value
-      ].join('\n');
-      window.location.href=`mailto:info@klinkerbox.ch?subject=${encodeURIComponent('Anfrage Klinkerbox — '+f.name.value)}&body=${encodeURIComponent(body)}`;
-      showHint($('#formHint'), I[lang].nl_done, true);
+      const btn=cf.querySelector('button[type=submit],[type=submit]'); const bTxt=btn?btn.textContent:'';
+      if(btn) btn.disabled=true;
+      showHint($('#formHint'), ft('sending'), true);
+      try{
+        const j=await web3send({
+          subject:'Anfrage Klinkerbox — '+f.name.value,
+          from_name:f.name.value, replyto:f.email.value,
+          [d.f_name]:f.name.value, [d.f_company]:f.company.value, [d.f_phone]:f.phone.value,
+          [d.f_email]:f.email.value, [d.f_projaddr]:f.projaddr.value,
+          [d.f_interest]:interests, [d.f_message]:f.message.value
+        });
+        if(j&&j.success){ showHint($('#formHint'), I[lang].nl_done, true); cf.reset(); }
+        else showHint($('#formHint'), ft('err'), false);
+      }catch(err){ showHint($('#formHint'), ft('err'), false); }
+      finally{ if(btn){ btn.disabled=false; btn.textContent=bTxt; } }
     };
     const nf=$('#newsForm');
-    if(nf) nf.onsubmit=e=>{
+    if(nf) nf.onsubmit=async e=>{
       e.preventDefault();
       const f=nf.elements; if(!f.email.value.trim()) return;
-      const body=`${I[lang].nl_first}: ${f.first.value}\n${I[lang].nl_last}: ${f.last.value}\n${I[lang].nl_email}: ${f.email.value}`;
-      window.location.href=`mailto:info@klinkerbox.ch?subject=${encodeURIComponent('Newsletter-Anmeldung')}&body=${encodeURIComponent(body)}`;
-      nf.reset();
+      const d=I[lang], hint=$('#newsHint');
+      const btn=nf.querySelector('button[type=submit],[type=submit]'); if(btn) btn.disabled=true;
+      if(hint) showHint(hint, ft('sending'), true);
+      try{
+        const j=await web3send({ subject:'Newsletter-Anmeldung',
+          from_name:(f.first.value+' '+f.last.value).trim()||'Newsletter', replyto:f.email.value,
+          [d.nl_first]:f.first.value, [d.nl_last]:f.last.value, [d.nl_email]:f.email.value });
+        if(j&&j.success){ nf.reset(); if(hint) showHint(hint, I[lang].nl_done, true); }
+        else if(hint) showHint(hint, ft('err'), false);
+      }catch(err){ if(hint) showHint(hint, ft('err'), false); }
+      finally{ if(btn) btn.disabled=false; }
     };
   }
   function showHint(el,msg,ok){ if(!el) return; el.hidden=false; el.textContent=msg; el.className='cform__hint '+(ok?'is-ok':'is-err'); }
