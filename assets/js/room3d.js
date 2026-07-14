@@ -335,11 +335,13 @@ function sizeToHost(){
   camera.fov=(camera.aspect>1.45)?44:(camera.aspect>1.1?52:58);
   camera.updateProjectionMatrix();
 }
-function loop(){
-  rafId=requestAnimationFrame(loop);
-  if(!renderer||!host) return;
-  applyCam(false);
-  renderer.render(scene,camera);
+// rAF-Loop + Timer-Watchdog: rendert auch weiter, wenn der Browser rAF drosselt
+let wdId=0, lastRaf=0;
+function step(){ if(!renderer||!host) return; applyCam(false); renderer.render(scene,camera); }
+function loop(){ rafId=requestAnimationFrame(loop); lastRaf=performance.now(); step(); }
+function startLoops(){
+  if(!rafId) loop();
+  if(!wdId) wdId=setInterval(()=>{ if(performance.now()-lastRaf>200) step(); },120);
 }
 function texFromCanvas(cv){
   if(!cv) return null;
@@ -364,7 +366,7 @@ window.Room3D={
     if(ro) ro.disconnect();
     ro=new ResizeObserver(()=>sizeToHost()); ro.observe(host);
     sizeToHost();
-    if(!rafId) loop();
+    startLoops();
     return true;
   },
   // Wand hinten, Wand rechts, Boden — je ein Canvas (null → neutrale Fläche)

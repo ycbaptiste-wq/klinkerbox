@@ -1029,7 +1029,7 @@
       return;
     }
     // Aussen-Ansicht: 3D-Gebäude (Bungalow + EFH) — Fassade/Boden als echte Texturen
-    const EXT3D=(mixBuilding==='bungalow')?window.Bungalow3D:(mixBuilding==='efh')?window.Efh3D:null;
+    const EXT3D=(mixBuilding==='bungalow')?window.Bungalow3D:(mixBuilding==='efh')?window.Efh3D:(mixBuilding==='villa')?window.Villa3D:null;
     if(mixView==='exterior' && EXT3D && EXT3D.available()){
       const bld=mixBuilding;
       const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
@@ -1043,6 +1043,11 @@
           sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,660,12.5,map);      // 8m Seiten
           const fDiv=(fShape==='hex'||fShape==='oct')?30:(fShape==='square'?14:11);// 14m Terrasse
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,fDiv,map);
+        } else if(bld==='villa'){
+          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,1250,20,map);     // 13m Front (2 Geschosse)
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),2000,1000,15.5,map);     // 10m Seiten
+          const fDiv=(fShape==='hex'||fShape==='oct')?31:(fShape==='square'?15:11.5);// 15m Vorplatz
+          floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,900,fDiv,map);
         } else {                                                                   // EFH
           facadeCv=zoneTexFull(zoneKey('exterior','facade'),2000,1270,15,map);     // 9.6m Front
           sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,1700,12.5,map);     // 8m Giebelseite
@@ -1084,6 +1089,7 @@
   window.addEventListener('room3d-ready',()=>{ if(mixView==='interior') refreshWall(); });
   window.addEventListener('bungalow3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='bungalow') refreshWall(); });
   window.addEventListener('efh3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='efh') refreshWall(); });
+  window.addEventListener('villa3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='villa') refreshWall(); });
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
   function zoneTex(name,size,map){
     const z=zoneData[name]; if(!z.mix.length) return null;
@@ -1161,7 +1167,7 @@
       const url=window.Room3D.snapshot(CW,CH);
       if(url){ const a=document.createElement('a'); a.href=url; a.download='klinkerbox-mischung.png'; a.click(); return; }
     }
-    const EX3=(mixBuilding==='bungalow')?window.Bungalow3D:(mixBuilding==='efh')?window.Efh3D:null;
+    const EX3=(mixBuilding==='bungalow')?window.Bungalow3D:(mixBuilding==='efh')?window.Efh3D:(mixBuilding==='villa')?window.Villa3D:null;
     if(mixView==='exterior' && EX3 && EX3.available()){
       const url=EX3.snapshot(CW,CH);
       if(url){ const a=document.createElement('a'); a.href=url; a.download='klinkerbox-mischung.png'; a.click(); return; }
