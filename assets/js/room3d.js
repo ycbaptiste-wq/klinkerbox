@@ -326,8 +326,8 @@ function buildScene(){
   const stFoot=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,0.02,20),blackM); stFoot.position.set(-2.15,0.01,0.7); scene.add(stFoot);
   const stBook=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.03,0.17),mat(0x7c4436,0.7)); stBook.position.set(-2.15,0.535,0.7); stBook.rotation.y=0.2; scene.add(stBook);
 
-  // ---------- ZIMMERBAUM (Olive) in der linken Ecke ----------
-  const PX=-2.7, PZ=4.25;
+  // ---------- ZIMMERBAUM (Olive) in der hinteren linken Ecke (dezent) ----------
+  const PX=-2.85, PZ=0.6;
   const gpot=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.18,0.40,24),
     new THREE.MeshStandardMaterial({color:0xb9b1a4,roughness:0.9,bumpMap:bump,bumpScale:0.2}));
   gpot.position.set(PX,0.20,PZ); gpot.castShadow=true; scene.add(gpot);

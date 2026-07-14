@@ -34,6 +34,7 @@
   const $$ = s => Array.from(document.querySelectorAll(s));
   const subLabel = v => (SUB[v] && SUB[v][lang]) || v;
   const famLabel = v => (FAM[v] && FAM[v][lang]) || v;
+  const famsOf = p => (p.fams && p.fams.length) ? p.fams : [p.family];   // ein Produkt kann mehreren Farbfamilien angehören
 
   // ----- surface finish (Oberfläche) for paving bricks -----
   function finishTokens(p){
@@ -157,7 +158,7 @@
   }
   function buildColorDots(){
     const wrap = $('#colorDots'); wrap.innerHTML='';
-    const fams=[...new Set(pool().map(p=>p.family))];          // only colours present in the current category
+    const fams=[...new Set(pool().flatMap(p=>famsOf(p)))];     // only colours present in the current category
     if(state.color && !fams.includes(state.color)) state.color=null;
     fams.sort((a,b)=>Object.keys(FAM).indexOf(a)-Object.keys(FAM).indexOf(b)).forEach(f=>{
       const d=document.createElement('button');
@@ -187,10 +188,10 @@
       if(state.stil && p.stil!==state.stil) return false;
       // every Mauerklinker is also available as Riemchen → the Riemchen filter matches all
       if(state.typ && p.typ!==state.typ && !(state.typ==='Riemchen' && p.cat==='mauer')) return false;
-      if(state.color && p.family!==state.color) return false;
+      if(state.color && !famsOf(p).includes(state.color)) return false;
       if(state.size!=='all' && !isAllFmt(p) && p.size!==state.size && !(isMulti(p) && p.formats.includes(state.size))) return false;
       if(state.q){
-        const h=(p.series+' '+p.name+' '+famLabel(p.family)+' '+p.size).toLowerCase();
+        const h=(p.series+' '+p.name+' '+famsOf(p).map(famLabel).join(' ')+' '+p.size).toLowerCase();
         if(!h.includes(state.q.toLowerCase())) return false;
       }
       return true;
@@ -490,7 +491,7 @@
     _suggest=SUGGEST_SPECS.map(spec=>{
       const pool=P.filter(p=>p.cat===spec.cat && shapeFamily(p)===spec.sf);
       const picked=[];
-      spec.want.forEach(fam=>{ const c=pool.find(p=>p.family===fam && !picked.includes(p)); if(c) picked.push(c); });
+      spec.want.forEach(fam=>{ const c=pool.find(p=>famsOf(p).includes(fam) && !picked.includes(p)); if(c) picked.push(c); });
       return {title:spec.t, cat:spec.cat, products:picked};
     }).filter(s=>s.products.length>=2);
     return _suggest;
