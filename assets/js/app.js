@@ -283,7 +283,7 @@
           <div class="lb__di"><dt>${d.lb_cat}</dt><dd>${catName}</dd></div>
           <div class="lb__di"><dt>${d.lb_sub}</dt><dd>${subLabel(p.typ||p.sub)}</dd></div>
           ${fin?`<div class="lb__di"><dt>${d.lb_finish}</dt><dd>${fin}</dd></div>`:''}
-          <div class="lb__di"><dt>${d.lb_color}</dt><dd class="lb__cdd"><span class="lb__dot" style="background:${p.hex}"></span>${famLabel(p.family)}</dd></div>
+          <div class="lb__di"><dt>${d.lb_color}</dt><dd class="lb__cdd"><span class="lb__dot" style="background:${p.hex}"></span>${famsOf(p).map(famLabel).join(' · ')}</dd></div>
           ${isMulti(p)
             ? `<div class="lb__di lb__di--wide"><dt>${d.lb_size}</dt><dd class="lb__fmts">${p.formats.map(f=>`<span>${f}</span>`).join('')}</dd></div>`
             : `<div class="lb__di"><dt>${d.lb_size}</dt><dd>${sizeLabel(p)}</dd></div>`}
