@@ -572,7 +572,7 @@
     for(let r=0;r<MROWS;r++) wildOff.push(Math.random());
   }
   function bondOffset(row){
-    if(mixBond==='stack') return 0;
+    if(mixBond==='stack'||mixBond==='linear') return 0;    // Lineare Verlegung = Rasterfugen
     if(mixBond==='cross') return [0,0.5,0.25,0.75][row%4];
     if(mixBond==='wild') return wildOff[row]||0;
     return (row%2)*0.5;                          // running bond
@@ -616,8 +616,9 @@
     if(fam==='hex') return paintHex(cx,W,H,map,bed);
     if(fam==='oct') return paintOct(cx,W,H,map,Math.max(3*sc,bed));
     if(fam==='square') return paintSquare(cx,W,H,map,Math.max(bed,head));
-    if(mixBond==='herring') return paintHerring(cx,W,H,map,head);
-    if(mixBond==='basket') return paintBasket(cx,W,H,map,head);
+    if(mixBond==='herring') return paintHerring(cx,W,H,map,head);      // Fischgrät (45°)
+    if(mixBond==='diagonal') return paintDiagonal(cx,W,H,map,head);    // achsparallele Fischgrät
+    if(mixBond==='basket'||mixBond==='block') return paintBasket(cx,W,H,map,head);
     return paintCourses(cx,W,H,map,fam,bed,head);
   }
   function paintCourses(cx,W,H,map,fam,bed,head){
@@ -633,22 +634,34 @@
     for(let r=0;r<rows;r++) for(let c=0;c<n;c++){ const {im,b}=pickCell(map,c,r);
       drawUnit(cx,im,gap+c*(tw+gap),gap+r*(tw+gap),tw,tw,b); }
   }
-  // 90° herringbone: unit = H + V brick, lattice v1=(S,S) v2=(-2S,2S)
-  function paintHerring(cx,W,H,map,gap){
-    const S=Math.round(W*0.062), L=2*S;
-    const mMax=Math.ceil((W+H)/(2*S))+5, nMin=-Math.ceil(W/(4*S))-5, nMax=Math.ceil(H/(4*S))+5;
-    for(let m=-5;m<mMax;m++) for(let n=nMin;n<nMax;n++){
+  // Fischgrät-Kern: füllt eine Region [x0..x1,y0..y1] mit H+V-Steinen (Gitter v1=(S,S) v2=(-2S,2S))
+  function herringInto(ctx,x0,y0,x1,y1,S,map,gap){
+    const L=2*S;
+    const mMin=Math.floor((x0+y0)/(2*S))-2, mMax=Math.ceil((x1+y1)/(2*S))+2;
+    const nMin=Math.floor((y0-x1)/(4*S))-2, nMax=Math.ceil((y1-x0)/(4*S))+2;
+    for(let m=mMin;m<=mMax;m++) for(let n=nMin;n<=nMax;n++){
       const px=m*S-n*2*S, py=m*S+n*2*S;
-      if(px>W+L||px<-2*L||py>H+L||py<-2*L) continue;
+      if(px>x1+L||px<x0-2*L||py>y1+L||py<y0-2*L) continue;
       const h=pickCell(map,Math.round((px+L/2)/S),Math.round((py+S/2)/S));
-      drawUnit(cx,h.im,px,py,L-gap,S-gap,h.b);
+      drawUnit(ctx,h.im,px,py,L-gap,S-gap,h.b);
       const v=pickCell(map,Math.round((px+S/2)/S),Math.round((py+S+L/2)/S));
-      drawUnit(cx,v.im,px,py+S,S-gap,L-gap,v.b);
+      drawUnit(ctx,v.im,px,py+S,S-gap,L-gap,v.b);
     }
+  }
+  // Kurzseite S eines 2:1-Pflastersteins — massstäblich (skaliert mit texDiv wie der Läuferverband)
+  const paverS=W=>Math.max(6,Math.round(W*0.078/texDiv));
+  // Diagonalverband: achsparallele Steine, Fugen laufen diagonal
+  function paintDiagonal(cx,W,H,map,gap){ herringInto(cx,0,0,W,H,paverS(W),map,gap); }
+  // Fischgrätverband: dasselbe Muster, aber um 45° gedreht → Steine liegen schräg
+  function paintHerring(cx,W,H,map,gap){
+    const S=paverS(W), ox=W/2, oy=H/2, R=0.78*Math.hypot(W,H);
+    cx.save(); cx.translate(ox,oy); cx.rotate(Math.PI/4); cx.translate(-ox,-oy);
+    herringInto(cx,ox-R,oy-R,ox+R,oy+R,S,map,gap);
+    cx.restore();
   }
   // basket weave (Parkettverband): checkerboard of paired H / paired V bricks
   function paintBasket(cx,W,H,map,gap){
-    const S=Math.round(W*0.066), L=2*S, cols=Math.ceil(W/L)+1, rows=Math.ceil(H/L)+1;
+    const S=paverS(W), L=2*S, cols=Math.ceil(W/L)+1, rows=Math.ceil(H/L)+1;
     for(let r=0;r<rows;r++) for(let c=0;c<cols;c++){ const x=c*L, y=r*L;
       if((r+c)%2===0){ const a=pickCell(map,c*2,r*2), b2=pickCell(map,c*2,r*2+1);
         drawUnit(cx,a.im,x,y,L-gap,S-gap,a.b); drawUnit(cx,b2.im,x,y+S,L-gap,S-gap,b2.b); }
@@ -1333,7 +1346,7 @@
     const bondApplies=RECT_FAM(mixShape||'brick') && (mixShape||'brick')!=='square';
     // paving patterns for Pflasterklinker · wall bonds for Mauerklinker
     const bondOpts=mixCat==='pflaster'
-      ? [['run',M.b_run[lang]],['herring',M.b_herring[lang]],['basket',M.b_basket[lang]],['wild',M.b_wild[lang]]]
+      ? [['run',M.b_run[lang]],['linear',M.b_linear[lang]],['herring',M.b_herring[lang]],['diagonal',M.b_diagonal[lang]],['block',M.b_block[lang]]]
       : [['run',M.b_run[lang]],['cross',M.b_cross[lang]],['stack',M.b_stack[lang]],['wild',M.b_wild[lang]]];
     if(!bondOpts.some(o=>o[0]===mixBond)) mixBond='run';   // coerce to a valid option for this category
     const bond=bondApplies
