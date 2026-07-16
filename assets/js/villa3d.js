@@ -4,7 +4,7 @@
 // Portikus mit Freitreppe und Geländer, Buchs-Vorgarten mit Metallzaun.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=35';
+import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=36';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
@@ -163,11 +163,9 @@ function buildScene(){
   const back=new THREE.Mesh(new THREE.PlaneGeometry(HW,HE-PL),mat(0xcfccc7,1));
   back.rotation.y=Math.PI; back.position.set(0,PL+(HE-PL)/2,-HD); scene.add(back);
 
-  // ---- Gesimse: Gurtband zwischen den Geschossen + Traufgesims ----
-  const band=new THREE.Mesh(new THREE.BoxGeometry(HW+0.16,0.20,0.10),mat(0xeceae6,0.7));
-  band.position.set(0,3.72,0.05); band.castShadow=true; scene.add(band);
-  const cornice=new THREE.Mesh(new THREE.BoxGeometry(HW+0.7,0.34,HD+0.7),mat(0xeceae6,0.7));
-  cornice.position.set(0,HE+0.17,-HD/2); cornice.castShadow=true; scene.add(cornice);
+  // ---- Traufgesims (Dachrand) — mittleres Gurtband entfernt (zu dominante waagerechte Linie) ----
+  const cornice=new THREE.Mesh(new THREE.BoxGeometry(HW+0.7,0.30,HD+0.7),mat(0xeceae6,0.7));
+  cornice.position.set(0,HE+0.19,-HD/2); cornice.castShadow=true; scene.add(cornice);
 
   // ---- Walmdach + Gaube ----
   const rT=roofTex(); rT.repeat.set(7,3);
@@ -222,14 +220,22 @@ function buildScene(){
     st.castShadow=true; st.receiveShadow=true; stG.add(st);
   }
   const railM=mat(0x2c2e31,0.5,0.6);
-  [[-1.62],[1.62]].forEach(([sx])=>{
-    const rail=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,2.3),railM);
-    rail.position.set(sx,PL+0.55,1.45); rail.rotation.x=Math.atan2(PL,2.0);
-    stG.add(rail);
-    for(let i=0;i<5;i++){
-      const t=i/4, bz=0.6+t*1.9, by=(PL+0.52)-t*PL*0.92;
-      const bar=new THREE.Mesh(new THREE.BoxGeometry(0.025,by,0.025),railM);
-      bar.position.set(sx,by/2,bz); stG.add(bar);
+  const zBot=2.5, zTop=0.7, yTop=PL, hh=0.92;          // Treppenlauf-Fusspunkte + Handlaufhöhe
+  [[-1.6],[1.6]].forEach(([sx])=>{
+    // Pfosten unten (auf dem Boden) + oben (auf dem Podest) — nichts schwebt
+    const pB=new THREE.Mesh(new THREE.BoxGeometry(0.08,hh+0.10,0.08),railM);
+    pB.position.set(sx,(hh+0.10)/2,zBot); pB.castShadow=true; stG.add(pB);
+    const pT=new THREE.Mesh(new THREE.BoxGeometry(0.08,hh+0.10,0.08),railM);
+    pT.position.set(sx,yTop+(hh+0.10)/2,zTop); pT.castShadow=true; stG.add(pT);
+    // Handlauf verbindet die Pfostenköpfe (entlang des Laufs geneigt)
+    const y0=hh, y1=yTop+hh, dz=zBot-zTop, dy=y1-y0, len=Math.hypot(dz,dy);
+    const hr=new THREE.Mesh(new THREE.BoxGeometry(0.06,0.06,len+0.08),railM);
+    hr.position.set(sx,(y0+y1)/2,(zBot+zTop)/2); hr.rotation.x=Math.atan2(dy,dz); hr.castShadow=true; stG.add(hr);
+    // Baluster: von der Lauflinie bis zum Handlauf
+    for(let i=1;i<=4;i++){ const t=i/5;
+      const z=zBot-t*dz, yFoot=t*yTop, yHand=yFoot+hh;
+      const bar=new THREE.Mesh(new THREE.BoxGeometry(0.03,yHand-yFoot,0.03),railM);
+      bar.position.set(sx,(yFoot+yHand)/2,z); stG.add(bar);
     }
   });
 

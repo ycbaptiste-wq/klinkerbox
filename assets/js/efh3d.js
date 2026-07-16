@@ -4,7 +4,7 @@
 // Giebelseiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 // Orbit + Zoom wie beim Bungalow/Innenraum.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=35';
+import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=36';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;

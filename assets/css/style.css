@@ -414,14 +414,16 @@ a.cinfo__val:hover{color:var(--clay)}
 .card:hover .card__add,.card__add:focus-visible{opacity:1;transform:none}
 .card__add:hover{background:var(--clay-dark)}
 .card.in-mix .card__add{opacity:1;transform:none;background:#3f7a4e}
+.card.in-mix .card__add:hover{background:#c0492f}   /* ausgewählt → Hover signalisiert Entfernen (×) */
+.card.in-mix .card__add:hover::after{content:"✕";position:absolute;inset:0;display:grid;place-items:center;background:inherit;border-radius:50%}
 @media (hover:none){ .card__add{opacity:1;transform:none} }
 .mixer{position:fixed;inset:0;z-index:120;background:rgba(15,12,10,.82);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:24px;animation:fade .3s var(--ease)}
 .mixer[hidden]{display:none}
-.mixer__panel{position:relative;background:#fff;border-radius:var(--radius-lg);width:min(1400px,97vw);height:min(900px,95vh);
+.mixer__panel{position:relative;background:#fff;border-radius:var(--radius-lg);width:min(1580px,98vw);height:min(1000px,96vh);
   padding:1.5rem;box-shadow:var(--shadow-l);animation:pop .35s var(--ease-out)}
 .mixer__close{position:absolute;top:.8rem;right:1rem;z-index:3;background:none;border:none;font-size:1.9rem;line-height:1;cursor:pointer;color:var(--ink-soft)}
 .mixer__body{display:flex;gap:1.5rem;height:100%}
-.mixer__side{flex:0 0 360px;display:flex;flex-direction:column;min-height:0;overflow-y:auto;padding-right:.4rem}
+.mixer__side{flex:0 0 336px;display:flex;flex-direction:column;min-height:0;overflow-y:auto;padding-right:.4rem}
 .mixer__head{margin-bottom:.6rem}
 .mixer__title{font-family:"Bricolage Grotesque",serif;font-weight:500;font-size:1.45rem;margin-bottom:.1rem}
 .mixer__cat{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--clay);font-weight:600}
@@ -434,6 +436,7 @@ a.cinfo__val:hover{color:var(--clay)}
 .mixview[hidden]{display:none}
 .mixview__row{display:flex;gap:.25rem;background:rgba(20,18,16,.62);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.14);border-radius:100px;padding:.28rem}
 .mixview__row--sub{background:rgba(20,18,16,.5)}
+.mixview__lbl{align-self:center;font-size:.6rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:rgba(255,255,255,.5);padding:0 .45rem 0 .55rem}
 .mixview__b{font:inherit;font-size:.82rem;font-weight:600;color:rgba(255,255,255,.72);background:none;border:none;cursor:pointer;
   padding:.4rem .9rem;border-radius:100px;transition:.2s;white-space:nowrap}
 .mixview__b--sm{font-size:.76rem;padding:.3rem .8rem}
@@ -508,7 +511,7 @@ a.cinfo__val:hover{color:var(--clay)}
   .mixer__panel{width:100%;height:100%;height:100dvh;max-height:none;border-radius:0;padding:0;overflow:hidden;display:flex;flex-direction:column}
   .mixer__close{top:.5rem;right:.55rem;width:36px;height:36px;border-radius:50%;background:rgba(20,18,16,.55);color:#fff;display:grid;place-items:center;-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
   .mixer__body{flex-direction:column;gap:0;height:100%;min-height:0}
-  .mixer__stage{order:-1;flex:0 0 46vh;min-height:46vh;padding:0}
+  .mixer__stage{order:-1;flex:0 0 56vh;min-height:56vh;padding:0}
   .mixer__preview{min-height:0;height:100%;border-radius:0;border:none;border-bottom:1px solid var(--line)}
   .mixer__side{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:.9rem 1rem 1.6rem}
   .mixer__head{margin-bottom:.5rem}

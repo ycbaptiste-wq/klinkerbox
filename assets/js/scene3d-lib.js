@@ -44,14 +44,14 @@ export function buildEnv(renderer){
 export function glassMaterial(opts){
   opts=opts||{};
   return new THREE.MeshPhysicalMaterial({
-    color: opts.color!=null?opts.color:0x27303a,
+    color: opts.color!=null?opts.color:0x2b343e,
     metalness:0,
-    roughness: opts.roughness!=null?opts.roughness:0.05,
+    roughness: opts.roughness!=null?opts.roughness:0.06,
     transparent:true,
-    opacity: opts.opacity!=null?opts.opacity:0.72,
-    envMapIntensity: opts.env!=null?opts.env:2.6,
-    clearcoat:1, clearcoatRoughness:0.05,
-    ior:1.5, reflectivity:0.9,
+    opacity: opts.opacity!=null?opts.opacity:0.46,   // durchsichtiger → man sieht in den Raum
+    envMapIntensity: opts.env!=null?opts.env:1.7,     // weniger spiegelnd, damit der Innenraum durchkommt
+    clearcoat:1, clearcoatRoughness:0.06,
+    ior:1.5, reflectivity:0.7,
     side:THREE.FrontSide, depthWrite:false
   });
 }
@@ -65,23 +65,30 @@ export function interiorMaterial(kind){
   const cv=document.createElement('canvas'); cv.width=128; cv.height=170;
   const c=cv.getContext('2d');
   const g=c.createLinearGradient(0,0,0,170);
-  if(kind==='office'){ g.addColorStop(0,'#454b54'); g.addColorStop(1,'#5c636c'); }
-  else if(kind==='dark'){ g.addColorStop(0,'#191d22'); g.addColorStop(1,'#2a3038'); }
-  else { g.addColorStop(0,'#1c2027'); g.addColorStop(0.62,'#282d35'); g.addColorStop(1,'#363c45'); }
+  if(kind==='office'){ g.addColorStop(0,'#6c727b'); g.addColorStop(1,'#848b94'); }
+  else if(kind==='dark'){ g.addColorStop(0,'#20252b'); g.addColorStop(1,'#333a43'); }
+  else { g.addColorStop(0,'#8a8175'); g.addColorStop(0.58,'#6f665b'); g.addColorStop(1,'#4c453d'); } // helle, warme Wohnwand
   c.fillStyle=g; c.fillRect(0,0,128,170);
   if(kind==='home'){
-    // seitliche Vorhänge
-    c.fillStyle='rgba(226,220,207,0.52)';
-    for(let x=2;x<40;x+=6) c.fillRect(x,0,3,170);
-    for(let x=88;x<126;x+=6) c.fillRect(x,0,3,170);
-    // warmer Lichtschein (Lampe im Raum)
-    const gg=c.createRadialGradient(64,70,2,64,70,66);
-    gg.addColorStop(0,'rgba(255,222,166,0.24)'); gg.addColorStop(1,'rgba(255,222,166,0)');
+    // Rückwand mit warmem Lampenschein (Wohnzimmer)
+    const gg=c.createRadialGradient(64,58,2,64,58,80);
+    gg.addColorStop(0,'rgba(255,226,170,0.55)'); gg.addColorStop(1,'rgba(255,226,170,0)');
     c.fillStyle=gg; c.fillRect(0,0,128,170);
+    // Bodenzone (dunkler) + Möbel-Silhouette (Sofa) → Tiefe/Durchblick
+    c.fillStyle='rgba(38,30,22,0.55)'; c.fillRect(0,120,128,50);
+    c.fillStyle='rgba(24,18,12,0.75)'; c.fillRect(20,96,88,30);   // Sofa-Körper
+    c.fillRect(20,84,16,42); c.fillRect(92,84,16,42);             // Armlehnen
+    // seitliche Vorhänge
+    c.fillStyle='rgba(232,226,212,0.6)';
+    for(let x=2;x<34;x+=6) c.fillRect(x,0,3,170);
+    for(let x=94;x<126;x+=6) c.fillRect(x,0,3,170);
+    // stehende Lampe rechts
+    c.fillStyle='rgba(255,236,190,0.85)'; c.fillRect(110,40,7,10);
   } else if(kind==='office'){
-    c.fillStyle='rgba(255,247,227,0.5)';
-    for(let y=16;y<86;y+=24) c.fillRect(22,y,84,4);   // Deckenleuchten-Reihen
-    c.fillStyle='rgba(0,0,0,0.20)'; c.fillRect(0,126,128,44); // dunklere Bodenzone
+    c.fillStyle='rgba(255,250,236,0.7)';
+    for(let y=14;y<92;y+=22) c.fillRect(20,y,88,5);   // Deckenleuchten-Reihen
+    c.fillStyle='rgba(90,100,112,0.55)'; c.fillRect(0,118,128,52); // Bodenzone
+    c.fillStyle='rgba(30,36,44,0.5)'; c.fillRect(24,96,80,26);     // Schreibtisch-Silhouette
   }
   const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace;
   const m=new THREE.MeshBasicMaterial({map:t});

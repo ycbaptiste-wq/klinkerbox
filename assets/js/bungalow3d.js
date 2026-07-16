@@ -4,7 +4,7 @@
 // Flachdach mit Attika, Vordach mit Stütze, dunkle Holztür, Glasfront,
 // Pflanzkübel, Kiesbeete, Gartenmauern, Himmel. Orbit + Zoom wie innen.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=35';
+import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=36';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
@@ -187,10 +187,13 @@ function buildScene(){
   step1.position.set(-3.9,0.08,0.9); step1.castShadow=true; step1.receiveShadow=true; scene.add(step1);
   const step2=new THREE.Mesh(new THREE.BoxGeometry(3.6,0.08,2.0),mat(0xc4c1bb,0.85));
   step2.position.set(-3.9,0.04,1.1); step2.receiveShadow=true; scene.add(step2);
-  const benchC=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.42,0.5),mat(0xb9b6b0,0.9));
-  benchC.position.set(-6.3,0.21,1.7); benchC.castShadow=true; scene.add(benchC);
-  const benchW=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.06,0.45),mat(0x77543a,0.7));
-  benchW.position.set(-5.85,0.45,1.7); benchW.castShadow=true; scene.add(benchW);
+  // Sitzbank: massiver Betonsockel mit aufliegendem Holzsitz (sauber aufgelagert, kein Überstand)
+  const benchX=-6.35, benchZ=2.75;
+  const benchBase=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.40,0.46),mat(0xb9b6b0,0.9));
+  benchBase.position.set(benchX,0.20,benchZ); benchBase.castShadow=true; benchBase.receiveShadow=true; scene.add(benchBase);
+  const benchSeat=new THREE.Mesh(new THREE.BoxGeometry(1.56,0.07,0.5),mat(0x77543a,0.7));
+  benchSeat.position.set(benchX,0.435,benchZ); benchSeat.castShadow=true; scene.add(benchSeat);
+  const benchSh=shadowBlob(1.9,1.0,0.26); benchSh.position.set(benchX,0.006,benchZ); scene.add(benchSh);
 
   // ---- Pflanzkübel (schwarz) + Gräser nahe Eingang ----
   [[-2.35,1.5,0.30],[-1.75,1.85,0.38]].forEach(([x,z,r])=>{

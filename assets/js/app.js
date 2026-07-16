@@ -199,13 +199,21 @@
   }
   const PAGE=12;                       // products per page → less endless scrolling
   let mList=[], mShown=0;
+  // Zustand des Auswahl-Buttons (+ / ✓) + Tooltip — je nachdem ob schon gewählt
+  function setCardAddState(btn,inMix){
+    if(!btn) return;
+    btn.textContent = inMix ? '✓' : '+';
+    const t = inMix ? window.MIX.remove[lang] : window.MIX.add[lang];
+    btn.title=t; btn.setAttribute('aria-label',t);
+  }
   function makeCard(p,stagger){
-    const c=document.createElement('article'); c.className='card'+(allZoneIds().has(p.id)?' in-mix':'');
+    const inMix=allZoneIds().has(p.id);
+    const c=document.createElement('article'); c.className='card'+(inMix?' in-mix':'');
     c.dataset.pid=p.id;
     c.innerHTML=`
       <span class="card__mixbadge">${window.MIX.added[lang]}</span>
       <div class="card__img"><img loading="lazy" decoding="async" src="${imgSrc(p)}" alt="${p.series} ${p.name}">
-        <button type="button" class="card__add" aria-label="${window.MIX.add[lang]}" title="${window.MIX.add[lang]}">+</button></div>
+        <button type="button" class="card__add">+</button></div>
       <div class="card__body">
         <div class="card__series">${p.series}</div>
         <div class="card__name">${p.name}</div>
@@ -213,9 +221,14 @@
       </div>`;
     c.onclick=()=>openLightbox(p);
     const addBtn=c.querySelector('.card__add');
-    if(addBtn) addBtn.onclick=e=>{ e.stopPropagation(); const had=mixHas(p); addToMixer(p);
-      if(!had && !mixHas(p)) return;                 // z.B. Indoor-Platte in Aussen abgelehnt
-      toast((had?'':'✓ ')+p.series+' · '+p.name); };
+    setCardAddState(addBtn, inMix);
+    // Klick auf den Button schaltet um: auswählen ↔ wieder abwählen
+    if(addBtn) addBtn.onclick=e=>{ e.stopPropagation();
+      if(allZoneIds().has(p.id)){ removeFromAnyZone(p); toast('✕ '+p.series+' · '+p.name); }
+      else { const had=mixHas(p); addToMixer(p);
+        if(!had && !mixHas(p)) return;               // z.B. Indoor-Platte in Aussen abgelehnt
+        toast('✓ '+p.series+' · '+p.name); }
+    };
     $('#grid').appendChild(c);
     requestAnimationFrame(()=>setTimeout(()=>c.classList.add('in'), Math.min(stagger*18,300)));
   }
@@ -241,7 +254,8 @@
   // reflect current mixer selection on the product cards
   function markMixedCards(ids){
     ids=ids||allZoneIds();
-    $$('#grid .card').forEach(c=>{ c.classList.toggle('in-mix', ids.has(c.dataset.pid)); });
+    $$('#grid .card').forEach(c=>{ const on=ids.has(c.dataset.pid);
+      c.classList.toggle('in-mix', on); setCardAddState(c.querySelector('.card__add'), on); });
   }
 
   // ===================== LIGHTBOX (product gallery) =====================
@@ -498,6 +512,16 @@
     if(!$('#mixer').hidden) renderMixer();
   }
   function removeFromMixer(p){ mix=mix.filter(x=>x.p.id!==p.id); if(!mix.length){ mixCat=null; mixShape=null; } genLayout(); saveActive(); updateFab(); renderMixer(); }
+  // Produkt aus der Auswahl entfernen — egal in welcher Zone (Fassade/Boden) es liegt
+  function removeFromAnyZone(p){
+    const target=zoneKey(sceneNow(), surfaceOf(p.cat));
+    if(target===activeZone){ removeFromMixer(p); return; }
+    const z=zoneData[target]; if(!z) return;
+    z.mix=z.mix.filter(m=>m.p.id!==p.id);
+    if(!z.mix.length){ z.cat=null; z.shape=null; z.layout=[]; }
+    updateFab();
+    if(!$('#mixer').hidden) renderMixer();
+  }
   function clearMixer(){ mix=[]; mixCat=null; mixShape=null; mixLayout=[]; mixBond='run'; saveActive(); updateFab(); renderMixer(); }
   // ---- ready-made suggestions for the empty mixer (same category + same shape) ----
   const SUGGEST_SPECS=[
@@ -1196,7 +1220,7 @@
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=38', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=39', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -1249,10 +1273,10 @@
     const el=$('#mixView'); if(!el) return;
     const M=MIX();   // always visible → pick surface (Aussen/Innen · Fassade/Boden) before adding
     const views=[['wall',M.view_wall[lang]],['exterior',M.view_ext[lang]],['interior',M.view_int[lang]]];
-    let html=`<div class="mixview__row">${views.map(o=>`<button class="mixview__b${o[0]===mixView?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
+    let html=`<div class="mixview__row"><span class="mixview__lbl">${M.lbl_view[lang]}</span>${views.map(o=>`<button class="mixview__b${o[0]===mixView?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
     if(mixView==='exterior'||mixView==='interior'){
       const surfs=[['facade',M.surf_facade[lang]],['floor',M.surf_floor[lang]]];
-      html+=`<div class="mixview__row mixview__row--sub">${surfs.map(o=>`<button class="mixview__b mixview__b--sm${o[0]===mixSurface?' is-active':''}" data-s="${o[0]}">${o[1]}</button>`).join('')}</div>`;
+      html+=`<div class="mixview__row mixview__row--sub"><span class="mixview__lbl">${M.lbl_surf[lang]}</span>${surfs.map(o=>`<button class="mixview__b mixview__b--sm${o[0]===mixSurface?' is-active':''}" data-s="${o[0]}">${o[1]}</button>`).join('')}</div>`;
     }
     el.hidden=false; el.innerHTML=html;
     el.querySelectorAll('.mixview__b[data-v]').forEach(b=>b.onclick=()=>switchView(b.dataset.v));

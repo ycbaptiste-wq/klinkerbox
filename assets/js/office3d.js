@@ -4,7 +4,7 @@
 // beleuchteter Lobby, grosser Vorplatz, Gräser-Beete, Stadt-Kulisse.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=35';
+import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=36';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
@@ -138,11 +138,7 @@ function buildScene(){
   roofTop.rotation.x=-Math.PI/2; roofTop.position.set(0,HE-0.02,-HD/2); scene.add(roofTop);
   const attika=new THREE.Mesh(new THREE.BoxGeometry(HW+0.35,0.22,HD+0.35),mat(0xdedbd6,0.7));
   attika.position.set(0,HE+0.11,-HD/2); attika.castShadow=true; scene.add(attika);
-  // feine Geschossbänder wie im Original
-  [FH+0.15, 2*FH+0.15].forEach(y=>{
-    const b=new THREE.Mesh(new THREE.BoxGeometry(HW+0.06,0.14,0.05),mat(0xdedbd6,0.75));
-    b.position.set(0,y,0.03); scene.add(b);
-  });
+  // Geschossbänder entfernt — waagerechte weisse Linien wirkten zu dominant (Wunsch)
 
   // ---- Fenster: 6 Achsen × OG1/OG2 + EG-Verglasung ----
   const glassM=glassMaterial();

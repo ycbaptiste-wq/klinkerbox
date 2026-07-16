@@ -4,7 +4,7 @@
 // Stehleuchte, Deko. Per Maus/Touch drehbar (Orbit mit Grenzen), Zoom per
 // Rad. Environment-Lighting + Soft-Shadows für einen fotonahen Look.
 import * as THREE from './three.module.min.js';
-import { buildEnv } from './scene3d-lib.js?v=35';
+import { buildEnv } from './scene3d-lib.js?v=36';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let wallMat=null, wallSideMat=null, floorMat=null, maxAniso=8;
@@ -221,8 +221,8 @@ function buildScene(){
 
   // ---------- SOFA ----------
   const sofa=new THREE.Group();
-  const fabric=new THREE.MeshStandardMaterial({color:0xe9e6e0,roughness:0.94,bumpMap:bump,bumpScale:0.25});
-  const fabricLite=new THREE.MeshStandardMaterial({color:0xefece6,roughness:0.94,bumpMap:bump,bumpScale:0.25});
+  const fabric=new THREE.MeshStandardMaterial({color:0xd3bf98,roughness:0.94,bumpMap:bump,bumpScale:0.25});     // Beige-Creme
+  const fabricLite=new THREE.MeshStandardMaterial({color:0xdecaa6,roughness:0.94,bumpMap:bump,bumpScale:0.25});
   const SW=2.62, SD=1.04;
   const base=new THREE.Mesh(rbox(SW,SD,0.24,0.06,0.03),fabric);
   base.position.y=0.14; base.castShadow=true; base.receiveShadow=true; sofa.add(base);

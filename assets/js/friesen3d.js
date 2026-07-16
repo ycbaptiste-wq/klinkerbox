@@ -4,7 +4,7 @@
 // dunkle Paneel-Tür mit Oberlicht, Buchshecken + Dünengräser, Marsch-Kulisse.
 // Fassade (EG + Giebel + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=35';
+import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=36';
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, gableMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
@@ -199,17 +199,16 @@ function buildScene(){
     cheek.rotation.y=(x<0)?-Math.PI/2:Math.PI/2;
     cheek.position.set(x,5.35/2,0.07); scene.add(cheek);
   });
-  // Giebeldach: zwei steile Schrägen + weisse Ortgänge + Kugel
-  const gRun=GW/2+0.30, gRise=2.35, gLen=Math.hypot(gRun,gRise), gAng=Math.atan2(gRise,gRun);
+  // Zwerchgiebel-Satteldach: First vorne→hinten (bindet an den Hauptfirst an) + weisse Ortgänge
+  const gRun=GW/2, gRise=2.10, gLen=Math.hypot(gRun,gRise), gAng=Math.atan2(gRise,gRun);
   [[-1],[1]].forEach(([s])=>{
-    const slab=new THREE.Mesh(new THREE.BoxGeometry(gLen,0.10,2.4),roofM);
+    const slab=new THREE.Mesh(new THREE.BoxGeometry(gLen,0.09,3.9),roofM);
     slab.rotation.z=s*gAng;
-    slab.position.set(-s*gRun/2,5.35+gRise/2+0.05,0.14+1.2-1.2);
-    slab.position.z=-0.95;
+    slab.position.set(-s*gRun/2, 5.35+gRise/2, -1.55);
     slab.castShadow=true; scene.add(slab);
-    const barge=new THREE.Mesh(new THREE.BoxGeometry(gLen+0.1,0.14,0.08),mat(0xf2f1ee,0.6));
+    const barge=new THREE.Mesh(new THREE.BoxGeometry(gLen+0.12,0.13,0.08),mat(0xf2f1ee,0.6));
     barge.rotation.z=s*gAng;
-    barge.position.set(-s*gRun/2,5.35+gRise/2+0.02,0.22);
+    barge.position.set(-s*gRun/2, 5.35+gRise/2+0.03, 0.24);
     scene.add(barge);
   });
   const finial=new THREE.Mesh(new THREE.SphereGeometry(0.15,14,14),mat(0x3a3d42,0.5,0.3));
@@ -220,15 +219,27 @@ function buildScene(){
   const gBand=new THREE.Mesh(new THREE.BoxGeometry(GW+0.3,0.16,0.10),mat(0xeceae6,0.7));
   gBand.position.set(0,3.32,0.19); scene.add(gBand);
 
-  // ---- Gauben links/rechts ----
+  // ---- Gauben links/rechts (kleine Satteldach-Giebelgauben, korrekt aufgebaut) ----
   const glassM=glassMaterial();
   [[-4.3],[4.3]].forEach(([x])=>{
-    const box=new THREE.Mesh(new THREE.BoxGeometry(2.5,1.5,1.9),mat(0xd8d5d0,0.9));
-    box.position.set(x,4.65,-1.15); box.castShadow=true; scene.add(box);
-    const dRoof=new THREE.Mesh(new THREE.BoxGeometry(2.7,0.10,2.1),roofM);
-    dRoof.rotation.x=0.32;
-    dRoof.position.set(x,5.52,-1.10); dRoof.castShadow=true; scene.add(dRoof);
-    friesenWindow(scene,x,4.62,1.5,1.15,glassM,-0.19);
+    const bw=2.3, bh=1.35, bd=1.85, bz=-1.15, baseY=3.98, gr=0.92;
+    const cheekM=mat(0xe7e5e1,0.85);
+    const body=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),cheekM);
+    body.position.set(x,baseY+bh/2,bz); body.castShadow=true; body.receiveShadow=true; scene.add(body);
+    // Giebeldreieck an der Gaubenfront
+    const tri=new THREE.Shape(); tri.moveTo(-bw/2,0); tri.lineTo(bw/2,0); tri.lineTo(0,gr); tri.closePath();
+    const triM=new THREE.Mesh(new THREE.ShapeGeometry(tri),cheekM);
+    triM.position.set(x,baseY+bh,bz+bd/2); scene.add(triM);
+    // zwei Dachschrägen (First front→hinten) + weisse Ortgänge
+    const run=bw/2+0.16, len=Math.hypot(run,gr), ang=Math.atan2(gr,run);
+    [[-1],[1]].forEach(([s])=>{
+      const sl=new THREE.Mesh(new THREE.BoxGeometry(len,0.07,bd+0.5),roofM);
+      sl.rotation.z=s*ang; sl.position.set(x - s*run/2, baseY+bh+gr/2, bz-0.02);
+      sl.castShadow=true; scene.add(sl);
+      const vb=new THREE.Mesh(new THREE.BoxGeometry(len+0.06,0.10,0.07),mat(0xf2f1ee,0.6));
+      vb.rotation.z=s*ang; vb.position.set(x - s*run/2, baseY+bh+gr/2+0.03, bz+bd/2+0.02); scene.add(vb);
+    });
+    friesenWindow(scene,x,baseY+0.70,1.32,0.98,glassM,bz+bd/2);
   });
 
   // ---- Giebel-Fenster (2 nebeneinander) ----
