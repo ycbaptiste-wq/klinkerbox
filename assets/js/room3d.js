@@ -262,9 +262,10 @@ function buildScene(){
   const cSeat=new THREE.Mesh(rbox(0.72,0.70,0.16,0.08,0.05),cFab); cSeat.position.y=0.42; cSeat.castShadow=true; cSeat.receiveShadow=true; chair.add(cSeat);
   const cCush=new THREE.Mesh(rbox(0.62,0.60,0.13,0.10,0.06),new THREE.MeshStandardMaterial({color:0xe3d7c4,roughness:0.95,bumpMap:bump,bumpScale:0.25}));
   cCush.position.set(0,0.55,0.02); cCush.castShadow=true; chair.add(cCush);
-  const cBack=new THREE.Mesh(rbox(0.72,0.16,0.60,0.08,0.05),cFab); cBack.position.set(0,0.72,-0.30); cBack.castShadow=true; chair.add(cBack);
+  const cBack=new THREE.Mesh(rbox(0.72,0.16,0.60,0.08,0.05),cFab); cBack.position.set(0,0.64,-0.30); cBack.castShadow=true; chair.add(cBack);
   [-1,1].forEach(s=>{ const ar=new THREE.Mesh(rbox(0.13,0.64,0.28,0.05,0.04),cFab); ar.position.set(s*0.37,0.5,0.02); ar.castShadow=true; chair.add(ar); });
-  [[-0.30,-0.28],[0.30,-0.28],[-0.30,0.28],[0.30,0.28]].forEach(([x,z])=>{ const lg=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.016,0.36,10),woodM); lg.position.set(x,0.18,z); lg.castShadow=true; chair.add(lg); });
+  // Beine bis in den Sitzkorb (0.44 hoch, Korb-Unterkante 0.42) — sonst schwebt der Sessel
+  [[-0.30,-0.28],[0.30,-0.28],[-0.30,0.28],[0.30,0.28]].forEach(([x,z])=>{ const lg=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.016,0.44,10),woodM); lg.position.set(x,0.22,z); lg.castShadow=true; chair.add(lg); });
   chair.position.set(2.05,0,3.95); chair.rotation.y=-2.05; scene.add(chair);   // zum Couchtisch gedreht
   const chShadow=shadowBlob(1.1,1.1,0.3); chShadow.position.set(2.05,0.004,3.95); scene.add(chShadow);
 
