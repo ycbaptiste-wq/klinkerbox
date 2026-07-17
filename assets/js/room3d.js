@@ -4,8 +4,9 @@
 // Stehleuchte, Deko. Per Maus/Touch drehbar (Orbit mit Grenzen), Zoom per
 // Rad. Environment-Lighting + Soft-Shadows für einen fotonahen Look.
 import * as THREE from './three.module.min.js';
-import { buildEnv } from './scene3d-lib.js?v=36';
+import { buildEnv, normalFromCanvas, addVignette } from './scene3d-lib.js?v=37';
 
+const MOBILE=matchMedia('(pointer:coarse)').matches;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let wallMat=null, wallSideMat=null, floorMat=null, maxAniso=8;
 let rafId=0, failed=false;
@@ -146,9 +147,10 @@ function buildScene(){
   scene.add(new THREE.AmbientLight(0xffffff,0.17));
   const sun=new THREE.DirectionalLight(0xfff1da,2.15);
   sun.position.set(-7,4.0,4.6); sun.target.position.set(1.4,0.3,1.4);
-  sun.castShadow=true; sun.shadow.mapSize.set(2048,2048);
+  sun.castShadow=true; sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
   sun.shadow.camera.left=-7; sun.shadow.camera.right=7; sun.shadow.camera.top=5; sun.shadow.camera.bottom=-2;
-  sun.shadow.camera.near=0.5; sun.shadow.camera.far=24; sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.03;
+  sun.shadow.camera.near=0.5; sun.shadow.camera.far=24; sun.shadow.camera.updateProjectionMatrix();
+  sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.03;
   scene.add(sun); scene.add(sun.target);
   const fill=new THREE.DirectionalLight(0xe9edf4,0.3); fill.position.set(5,2.6,5); scene.add(fill);
   [[-0.9],[1.5]].forEach(([x])=>{                  // Wandfluter für die Klinkerwand
@@ -385,7 +387,7 @@ function applyCam(hard){
 function ensureRenderer(){
   if(renderer||failed) return !failed;
   try{
-    renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+    renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.shadowMap.enabled=true;
     renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
@@ -413,7 +415,7 @@ function ensureRenderer(){
 function sizeToHost(){
   if(!renderer||!host) return;
   const w=Math.max(220,host.clientWidth||300), h=Math.max(220,host.clientHeight||240);
-  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
   camera.fov=(camera.aspect>1.45)?44:(camera.aspect>1.1?52:58);
@@ -425,7 +427,7 @@ function step(){ if(!renderer||!host) return; applyCam(false); renderer.render(s
 function loop(){ rafId=requestAnimationFrame(loop); lastRaf=performance.now(); step(); }
 function startLoops(){
   if(!rafId) loop();
-  if(!wdId) wdId=setInterval(()=>{ if(performance.now()-lastRaf>200) step(); },120);
+  if(!wdId) wdId=setInterval(()=>{ if(!document.hidden && performance.now()-lastRaf>200) step(); },120);
 }
 function texFromCanvas(cv){
   if(!cv) return null;
@@ -434,11 +436,15 @@ function texFromCanvas(cv){
   t.anisotropy=maxAniso;
   return t;
 }
-function applyTex(m,cv,fallback,rough){
+function applyTex(m,cv,fallback,rough,ns){
   if(m.map) m.map.dispose();
+  if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
   m.map=texFromCanvas(cv);
   m.color.set(cv?0xffffff:fallback);
   if(rough!=null) m.roughness=cv?rough:0.9;
+  if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
+    if(nt){ nt.anisotropy=maxAniso; m.normalMap=nt; const s=ns!=null?ns:1.15; m.normalScale=new THREE.Vector2(s,s); } }
+  m.envMapIntensity=cv?0.5:0.35;
   m.needsUpdate=true;
 }
 window.Room3D={
@@ -447,6 +453,7 @@ window.Room3D={
     if(!ensureRenderer()) return false;
     host=h;
     if(renderer.domElement.parentNode!==host){ host.innerHTML=''; host.appendChild(renderer.domElement); }
+    addVignette(host);
     if(ro) ro.disconnect();
     ro=new ResizeObserver(()=>sizeToHost()); ro.observe(host);
     sizeToHost();
@@ -458,7 +465,7 @@ window.Room3D={
     if(!renderer) return;
     applyTex(wallMat,wallCv,0xd9d5d0);
     applyTex(wallSideMat,wallSideCv||wallCv,0xd6d2cc);
-    applyTex(floorMat,floorCv,0xd3d0cb,0.72);
+    applyTex(floorMat,floorCv,0xd3d0cb,0.62,0.5);
   },
   // hochaufgelöstes Standbild der AKTUELLEN Ansicht (für Export PNG)
   snapshot(w,h){

@@ -1,40 +1,74 @@
 // ===================== KLINKERBOX · 3D-MATERIAL-BIBLIOTHEK =====================
-// Geteilte Bausteine für fotorealistische Aussen-Szenen: eine bewölkte
-// Himmels-Umgebung (echte Reflexionen in Glas/Metall), physikalisches
-// Fensterglas (reflektiert + leicht durchsichtig) und ein Innenraum-Material
-// (Vorhänge/Deckenlicht), sodass man leicht ins Gebäude hineinsieht.
+// Geteilte Bausteine für fotorealistische Szenen: teilsonniger Himmel (Dome +
+// Environment mit HDR-Sonne → echte Glanzlichter in Glas/Metall), physikalisches
+// Fensterglas, Innenraum-Material, Normal-Maps aus den Klinker-Texturen
+// (Fugen liegen tief, Steine tragen ihr Foto-Relief) und eine dezente Vignette.
 import * as THREE from './three.module.min.js';
 
-// bewölkter Himmel als Textur — Basis für Environment und (optional) Sky-Dome
-export function cloudSkyTexture(w, h){
-  const cv=document.createElement('canvas'); cv.width=w||512; cv.height=h||256;
+// ---------- Himmel: teilsonnig-hell, weiche Quellwolken, warmer Horizont ----------
+let _skyCv=null;
+function skyCanvas(){
+  if(_skyCv) return _skyCv;
+  const cv=document.createElement('canvas'); cv.width=1024; cv.height=512;
   const c=cv.getContext('2d');
-  const g=c.createLinearGradient(0,0,0,cv.height);
-  g.addColorStop(0,'#8ea0b0'); g.addColorStop(0.5,'#bcc7cf'); g.addColorStop(1,'#eef1f0');
-  c.fillStyle=g; c.fillRect(0,0,cv.width,cv.height);
-  for(let i=0;i<52;i++){
-    const x=Math.random()*cv.width, y=Math.random()*cv.height*0.62, r=(18+Math.random()*70)*(cv.width/512);
-    const gg=c.createRadialGradient(x,y,0,x,y,r);
-    gg.addColorStop(0,'rgba(255,255,255,'+(0.10+Math.random()*0.16)+')');
-    gg.addColorStop(1,'rgba(255,255,255,0)');
-    c.fillStyle=gg; c.beginPath(); c.arc(x,y,r,0,Math.PI*2); c.fill();
-  }
-  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace;
+  const g=c.createLinearGradient(0,0,0,512);
+  g.addColorStop(0,'#7290ad'); g.addColorStop(0.34,'#a4bacb');
+  g.addColorStop(0.60,'#d3dcdf'); g.addColorStop(0.84,'#efeee7'); g.addColorStop(1,'#f6f2e9');
+  c.fillStyle=g; c.fillRect(0,0,1024,512);
+  // warmes Sonnen-Glühen (breit und weich, kein hartes Zentrum)
+  const sg=c.createRadialGradient(300,120,10,300,120,340);
+  sg.addColorStop(0,'rgba(255,244,220,0.55)'); sg.addColorStop(0.45,'rgba(255,240,214,0.20)');
+  sg.addColorStop(1,'rgba(255,240,214,0)');
+  c.fillStyle=sg; c.fillRect(0,0,1024,512);
+  // Quellwolken: mehrere überlappende weiche Ballen, oben heller, Basis leicht grau
+  const puff=(x,y,r,a)=>{ const gg=c.createRadialGradient(x,y-r*0.15,r*0.1,x,y,r);
+    gg.addColorStop(0,'rgba(255,255,255,'+a+')'); gg.addColorStop(0.7,'rgba(252,253,254,'+(a*0.45)+')');
+    gg.addColorStop(1,'rgba(252,253,254,0)');
+    c.fillStyle=gg; c.beginPath(); c.ellipse(x,y,r*1.5,r*0.62,0,0,Math.PI*2); c.fill(); };
+  const base=(x,y,r,a)=>{ const gg=c.createRadialGradient(x,y,r*0.1,x,y,r);
+    gg.addColorStop(0,'rgba(155,168,178,'+a+')'); gg.addColorStop(1,'rgba(155,168,178,0)');
+    c.fillStyle=gg; c.beginPath(); c.ellipse(x,y,r*1.6,r*0.34,0,0,Math.PI*2); c.fill(); };
+  const clouds=[[140,150,58],[240,120,74],[360,170,54],[520,110,66],[660,160,72],
+                [820,120,60],[930,180,50],[80,230,44],[440,235,42],[760,240,52],[590,205,38]];
+  clouds.forEach(([x,y,r],i)=>{
+    const a=0.30+((i*37)%23)/100*0.5;
+    base(x,y+r*0.34,r,0.14);
+    puff(x-r*0.55,y+r*0.12,r*0.62,a*0.8); puff(x+r*0.5,y+r*0.10,r*0.68,a*0.8);
+    puff(x,y,r,a); puff(x-r*0.2,y-r*0.28,r*0.5,a*0.9);
+  });
+  // Dunst-Schleier über dem Horizont
+  const hz=c.createLinearGradient(0,300,0,512);
+  hz.addColorStop(0,'rgba(240,238,230,0)'); hz.addColorStop(1,'rgba(244,240,231,0.75)');
+  c.fillStyle=hz; c.fillRect(0,300,1024,212);
+  _skyCv=cv; return cv;
+}
+// Textur für die sichtbare Himmelskuppel der Aussen-Szenen
+export function skyDomeTexture(){
+  const t=new THREE.CanvasTexture(skyCanvas()); t.colorSpace=THREE.SRGBColorSpace;
   t.wrapS=t.wrapT=THREE.RepeatWrapping;
   return t;
 }
+// Kompatibilität: alter Name (bewölkter Himmel) → gleicher, schönerer Himmel
+export function cloudSkyTexture(){ return skyDomeTexture(); }
 
-// PMREM-Environment aus bewölktem Himmel + Boden → realistische Reflexionen
+// PMREM-Environment: Himmel + Boden + HDR-Sonne → realistische Reflexe und
+// ein echtes Glanzlicht auf Glas/Metall (Farbwerte > 1 bleiben im PMREM erhalten)
 export function buildEnv(renderer){
   const es=new THREE.Scene();
+  // Himmel gedimmt (0.62): das IBL-Umgebungslicht darf die Sonnenschatten
+  // nicht überstrahlen — Glanz auf Glas liefert die HDR-Sonne darunter
   const sky=new THREE.Mesh(new THREE.SphereGeometry(60,32,20),
-    new THREE.MeshBasicMaterial({map:cloudSkyTexture(1024,512),side:THREE.BackSide}));
+    new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:0x6f6f6f,side:THREE.BackSide}));
   es.add(sky);
+  const sun=new THREE.Mesh(new THREE.SphereGeometry(3.2,16,12),
+    new THREE.MeshBasicMaterial({color:new THREE.Color(11,9.5,7.5)}));
+  sun.position.set(-24,30,24);                       // gleiche Richtung wie das Sonnenlicht der Szenen
+  es.add(sun);
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(200,200),
     new THREE.MeshBasicMaterial({color:0x8f9289}));
   ground.rotation.x=-Math.PI/2; ground.position.y=-4; es.add(ground);
   const pm=new THREE.PMREMGenerator(renderer);
-  const env=pm.fromScene(es,0.03).texture;   // wenig Blur → sichtbare Wolken im Glas
+  const env=pm.fromScene(es,0.03).texture;           // wenig Blur → sichtbare Wolken im Glas
   pm.dispose();
   return env;
 }
@@ -49,7 +83,7 @@ export function glassMaterial(opts){
     roughness: opts.roughness!=null?opts.roughness:0.06,
     transparent:true,
     opacity: opts.opacity!=null?opts.opacity:0.46,   // durchsichtiger → man sieht in den Raum
-    envMapIntensity: opts.env!=null?opts.env:1.7,     // weniger spiegelnd, damit der Innenraum durchkommt
+    envMapIntensity: opts.env!=null?opts.env:2.4,    // HDR-Sonne liefert das Glanzlicht (Env ist gedimmt)
     clearcoat:1, clearcoatRoughness:0.06,
     ior:1.5, reflectivity:0.7,
     side:THREE.FrontSide, depthWrite:false
@@ -94,4 +128,71 @@ export function interiorMaterial(kind){
   const m=new THREE.MeshBasicMaterial({map:t});
   _intCache[kind]=m;
   return m;
+}
+
+// ---------- Normal-Map aus der Klinker-Textur ----------
+// Die Fugenfarbe ist die dominante, uniforme Farbe der Textur → diese Pixel
+// liegen tief (Fuge zurückversetzt), die Steine tragen ihr Foto-Relief
+// (Luminanz als Höhe). Sobel über ein geglättetes Höhenfeld → Tangentspace-Normal.
+export function normalFromCanvas(cv,maxW){
+  if(!cv) return null;
+  const W=Math.max(2,Math.min(maxW||1024,cv.width));
+  const H=Math.max(2,Math.round(cv.height*W/cv.width));
+  const sc=document.createElement('canvas'); sc.width=W; sc.height=H;
+  const c=sc.getContext('2d',{willReadFrequently:true});
+  c.drawImage(cv,0,0,W,H);
+  let d; try{ d=c.getImageData(0,0,W,H).data; }catch(e){ return null; }
+  const N=W*H;
+  // dominante quantisierte Farbe (4 Bit/Kanal) = Fugenfarbe, wenn sie genug Fläche hat
+  const hist=new Map(); let bestK=-1, bestN=0;
+  for(let p=0,i=0;p<N;p++,i+=4){
+    const k=((d[i]>>4)<<8)|((d[i+1]>>4)<<4)|(d[i+2]>>4);
+    const n=(hist.get(k)||0)+1; hist.set(k,n);
+    if(n>bestN){ bestN=n; bestK=k; }
+  }
+  const jr=(((bestK>>8)&15)<<4)+8, jg=(((bestK>>4)&15)<<4)+8, jb=((bestK&15)<<4)+8;
+  const isJoint=bestN>N*0.06;
+  // Höhenfeld 0..1
+  const h=new Float32Array(N);
+  for(let p=0,i=0;p<N;p++,i+=4){
+    const r=d[i],g=d[i+1],b=d[i+2];
+    let v=0.35+0.65*((r*0.299+g*0.587+b*0.114)/255);
+    if(isJoint && Math.abs(r-jr)<26 && Math.abs(g-jg)<26 && Math.abs(b-jb)<26) v=0.10;
+    h[p]=v;
+  }
+  // 3×3-Blur gegen Pixelrauschen
+  const hb=new Float32Array(N);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    let s=0,n=0;
+    for(let dy=-1;dy<=1;dy++){ const yy=y+dy; if(yy<0||yy>=H) continue;
+      for(let dx=-1;dx<=1;dx++){ const xx=x+dx; if(xx<0||xx>=W) continue; s+=h[yy*W+xx]; n++; } }
+    hb[y*W+x]=s/n;
+  }
+  // Sobel → Normal (Y+ oben; Canvas-y läuft nach unten, Textur ist geflippt)
+  const out=c.createImageData(W,H), od=out.data, K=2.4;
+  for(let y=0;y<H;y++){ const y0=Math.max(0,y-1)*W, y1=Math.min(H-1,y+1)*W, row=y*W;
+    for(let x=0;x<W;x++){
+      const x0=Math.max(0,x-1), x1=Math.min(W-1,x+1);
+      const gx=(hb[row+x1]-hb[row+x0])*K, gy=(hb[y1+x]-hb[y0+x])*K;
+      const inv=1/Math.sqrt(gx*gx+gy*gy+1), i=(row+x)*4;
+      od[i  ]=Math.round((-gx*inv*0.5+0.5)*255);
+      od[i+1]=Math.round(( gy*inv*0.5+0.5)*255);
+      od[i+2]=Math.round(( inv*0.5+0.5)*255);
+      od[i+3]=255;
+    }
+  }
+  c.putImageData(out,0,0);
+  return new THREE.CanvasTexture(sc);
+}
+
+// ---------- dezente Vignette über dem 3D-Canvas (Foto-Look) ----------
+export function addVignette(host){
+  if(!host) return;
+  if(getComputedStyle(host).position==='static') host.style.position='relative';
+  if(host.querySelector(':scope > .v3d-vignette')) return;
+  const d=document.createElement('div');
+  d.className='v3d-vignette';
+  d.style.cssText='position:absolute;inset:0;pointer-events:none;border-radius:inherit;z-index:2;'+
+    'background:radial-gradient(120% 95% at 50% 40%, rgba(0,0,0,0) 60%, rgba(14,17,22,0.20) 100%)';
+  host.appendChild(d);
 }

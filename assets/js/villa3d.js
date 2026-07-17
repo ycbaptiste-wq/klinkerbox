@@ -4,8 +4,9 @@
 // Portikus mit Freitreppe und Geländer, Buchs-Vorgarten mit Metallzaun.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial } from './scene3d-lib.js?v=36';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette } from './scene3d-lib.js?v=37';
 
+const MOBILE=matchMedia('(pointer:coarse)').matches;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
 let rafId=0, failed=false;
@@ -108,25 +109,21 @@ function buildScene(){
   scene.environment=buildEnv(renderer);
   scene.fog=new THREE.Fog(0xe9ebe9,55,110);
 
-  { const cv=document.createElement('canvas'); cv.width=4; cv.height=512;
-    const c=cv.getContext('2d'); const g=c.createLinearGradient(0,0,0,512);
-    g.addColorStop(0,'#aeb9c2'); g.addColorStop(0.55,'#d3d9dc'); g.addColorStop(1,'#f2f3f1');
-    c.fillStyle=g; c.fillRect(0,0,4,512);
-    const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace;
-    const sky=new THREE.Mesh(new THREE.SphereGeometry(85,24,16),
-      new THREE.MeshBasicMaterial({map:t,side:THREE.BackSide,fog:false}));
+  { const sky=new THREE.Mesh(new THREE.SphereGeometry(85,32,18),
+      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.5,1.5,1.5),side:THREE.BackSide,fog:false}));
     scene.add(sky); }
 
-  scene.add(new THREE.HemisphereLight(0xe6ebf0,0x8a8d84,0.85));
-  scene.add(new THREE.AmbientLight(0xffffff,0.18));
-  const sun=new THREE.DirectionalLight(0xfff3e0,1.9);
-  sun.position.set(-14,18,14);
+  scene.add(new THREE.HemisphereLight(0xdbe7f2,0x8d9084,0.35));
+  scene.add(new THREE.AmbientLight(0xffffff,0.06));
+  const sun=new THREE.DirectionalLight(0xffeed2,2.6);
+  sun.position.set(-17,20,10.5);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,1);
   sun.castShadow=true;
-  sun.shadow.mapSize.set(2048,2048);
-  sun.shadow.camera.left=-15; sun.shadow.camera.right=15;
+  sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
+  sun.shadow.camera.left=-15; sun.shadow.camera.right=18;
   sun.shadow.camera.top=16;   sun.shadow.camera.bottom=-9;
   sun.shadow.camera.near=1; sun.shadow.camera.far=60;
+  sun.shadow.camera.updateProjectionMatrix();
   sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.05;
   scene.add(sun); scene.add(sun.target);
 
@@ -302,12 +299,12 @@ function applyCam(hard){
 function ensureRenderer(){
   if(renderer||failed) return !failed;
   try{
-    renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+    renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.shadowMap.enabled=true;
     renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure=1.0;
+    renderer.toneMappingExposure=0.72;
     maxAniso=renderer.capabilities.getMaxAnisotropy()||8;
     buildScene();
     const el=renderer.domElement;
@@ -329,7 +326,7 @@ function ensureRenderer(){
 function sizeToHost(){
   if(!renderer||!host) return;
   const w=Math.max(220,host.clientWidth||300), h=Math.max(220,host.clientHeight||240);
-  renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+  renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
   camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
@@ -342,7 +339,7 @@ function step(){ if(!renderer||!host) return; applyCam(false); renderer.render(s
 function loop(){ rafId=requestAnimationFrame(loop); lastRaf=performance.now(); step(); }
 function startLoops(){
   if(!rafId) loop();
-  if(!wdId) wdId=setInterval(()=>{ if(performance.now()-lastRaf>200) step(); },120);
+  if(!wdId) wdId=setInterval(()=>{ if(!document.hidden && performance.now()-lastRaf>200) step(); },120);
 }
 function texFromCanvas(cv){
   if(!cv) return null;
@@ -351,11 +348,15 @@ function texFromCanvas(cv){
   t.anisotropy=maxAniso;
   return t;
 }
-function applyTex(m,cv,fallback,rough){
+function applyTex(m,cv,fallback,rough,ns){
   if(m.map) m.map.dispose();
+  if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
   m.map=texFromCanvas(cv);
   m.color.set(cv?0xffffff:fallback);
   if(rough!=null) m.roughness=cv?rough:0.9;
+  if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
+    if(nt){ nt.anisotropy=maxAniso; m.normalMap=nt; const s=ns!=null?ns:1.25; m.normalScale=new THREE.Vector2(s,s); } }
+  m.envMapIntensity=cv?0.5:0.35;
   m.needsUpdate=true;
 }
 window.Villa3D={
@@ -364,6 +365,7 @@ window.Villa3D={
     if(!ensureRenderer()) return false;
     host=h;
     if(renderer.domElement.parentNode!==host){ host.innerHTML=''; host.appendChild(renderer.domElement); }
+    addVignette(host);
     if(ro) ro.disconnect();
     ro=new ResizeObserver(()=>sizeToHost()); ro.observe(host);
     sizeToHost();
@@ -375,7 +377,7 @@ window.Villa3D={
     applyTex(facadeMat,facadeCv,0xdad6d1);
     applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce);
     applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce);
-    applyTex(floorMat,floorCv,0xd0cdc8,0.8);
+    applyTex(floorMat,floorCv,0xd0cdc8,0.8,0.55);
   },
   snapshot(w,h){
     if(!renderer) return null;
