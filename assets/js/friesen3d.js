@@ -382,6 +382,8 @@ window.Friesen3D={
     startLoops();
     return true;
   },
+  // Render-Loop + Watchdog anhalten (Mixer zu / anderes Gebaeude aktiv)
+  stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId=0; } if(wdId){ clearInterval(wdId); wdId=0; } },
   // Fassade EG, Seiten, Vorplatz, Zwerchgiebel — je ein Canvas (null → neutral)
   setTextures(facadeCv,sideCv,floorCv,gableCv){
     if(!renderer) return;

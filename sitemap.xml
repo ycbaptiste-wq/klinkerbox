@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://klinkerbox.ch/</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klinkerbox.ch/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klinkerbox.ch/?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://klinkerbox.ch/?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klinkerbox.ch/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klinkerbox.ch/"/>
+  </url>
+  <url>
+    <loc>https://klinkerbox.ch/?lang=fr</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klinkerbox.ch/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klinkerbox.ch/?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://klinkerbox.ch/?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klinkerbox.ch/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klinkerbox.ch/"/>
+  </url>
+  <url>
+    <loc>https://klinkerbox.ch/?lang=it</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klinkerbox.ch/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klinkerbox.ch/?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://klinkerbox.ch/?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klinkerbox.ch/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klinkerbox.ch/"/>
+  </url>
+  <url>
+    <loc>https://klinkerbox.ch/?lang=en</loc>
+    <xhtml:link rel="alternate" hreflang="de" href="https://klinkerbox.ch/"/>
+    <xhtml:link rel="alternate" hreflang="fr" href="https://klinkerbox.ch/?lang=fr"/>
+    <xhtml:link rel="alternate" hreflang="it" href="https://klinkerbox.ch/?lang=it"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://klinkerbox.ch/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://klinkerbox.ch/"/>
+  </url>
+</urlset>

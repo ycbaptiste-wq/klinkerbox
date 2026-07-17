@@ -239,6 +239,8 @@ window.MIX = {
   j_normal:{de:"Normal", fr:"Normal", it:"Normale", en:"Normal"},
   jcolor: {de:"Fugenfarbe", fr:"Couleur du joint", it:"Colore fuga", en:"Joint colour"},
   export: {de:"Als Bild speichern", fr:"Enregistrer l'image", it:"Salva immagine", en:"Save image"},
+  request:{de:"Diese Zusammenstellung anfragen", fr:"Demander cette composition", it:"Richiedi questa composizione", en:"Request this combination"},
+  req_msg:{de:"Guten Tag\nIch interessiere mich für folgende Zusammenstellung aus dem 3D-Konfigurator:", fr:"Bonjour,\nJe m'intéresse à la composition suivante du configurateur 3D :", it:"Buongiorno,\nmi interessa la seguente composizione dal configuratore 3D:", en:"Hello,\nI am interested in the following combination from the 3D configurator:"},
   reset:  {de:"Andere Kategorie — Auswahl zurückgesetzt", fr:"Autre catégorie — sélection réinitialisée", it:"Altra categoria — selezione azzerata", en:"Other category — selection reset"},
   resetfmt:{de:"Anderes Format — nur gleiche Formen mischbar", fr:"Autre format — seules les mêmes formes se mélangent", it:"Altro formato — solo stesse forme miscelabili", en:"Different format — only matching shapes mix"},
   indoor_only:{de:"Indoor-Platten sind nur für die Innen-Ansicht.", fr:"Les carreaux d'intérieur sont réservés à la vue intérieure.", it:"Le piastrelle indoor sono solo per la vista interni.", en:"Indoor tiles are for the interior view only."}

@@ -9,11 +9,58 @@
 <meta name="google" content="notranslate">
 <title>Klinkerbox — Pflasterklinker, Mauerklinker & Tonplatten</title>
 <meta name="description" content="Ihr Fachspezialist und Baustellenbegleiter für Pflaster- und Mauerklinker aus Ton sowie Tonplatten. Edle Klinker für Wege, Fassaden und Böden.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,500;12..96,600;12..96,700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="canonical" href="https://klinkerbox.ch/">
+<link rel="alternate" hreflang="de" href="https://klinkerbox.ch/">
+<link rel="alternate" hreflang="fr" href="https://klinkerbox.ch/?lang=fr">
+<link rel="alternate" hreflang="it" href="https://klinkerbox.ch/?lang=it">
+<link rel="alternate" hreflang="en" href="https://klinkerbox.ch/?lang=en">
+<link rel="alternate" hreflang="x-default" href="https://klinkerbox.ch/">
+<!-- Link-Vorschau beim Teilen (WhatsApp/Mail/LinkedIn) -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Klinkerbox">
+<meta property="og:title" content="Klinkerbox — Pflasterklinker, Mauerklinker & Tonplatten">
+<meta property="og:description" content="Ihr Fachspezialist und Baustellenbegleiter für Pflaster- und Mauerklinker aus Ton sowie Tonplatten. Edle Klinker für Wege, Fassaden und Böden.">
+<meta property="og:url" content="https://klinkerbox.ch/">
+<meta property="og:image" content="https://klinkerbox.ch/assets/img/og-image.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="de_CH">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://klinkerbox.ch/assets/img/og-image.jpg">
+<!-- Fonts selbst gehostet (assets/fonts) — kein Google-Fonts-Roundtrip -->
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/inter-var-latin.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/bricolage-500-latin.woff2" crossorigin>
+<link rel="preload" as="image" href="assets/img/hero.webp" type="image/webp" fetchpriority="high">
 <link rel="icon" type="image/png" href="assets/img/logo-mark.png">
-<link rel="stylesheet" href="assets/css/style.css?v=31">
+<link rel="stylesheet" href="assets/css/style.css?v=32">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "Klinkerbox",
+  "url": "https://klinkerbox.ch/",
+  "image": "https://klinkerbox.ch/assets/img/og-image.jpg",
+  "logo": "https://klinkerbox.ch/assets/img/logo-mark.png",
+  "telephone": "+41798301534",
+  "email": "info@klinkerbox.ch",
+  "founder": {"@type": "Person", "name": "Daniel Ryser"},
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "Rehhagstrasse 153",
+    "postalCode": "3018",
+    "addressLocality": "Bern",
+    "addressCountry": "CH"
+  },
+  "openingHoursSpecification": [{
+    "@type": "OpeningHoursSpecification",
+    "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday"],
+    "opens": "07:30",
+    "closes": "18:00"
+  }],
+  "areaServed": "CH",
+  "description": "Fachspezialist und Baustellenbegleiter für Pflaster- und Mauerklinker aus Ton sowie Tonplatten."
+}
+</script>
 </head>
 <body>
 
@@ -266,7 +313,8 @@
         </div>
         <div class="mixer__list" id="mixList"></div>
         <div class="mixer__actions">
-          <button class="btn btn--solid" id="mixExport">Export PNG</button>
+          <button class="btn btn--solid" id="mixRequest">Diese Zusammenstellung anfragen</button>
+          <button class="btn btn--outline" id="mixExport">Als Bild speichern</button>
           <button class="btn btn--outline" id="mixShuffle">Neu mischen</button>
           <button class="btn btn--outline" id="mixClear">Leeren</button>
         </div>
@@ -289,8 +337,8 @@
 <script src="assets/js/products.js?v=28"></script>
 <script src="assets/js/enrich.js?v=27"></script>
 <script src="assets/js/specs.js?v=27"></script>
-<script src="assets/js/i18n.js?v=32"></script>
-<script src="assets/js/app.js?v=41"></script>
+<script src="assets/js/i18n.js?v=33"></script>
+<script src="assets/js/app.js?v=42"></script>
 <!-- 3D-Module (three.js) werden erst beim Öffnen des Konfigurators dynamisch geladen → schnellerer Seitenaufbau -->
 </body>
 </html>

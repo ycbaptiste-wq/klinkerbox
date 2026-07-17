@@ -461,6 +461,8 @@ window.Room3D={
     startLoops();
     return true;
   },
+  // Render-Loop + Watchdog anhalten (Mixer zu / anderes Gebaeude aktiv)
+  stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId=0; } if(wdId){ clearInterval(wdId); wdId=0; } },
   // Wand hinten, Wand rechts, Boden — je ein Canvas (null → neutrale Fläche)
   setTextures(wallCv,wallSideCv,floorCv){
     if(!renderer) return;
