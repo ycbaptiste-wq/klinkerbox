@@ -330,19 +330,22 @@ function buildScene(){
   const stBook=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.03,0.17),mat(0x7c4436,0.7)); stBook.position.set(-2.15,0.535,0.7); stBook.rotation.y=0.2; scene.add(stBook);
 
   // ---------- ZIMMERBAUM (Olive) in der hinteren linken Ecke (dezent) ----------
-  const PX=-2.85, PZ=0.6;
-  const gpot=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.18,0.40,24),
+  // kompakt und von der Fensterfront weggerückt: Vorhang-Falten reichen bis
+  // x ≈ -2.92 — die Krone (linkeste Kugel: PX-0.31) muss davor enden
+  const PX=-2.45, PZ=0.30;
+  const tree=new THREE.Group(); tree.position.set(PX,0,PZ); scene.add(tree);
+  const gpot=new THREE.Mesh(new THREE.CylinderGeometry(0.20,0.165,0.36,24),
     new THREE.MeshStandardMaterial({color:0xb9b1a4,roughness:0.9,bumpMap:bump,bumpScale:0.2}));
-  gpot.position.set(PX,0.20,PZ); gpot.castShadow=true; scene.add(gpot);
-  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.028,0.04,1.05,8),mat(0x7a6a52,0.9));
-  trunk.position.set(PX,0.92,PZ); scene.add(trunk);
+  gpot.position.y=0.18; gpot.castShadow=true; tree.add(gpot);
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(0.024,0.035,0.85,8),mat(0x7a6a52,0.9));
+  trunk.position.y=0.76; tree.add(trunk);
   const leafM=new THREE.MeshStandardMaterial({color:0x5c7248,roughness:1});
-  [[0,1.5,0,0.26],[-0.2,1.42,0.12,0.19],[0.2,1.44,-0.1,0.20],[0.05,1.66,0.05,0.22],[-0.13,1.62,-0.14,0.17],
-   [0.16,1.62,0.14,0.17],[-0.05,1.78,-0.02,0.18],[0.1,1.32,0.16,0.16],[-0.18,1.74,0.1,0.15]].forEach(([dx,y,dz,r])=>{
+  [[0,1.28,0,0.21],[-0.16,1.22,0.10,0.15],[0.16,1.23,-0.08,0.16],[0.04,1.41,0.04,0.18],[-0.10,1.38,-0.11,0.14],
+   [0.13,1.38,0.11,0.14],[-0.04,1.51,-0.02,0.14],[0.08,1.13,0.13,0.13],[-0.14,1.47,0.08,0.12]].forEach(([dx,y,dz,r])=>{
     const lf=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),leafM);
-    lf.position.set(PX+dx,y,PZ+dz); lf.scale.set(1,1.08,1); lf.castShadow=true; scene.add(lf);
+    lf.position.set(dx,y,dz); lf.scale.set(1,1.08,1); lf.castShadow=true; tree.add(lf);
   });
-  const gpShadow=shadowBlob(0.8,0.8,0.26); gpShadow.position.set(PX,0.004,PZ); scene.add(gpShadow);
+  const gpShadow=shadowBlob(0.7,0.7,0.26); gpShadow.position.set(PX,0.004,PZ); scene.add(gpShadow);
 
   // ---------- STEHLEUCHTE (rechts, leuchtet) ----------
   const lampBase=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.16,0.02,32),blackM); lampBase.position.set(2.75,0.01,2.7); scene.add(lampBase);
