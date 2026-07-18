@@ -207,7 +207,8 @@ void main(){
   float w2=uW*0.5, h2=uH*0.5;
   bool office=uKind>0.5;
   float lampOn=0.5+0.7*hash(uSeed*7.31+1.7);
-  float lit=0.7+0.6*hash(uSeed*4.71+0.9);          // Grundhelligkeit variiert je Fenster
+  // Grundhelligkeit variiert je Fenster — Büros streuen stärker (leere dunkle Räume)
+  float lit=office? (0.45+0.95*hash(uSeed*4.71+0.9)) : (0.7+0.6*hash(uSeed*4.71+0.9));
   // ---- seitliche Vorhänge direkt hinter dem Glas (nur Wohnen, nicht überall) ----
   if(!office && hash(uSeed*2.13)>0.3){
     float tc=(-0.09)/rd.z;
@@ -217,6 +218,17 @@ void main(){
       float fold=0.82+0.18*sin(pc.x*90.0/uW+uSeed);
       vec3 cc=mix(vec3(0.62,0.58,0.50),vec3(0.52,0.47,0.41),(h2-pc.y)/uH)*fold*0.6*lit;
       gl_FragColor=vec4(pow(max(cc,vec3(0.0)),vec3(0.4545)),1.0); return;
+    }
+  }
+  // ---- Büro: Lamellen-Jalousien, teils heruntergelassen ----
+  if(office && hash(uSeed*2.13)>0.35){
+    float cover=0.25+0.6*hash(uSeed*6.3);
+    float tb=(-0.06)/rd.z;
+    vec2 pb=ro.xy+rd.xy*tb;
+    if(pb.y>h2-cover*uH){
+      float s=0.78+0.22*sin(pb.y*220.0/uH);
+      vec3 bc=vec3(0.60,0.61,0.62)*s*(0.75+0.3*lit);
+      gl_FragColor=vec4(pow(max(bc,vec3(0.0)),vec3(0.4545)),1.0); return;
     }
   }
   // ---- Raumquader ----
@@ -229,7 +241,7 @@ void main(){
   // Wandton variiert je Fenster: greige / warmweiss / terracotta / salbei
   float hue=hash(uSeed*3.9+2.2);
   vec3 wallA = hue<0.25? vec3(0.20,0.17,0.14) : hue<0.5? vec3(0.215,0.195,0.17) : hue<0.75? vec3(0.225,0.16,0.125) : vec3(0.175,0.19,0.155);
-  if(office) wallA=vec3(0.15,0.16,0.185);
+  if(office) wallA=vec3(0.28,0.29,0.315);          // Büro: helle, kühle Wände
   vec3 wallB=wallA*1.45;
   vec2 lp=vec2((hash(uSeed)*0.6-0.3)*uW, -h2+uH*(office?0.45:0.58));
   vec3 lc=office? vec3(0.55,0.68,0.9):vec3(1.0,0.72,0.38);
@@ -242,12 +254,16 @@ void main(){
     col+=lc*lampOn*0.8*exp(-dl*dl*(16.0/(uW*uW+0.4)));
     col+=lc*lampOn*1.6*exp(-dl*dl*(420.0/(uW*uW+0.4)));
     float fx=(hash(uSeed*3.3)*0.4-0.2)*uW;
-    float fw=office?0.42:0.34;
-    if(hit.y<-h2+uH*(office?0.30:0.34) && abs(hit.x-fx)<uW*fw*0.5) col*=0.4;
+    float fw=office?0.5:0.34;
+    if(hit.y<-h2+uH*(office?0.26:0.34) && abs(hit.x-fx)<uW*fw*0.5) col*=office?0.55:0.4;
     if(office){
-      float my=-h2+uH*0.34;
-      if(abs(hit.y-my)<uH*0.06 && (abs(hit.x-fx-uW*0.09)<uW*0.055||abs(hit.x-fx+uW*0.09)<uW*0.055))
-        col=vec3(0.45,0.62,0.85)*lampOn;
+      // Whiteboard/Screen an der Rueckwand + Monitor-Reihe auf Schreibtischhoehe
+      float wx=(hash(uSeed*11.3)-0.5)*0.4*uW;
+      if(hash(uSeed*12.7)>0.4 && abs(hit.x-wx)<uW*0.16 && abs(hit.y-uH*0.12)<uH*0.14)
+        col=mix(col,vec3(0.55,0.56,0.57),0.92);
+      float my=-h2+uH*0.30;
+      if(abs(hit.y-my)<uH*0.055 && (abs(hit.x-fx-uW*0.10)<uW*0.05||abs(hit.x-fx+uW*0.02)<uW*0.05||abs(hit.x-fx+uW*0.14)<uW*0.05))
+        col=vec3(0.5,0.68,0.95)*(0.6+lampOn);
     } else {
       float px=(hash(uSeed*6.1)-0.5)*0.5*uW;
       if(abs(hit.x-px)<uW*0.085 && abs(hit.y-uH*0.10)<uH*0.13) col=mix(col,vec3(0.42,0.37,0.29),0.9);
@@ -263,8 +279,12 @@ void main(){
     float v=(hit.y+h2)/uH;
     col=mix(wallA*0.8,wallB*0.85,v)*(1.0-0.35*dz);
   } else if(rd.y<0.0){
-    // Boden: Holzdielen mit Lampen-Lichtfleck (Wohnen) / Teppich (Buero)
-    if(office) col=vec3(0.15,0.155,0.165)*(1.0-0.45*dz);
+    // Boden: Holzdielen mit Lampen-Lichtfleck (Wohnen) / Teppichfliesen (Buero)
+    if(office){
+      col=vec3(0.21,0.22,0.245);
+      if(fract(hit.x/0.5)<0.05||fract(-hit.z/0.5)<0.05) col*=0.88;   // Teppichfliesen-Raster
+      col*=(1.0-0.45*dz);
+    }
     else{
       float pk=floor(hit.x/0.16);
       col=vec3(0.16,0.115,0.08)*(0.85+0.3*hash(pk*13.7+uSeed));
@@ -273,10 +293,12 @@ void main(){
       col+=vec3(0.5,0.36,0.19)*lampOn*0.25*exp(-length(hit.xz-vec2(lp.x,-uD*0.55))*3.0);
     }
   } else {
-    col=(office? vec3(0.30,0.31,0.32):vec3(0.34,0.32,0.29))*(1.0-0.35*dz);
+    // Decke: Rasterdecke mit Leuchtpanels (Buero) / warmweiss (Wohnen)
+    col=(office? vec3(0.38,0.39,0.40):vec3(0.34,0.32,0.29))*(1.0-0.35*dz);
     if(office){
-      float s=fract(-hit.z/1.1);
-      if(s<0.22 && abs(hit.x)<uW*0.42) col=vec3(0.95,0.90,0.72)*lampOn;
+      float px=fract((hit.x+10.0)/0.85), pz=fract(-hit.z/0.95);
+      if(px>0.12 && px<0.88 && pz>0.18 && pz<0.82) col=vec3(1.0,1.0,0.93)*(0.5+lampOn);
+      else col*=0.9;                                  // Rasterschienen dunkler
     }
   }
   col*=(1.0-0.3*dz)*lit;
