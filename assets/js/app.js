@@ -392,10 +392,35 @@
   function blankZone(){ return {mix:[],cat:null,shape:null,bond:'run',bed:'normal',head:'normal',joint:'#9d988f',order:0,layout:[],seq:[0],wild:[]}; }
   let zoneData={all_facade:blankZone(),all_floor:blankZone()};
   let activeZone='all_facade', mixScene='exterior', mixSurface='facade', mixBuilding='efh';
+  let mixTab='design', mortarsAll=false, stoneQ='';   // Seitenleisten-Tab · Fugenfarben-Ansicht · Steine-Suche
   const sceneNow=()=> (mixView==='interior')?'interior':(mixView==='exterior')?'exterior':mixScene;
   const zoneKey=(scene,surf)=> 'all_'+surf;
   const surfaceOf=cat=> (cat==='mauer')?'facade':'floor';   // Mauerklinker → Fassade · Pflaster/Tonplatten → Boden
-  function saveActive(){ zoneData[activeZone]={mix,cat:mixCat,shape:mixShape,bond:mixBond,bed:mixBed,head:mixHead,joint:mixJoint,order:mixOrder,layout:mixLayout,seq:mixSeq,wild:wildOff}; }
+  function saveActive(){ zoneData[activeZone]={mix,cat:mixCat,shape:mixShape,bond:mixBond,bed:mixBed,head:mixHead,joint:mixJoint,order:mixOrder,layout:mixLayout,seq:mixSeq,wild:wildOff}; persistMix(); }
+  // ---- Persistenz + Rückgängig: leichter Zonen-Schnappschuss (nur IDs/Gewichte/Settings) ----
+  function zonesSnapshot(){
+    return JSON.stringify({z:Object.fromEntries(Object.entries(zoneData).map(([k,z])=>[k,
+      {ids:z.mix.map(m=>({id:m.p.id,w:m.weight})),cat:z.cat,shape:z.shape,bond:z.bond,bed:z.bed,head:z.head,joint:z.joint,order:z.order}])),bld:mixBuilding});
+  }
+  function zonesRestore(s){ try{ const d=JSON.parse(s);
+    Object.entries(d.z||{}).forEach(([k,zz])=>{ const z=blankZone();
+      z.mix=(zz.ids||[]).map(o=>{ const p=P.find(x=>x.id===o.id); return p?{p,weight:o.w||3}:null; }).filter(Boolean);
+      z.cat=zz.cat; z.shape=zz.shape; z.bond=zz.bond||'run'; z.bed=zz.bed||'normal'; z.head=zz.head||'normal';
+      z.joint=zz.joint||'#9d988f'; z.order=zz.order||0;
+      zoneData[k]=z; });
+    if(d.bld) mixBuilding=d.bld;
+    loadActive(zoneData[activeZone]?activeZone:'all_facade'); genLayout(); zoneData[activeZone].layout=mixLayout; zoneData[activeZone].seq=mixSeq; zoneData[activeZone].wild=wildOff;
+    updateFab(); if(!$('#mixer').hidden) renderMixer();
+  }catch(e){} }
+  let mixLoaded=false;   // Persistenz erst nach dem Init-Restore aktiv (sonst überschreibt der Startzustand den Speicher)
+  function persistMix(){ if(!mixLoaded) return; try{ localStorage.setItem('kb_mix', zonesSnapshot()); }catch(e){} }
+  let undoState=null;
+  function offerUndo(msg){ const M=MIX();
+    let t=$('#toast'); if(!t){ t=document.createElement('div'); t.id='toast'; t.className='toast'; document.body.appendChild(t); }
+    t.innerHTML=msg+' <button class="toast__undo">'+M.undo[lang]+'</button>';
+    t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>{ t.classList.remove('show'); t.textContent=''; },9000);
+    t.querySelector('.toast__undo').onclick=()=>{ if(undoState) zonesRestore(undoState); undoState=null; t.classList.remove('show'); t.textContent=''; };
+  }
   function loadActive(name){ activeZone=name; const z=zoneData[name];
     mix=z.mix; mixCat=z.cat; mixShape=z.shape; mixBond=z.bond; mixBed=z.bed; mixHead=z.head; mixJoint=z.joint; mixOrder=z.order; mixLayout=z.layout; mixSeq=z.seq; wildOff=z.wild; }
   saveActive();   // link the initial globals to the facade surface
@@ -531,9 +556,11 @@
     if(target!==activeZone){ saveActive(); loadActive(target); mixSurface=surf; }
     if(mixHas(p)){ return; }                       // each product only once
     const fam=shapeFamily(p);
-    if(mix.length && (p.cat!==mixCat || fam!==mixShape)){   // other category or shape → reset
+    if(mix.length && (p.cat!==mixCat || fam!==mixShape)){   // other category or shape → reset (mit Rückgängig)
+      const msg=(p.cat!==mixCat) ? MIX().reset[lang] : MIX().resetfmt[lang];
+      saveActive(); undoState=zonesSnapshot();
       mix=[]; mixCat=null; mixShape=null; mixLayout=[]; mixBond='run';
-      toast(p.cat!==mixCat ? MIX().reset[lang] : MIX().resetfmt[lang]);
+      offerUndo(msg);
     }
     mix.push({p:p, weight:3}); mixCat=p.cat; mixShape=fam; genLayout(); saveActive(); updateFab();
     makeBrick(p,()=>{ if(!$('#mixer').hidden) refreshWall(); });
@@ -1302,29 +1329,103 @@
   }
   function buildViewToggle(){
     const el=$('#mixView'); if(!el) return;
-    const M=MIX();   // always visible → pick surface (Aussen/Innen · Fassade/Boden) before adding
+    const M=MIX();   // Fläche (Fassade/Boden) wird über die Zonen-Karten in der Seitenleiste gewählt
     const views=[['wall',M.view_wall[lang]],['exterior',M.view_ext[lang]],['interior',M.view_int[lang]]];
-    let html=`<div class="mixview__row"><span class="mixview__lbl">${M.lbl_view[lang]}</span>${views.map(o=>`<button class="mixview__b${o[0]===mixView?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
-    if(mixView==='exterior'||mixView==='interior'){
-      const surfs=[['facade',M.surf_facade[lang]],['floor',M.surf_floor[lang]]];
-      html+=`<div class="mixview__row mixview__row--sub"><span class="mixview__lbl">${M.lbl_surf[lang]}</span>${surfs.map(o=>`<button class="mixview__b mixview__b--sm${o[0]===mixSurface?' is-active':''}" data-s="${o[0]}">${o[1]}</button>`).join('')}</div>`;
-    }
-    el.hidden=false; el.innerHTML=html;
+    el.hidden=false;
+    el.innerHTML=`<div class="mixview__row"><span class="mixview__lbl">${M.lbl_view[lang]}</span>${views.map(o=>`<button class="mixview__b${o[0]===mixView?' is-active':''}" aria-pressed="${o[0]===mixView}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
     el.querySelectorAll('.mixview__b[data-v]').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
-    el.querySelectorAll('.mixview__b[data-s]').forEach(b=>b.onclick=()=>switchSurface(b.dataset.s));
+  }
+  // Gebäudewahl als Bild-Thumbnails direkt auf dem 3D-Canvas — immer verfügbar
+  function renderBld(){
+    const el=$('#mixBld'); if(!el) return;
+    if(mixView!=='exterior'){ el.hidden=true; return; }
+    const M=MIX();
+    el.hidden=false;
+    el.innerHTML=['efh','villa','bungalow','office','friesen'].map(k=>`<button class="mixbld__b${mixBuilding===k?' is-active':''}" aria-pressed="${mixBuilding===k}" data-b="${k}">
+      <span class="mixbld__im" style="background-image:url('assets/img/bld/${k}.webp')"></span><span>${M['b_'+k][lang]}</span></button>`).join('');
+    el.querySelectorAll('.mixbld__b').forEach(b=>b.onclick=()=>{ mixBuilding=b.dataset.b; saveActive(); renderMixer(); });
   }
   function updatePcts(){ const total=mix.reduce((a,m)=>a+m.weight,0)||1;
     $$('#mixList .mixratio__pct').forEach(s=>{ s.textContent=Math.round(mix[+s.dataset.i].weight/total*100)+'%'; }); }
   function allZoneIds(){ saveActive(); const s=new Set(); Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>s.add(m.p.id))); return s; }
   function updateFab(){ const ids=allZoneIds(), n=ids.size, c=$('#mixCount'); c.textContent=n; c.hidden=n===0;
     $('#mixFabTxt').textContent=MIX().title[lang]; markMixedCards(ids); }
-  function openMixer(){ $('#mixer').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop(); renderMixer(); }
+  function openMixer(){ $('#mixer').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop();
+    try{ localStorage.setItem('kb_fab','1'); }catch(e){}
+    const fb=$('#mixFab'); if(fb) fb.classList.add('mixfab--min');
+    mixTab=mix.length?'design':'stones';               // leerer Start → direkt zur Steinwahl
+    renderMixer(); maybeIntro();
+    setTimeout(()=>{ const c=$('#mixClose'); if(c) c.focus({preventScroll:true}); },60); }
+  // geführter 3-Schritt-Einstieg beim allerersten Öffnen
+  function maybeIntro(){
+    try{ if(localStorage.getItem('kb_intro')) return; }catch(e){ return; }
+    const M=MIX(), panel=document.querySelector('.mixer__panel');
+    if(!panel||$('#mixIntro')) return;
+    const tiles=[
+      ['facade','exterior','assets/img/bld/efh.webp',M.surf_facade[lang]],
+      ['floor','exterior','assets/products-640/pflaster/SeptimA-Noblesse.webp',M.intro_floor[lang]],
+      ['facade','interior','assets/img/bld/wohnzimmer.webp',M.intro_int[lang]]
+    ];
+    const ov=document.createElement('div'); ov.id='mixIntro'; ov.className='mixintro';
+    ov.innerHTML=`<div class="mixintro__box">
+      <h3 id="mixIntroH">${M.intro_q[lang]}</h3>
+      <div class="mixintro__tiles">${tiles.map((t,i)=>`<button class="mixintro__tile" data-i="${i}">
+        <span style="background-image:url('${t[2]}')"></span>${t[3]}</button>`).join('')}</div>
+      <div class="mixintro__sugs" hidden></div>
+      <button class="mixintro__skip">${M.intro_skip[lang]}</button></div>`;
+    panel.appendChild(ov);
+    const done=()=>{ try{ localStorage.setItem('kb_intro','1'); }catch(e){} ov.remove(); };
+    ov.querySelector('.mixintro__skip').onclick=done;
+    ov.querySelectorAll('.mixintro__tile').forEach(b=>b.onclick=()=>{
+      const t=tiles[+b.dataset.i];
+      saveActive(); mixScene=t[1]; mixView=t[1]; mixSurface=t[0];
+      loadActive(zoneKey(sceneNow(),t[0]));
+      const sugs=surfSuggestions().slice(0,6);
+      const wrap=ov.querySelector('.mixintro__sugs');
+      wrap.innerHTML=sugs.map((s,i)=>`<button class="mixsug" data-i="${i}">
+        <span class="mixsug__row">${s.products.map(p=>`<span class="mixsug__dot" style="background-image:url('${thumbSrc(p.img)}');background-size:cover;background-position:center"></span>`).join('')}</span>
+        <span class="mixsug__t">${s.title[lang]}</span></button>`).join('');
+      wrap.querySelectorAll('.mixsug').forEach(sb=>sb.onclick=()=>{ loadSuggestion(sugs[+sb.dataset.i]); mixTab='design'; done(); renderMixer(); });
+      ov.querySelector('.mixintro__tiles').hidden=true; wrap.hidden=false;
+      $('#mixIntroH').textContent=M.intro_style[lang];
+    });
+  }
   function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); stopAll3D(); }
   // 3D-Render-Loops stoppen (alle ausser dem aktiven Modul) — Akku/GPU-Last, iOS-Kontextlimit
   function stopAll3D(except){
     ['Room3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
       const m=window[n]; if(m && m.stop && n!==except) m.stop();
     });
+  }
+  // Steinliste + Anteile beider Zonen (für Anfrage und Export-Legende)
+  function mixSummaryLines(){
+    saveActive();
+    const M=MIX(), lines=[];
+    [['all_facade','surf_facade'],['all_floor','surf_floor']].forEach(([zn,lbl])=>{
+      const z=zoneData[zn]; if(!z||!z.mix.length) return;
+      const total=z.mix.reduce((a,m)=>a+m.weight,0)||1;
+      lines.push(M[lbl][lang]+': '+z.mix.map(m=>Math.round(m.weight/total*100)+'% '+m.p.series+' '+m.p.name).join(' + '));
+    });
+    return lines;
+  }
+  // Export-PNG bekommt unten eine weisse Legende: Logo-Zeile + Steinliste
+  function downloadWithLegend(url){
+    const lines=mixSummaryLines();
+    const img=new Image();
+    img.onload=()=>{
+      const pad=30, lh=36, head=52;
+      const H=img.height+pad*2+(lines.length?head+lines.length*lh:head);
+      const cv=document.createElement('canvas'); cv.width=img.width; cv.height=H;
+      const c=cv.getContext('2d');
+      c.fillStyle='#fff'; c.fillRect(0,0,cv.width,H);
+      c.drawImage(img,0,0);
+      c.fillStyle='#1c1b19'; c.font='600 28px Inter,sans-serif';
+      c.fillText('klinkerbox.ch',pad,img.height+pad+20);
+      c.font='400 23px Inter,sans-serif'; c.fillStyle='#5a554e';
+      lines.forEach((ln,i)=>c.fillText(ln,pad,img.height+pad+head+i*lh));
+      const a=document.createElement('a'); a.href=cv.toDataURL('image/png'); a.download='klinkerbox-mischung.png'; a.click();
+    };
+    img.src=url;
   }
   function exportWall(){
     saveActive();
@@ -1335,19 +1436,19 @@
     // Innen/Bungalow: hochaufgelöstes Standbild direkt aus der 3D-Szene
     if(mixView==='interior' && window.Room3D && window.Room3D.available()){
       const url=window.Room3D.snapshot(CW,CH);
-      if(url){ const a=document.createElement('a'); a.href=url; a.download='klinkerbox-mischung.png'; a.click(); return; }
+      if(url){ downloadWithLegend(url); return; }
     }
     const EX3=(mixBuilding==='bungalow')?window.Bungalow3D:(mixBuilding==='efh')?window.Efh3D:(mixBuilding==='villa')?window.Villa3D:(mixBuilding==='office')?window.Office3D:(mixBuilding==='friesen')?window.Friesen3D:null;
     if(mixView==='exterior' && EX3 && EX3.available()){
       const url=EX3.snapshot(CW,CH);
-      if(url){ const a=document.createElement('a'); a.href=url; a.download='klinkerbox-mischung.png'; a.click(); return; }
+      if(url){ downloadWithLegend(url); return; }
     }
     const cv=document.createElement('canvas'); cv.width=CW; cv.height=CH;
     const cx=cv.getContext('2d');
     const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
     mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
     ensureImgObjs(map=>{
-      const save=()=>cv.toBlob(bl=>{ const a=document.createElement('a'); a.href=URL.createObjectURL(bl); a.download='klinkerbox-mischung.png'; a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),1500); },'image/png');
+      const save=()=>downloadWithLegend(cv.toDataURL('image/png'));
       if(scene){ const TS=Math.round(Math.max(CW,CH)*0.9), sc=(mixView==='interior')?'interior':'exterior';
         const fT=zoneTex(zoneKey(sc,'facade'),TS,map), flT=zoneTex(zoneKey(sc,'floor'),TS,map);
         const photo=(mixView==='interior')?SCENES.interior:SCENES[mixBuilding];
@@ -1359,7 +1460,20 @@
       save(); });
   }
   const seg=(name,opts,cur)=>`<div class="mixseg" data-seg="${name}">${opts.map(o=>
-    `<button class="mixseg__b${o[0]===cur?' is-active':''}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
+    `<button class="mixseg__b${o[0]===cur?' is-active':''}" aria-pressed="${o[0]===cur}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
+  // Verband-Auswahl mit Mini-Schema-Icons (Muster statt nur Text)
+  const BOND_ICO={
+    run:'<g fill="currentColor"><rect x="1" y="1" width="12" height="4" rx="1"/><rect x="15" y="1" width="12" height="4" rx="1"/><rect x="-5" y="7" width="12" height="4" rx="1"/><rect x="9" y="7" width="12" height="4" rx="1"/><rect x="23" y="7" width="8" height="4" rx="1"/><rect x="1" y="13" width="12" height="4" rx="1"/><rect x="15" y="13" width="12" height="4" rx="1"/></g>',
+    cross:'<g fill="currentColor"><rect x="1" y="1" width="12" height="4" rx="1"/><rect x="15" y="1" width="12" height="4" rx="1"/><rect x="8" y="7" width="12" height="4" rx="1"/><rect x="-4" y="7" width="10" height="4" rx="1"/><rect x="22" y="7" width="8" height="4" rx="1"/><rect x="4" y="13" width="12" height="4" rx="1"/><rect x="18" y="13" width="10" height="4" rx="1"/></g>',
+    stack:'<g fill="currentColor"><rect x="1" y="1" width="12" height="4" rx="1"/><rect x="15" y="1" width="12" height="4" rx="1"/><rect x="1" y="7" width="12" height="4" rx="1"/><rect x="15" y="7" width="12" height="4" rx="1"/><rect x="1" y="13" width="12" height="4" rx="1"/><rect x="15" y="13" width="12" height="4" rx="1"/></g>',
+    linear:'<g fill="currentColor"><rect x="1" y="1" width="12" height="4" rx="1"/><rect x="15" y="1" width="12" height="4" rx="1"/><rect x="1" y="7" width="12" height="4" rx="1"/><rect x="15" y="7" width="12" height="4" rx="1"/><rect x="1" y="13" width="12" height="4" rx="1"/><rect x="15" y="13" width="12" height="4" rx="1"/></g>',
+    wild:'<g fill="currentColor"><rect x="1" y="1" width="16" height="4" rx="1"/><rect x="19" y="1" width="8" height="4" rx="1"/><rect x="-3" y="7" width="8" height="4" rx="1"/><rect x="7" y="7" width="14" height="4" rx="1"/><rect x="23" y="7" width="8" height="4" rx="1"/><rect x="1" y="13" width="10" height="4" rx="1"/><rect x="13" y="13" width="15" height="4" rx="1"/></g>',
+    herring:'<g stroke="currentColor" stroke-width="2.6" fill="none"><path d="M3 15l6-6M9 15l6-6M15 15l6-6M6 4l5 5M12 4l5 5M18 4l5 5"/></g>',
+    diagonal:'<g stroke="currentColor" stroke-width="2.6" fill="none"><path d="M2 16L14 4M8 16L20 4M14 16L26 4"/></g>',
+    block:'<g fill="currentColor"><rect x="1" y="1" width="11" height="3.4" rx="1"/><rect x="1" y="6" width="11" height="3.4" rx="1"/><rect x="14" y="1" width="4" height="8.4" rx="1"/><rect x="20" y="1" width="4" height="8.4" rx="1"/><rect x="1" y="12" width="4" height="6" rx="1"/><rect x="7" y="12" width="4" height="6" rx="1"/><rect x="14" y="13" width="11" height="3.4" rx="1"/></g>'
+  };
+  const segIcons=(name,opts,cur)=>`<div class="mixseg" data-seg="${name}">${opts.map(o=>
+    `<button class="mixseg__b mixseg__b--ico${o[0]===cur?' is-active':''}" aria-pressed="${o[0]===cur}" data-v="${o[0]}"><svg viewBox="0 0 30 18" aria-hidden="true">${BOND_ICO[o[0]]||''}</svg>${o[1]}</button>`).join('')}</div>`;
   function renderMixer(){
     const M=MIX();
     $('#mixTitle').textContent=M.title[lang];
@@ -1369,25 +1483,70 @@
     const sceneView=(mixView==='exterior'||mixView==='interior');
     const surfName=sceneView? (M[mixView==='interior'?'view_int':'view_ext'][lang]+' · '+M[mixSurface==='facade'?'surf_facade':'surf_floor'][lang]) : '';
     $('#mixCatLabel').textContent=(sceneView?surfName+(mixCat?' · ':''):'')+(mixCat?catName(mixCat):(sceneView?'':M.hint[lang]));
-    buildViewToggle();
+    buildViewToggle(); renderBld();
+    // Seitenleisten-Tabs: Steine (Katalog im Mixer) | Gestaltung (Regler)
+    const tabs=$('#mixTabs');
+    if(tabs){ tabs.innerHTML=`<button class="mixtabs__b${mixTab==='stones'?' is-active':''}" aria-pressed="${mixTab==='stones'}" data-t="stones">${M.tab_stones[lang]}</button>
+      <button class="mixtabs__b${mixTab==='design'?' is-active':''}" aria-pressed="${mixTab==='design'}" data-t="design">${M.tab_design[lang]}</button>`;
+      tabs.querySelectorAll('.mixtabs__b').forEach(b=>b.onclick=()=>{ mixTab=b.dataset.t; renderMixer(); }); }
     const prev=$('#mixPreview'), list=$('#mixList');
+    // Zonen-Karten: die zwei Sammel-Flächen (Fassade/Boden) sind immer sichtbar wählbar
+    const zonesHtml=`<div class="mixzones">`+[['all_facade','surf_facade','facade'],['all_floor','surf_floor','floor']].map(([zn,lbl,sf])=>{
+      const z=zoneData[zn]||blankZone(), n=z.mix.length;
+      const sw=z.mix.slice(0,4).map(m=>`<span class="mixzone__sw" style="background-image:url('${thumbSrc(m.p.img)}')"></span>`).join('');
+      return `<button class="mixzone${activeZone===zn?' is-active':''}" data-s="${sf}">
+        <span class="mixzone__t">${M[lbl][lang]}</span>
+        <span class="mixzone__row">${sw||`<span class="mixzone__none">${M.zone_none[lang]}</span>`}</span>
+        <span class="mixzone__n">${n} ${(n===1?M.stone_one:M.stone_many)[lang]}</span></button>`; }).join('')+`</div>`;
+    const bindZones=()=>list.querySelectorAll('.mixzone').forEach(b=>b.onclick=()=>{ const sf=b.dataset.s;
+      if(mixSurface!==sf || activeZone!=='all_'+sf){ stoneQ=''; switchSurface(sf); } });
     const sugCards=sugs=>`<div class="mixsuggest__grid">${sugs.map((s,i)=>`
       <button class="mixsug" data-i="${i}">
-        <span class="mixsug__row">${s.products.map(p=>`<span class="mixsug__dot" style="background:${p.hex}"></span>`).join('')}</span>
+        <span class="mixsug__row">${s.products.map(p=>`<span class="mixsug__dot" style="background-image:url('${thumbSrc(p.img)}');background-size:cover;background-position:center"></span>`).join('')}</span>
         <span class="mixsug__t">${s.title[lang]}</span>
         <span class="mixsug__c">${catName(s.cat)}</span>
       </button>`).join('')}</div>`;
+    // ---------- Tab «Steine»: Katalog-Grid direkt im Konfigurator ----------
+    if(mixTab==='stones'){
+      if(!mix.length && !sceneView){
+        const sugs=getSuggestions();
+        prev.innerHTML=`<div class="mixsuggest"><div class="mixsuggest__h">${M.suggest_title[lang]}</div>${sugCards(sugs)}<p class="mixsuggest__hint">${M.empty[lang]}</p></div>`;
+        prev.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
+      } else refreshWall();
+      const cats=mixSurface==='facade'?['mauer']:['pflaster','tonplatten'];
+      let pool=P.filter(p=>cats.includes(p.cat));
+      if(mixView==='exterior' && mixSurface==='floor') pool=pool.filter(p=>!(p.cat==='tonplatten'&&p.sub==='Indoor'));
+      const q=stoneQ.trim().toLowerCase();
+      if(q) pool=pool.filter(p=>(p.series+' '+p.name).toLowerCase().includes(q));
+      const ids=new Set(mix.map(m=>m.p.id));
+      list.innerHTML=zonesHtml
+        +`<input type="search" class="input mixstones__q" id="stoneQ" placeholder="${I[lang].search_ph}">`
+        +`<div class="mixstones__grid">${pool.map(p=>`
+          <button class="mixstone${ids.has(p.id)?' is-on':''}" data-id="${p.id}">
+            <span class="mixstone__img" style="background-image:url('${thumbSrc(p.img)}')"></span>
+            <span class="mixstone__n">${p.series} · ${p.name}</span>
+            <span class="mixstone__add">${ids.has(p.id)?'✓':'+'}</span>
+          </button>`).join('')}</div>`;
+      bindZones();
+      const sq=list.querySelector('#stoneQ'); sq.value=stoneQ;
+      sq.oninput=()=>{ stoneQ=sq.value; renderMixer();
+        const nq=$('#stoneQ'); if(nq){ nq.focus(); nq.setSelectionRange(nq.value.length,nq.value.length); } };
+      list.querySelectorAll('.mixstone').forEach(b=>b.onclick=()=>{ const p=P.find(x=>x.id===b.dataset.id); if(!p) return;
+        if(mixHas(p)) removeFromMixer(p); else addToMixer(p); });
+      return;
+    }
+    // ---------- Tab «Gestaltung» ----------
     if(!mix.length){
       const sugs=sceneView?surfSuggestions():getSuggestions();
       if(sceneView){
-        // keep the building/room visible; prompt to fill this surface from the side panel
         refreshWall();
-        list.innerHTML=`<div class="mixgrp"><div class="mixgrp__h">${surfName} · ${M.surf_add[lang]}</div>${sugCards(sugs)}</div>`;
+        list.innerHTML=zonesHtml+`<div class="mixgrp"><div class="mixgrp__h">${surfName} · ${M.surf_add[lang]}</div>${sugCards(sugs)}</div>`;
+        bindZones();
         list.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
         return;
       }
       prev.innerHTML=`<div class="mixsuggest"><div class="mixsuggest__h">${M.suggest_title[lang]}</div>${sugCards(sugs)}<p class="mixsuggest__hint">${M.empty[lang]}</p></div>`;
-      list.innerHTML='';
+      list.innerHTML=zonesHtml; bindZones();
       prev.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
       return;
     }
@@ -1395,16 +1554,14 @@
     const total=mix.reduce((a,m)=>a+m.weight,0)||1;
     const ratio=`<div class="mixgrp"><div class="mixgrp__h">${M.ratio[lang]}</div>${mix.map((m,i)=>`
       <div class="mixratio__row">
-        <span class="mixchip__sw" style="background:${m.p.hex}"></span>
+        <span class="mixchip__ph" style="background-image:url('${thumbSrc(m.p.img)}')"></span>
         <span class="mixratio__name">${m.p.series} · ${m.p.name}</span>
         <input type="range" class="mixratio__sl" min="1" max="12" value="${m.weight}" data-i="${i}" aria-label="${m.p.name}">
         <span class="mixratio__pct" data-i="${i}">${Math.round(m.weight/total*100)}%</span>
         <button class="mixchip__x" data-id="${m.p.id}" aria-label="remove">&times;</button>
       </div>`).join('')}</div>`;
-    const order=`<div class="mixgrp"><div class="mixgrp__h">${M.order[lang]}</div>
-      <div class="mixorder"><span>${M.o_rnd[lang]}</span>
-        <input type="range" id="mixOrderSl" min="0" max="100" value="${Math.round(mixOrder*100)}">
-        <span>${M.o_ord[lang]}</span></div></div>`;
+    const oCur=mixOrder<0.25?'rnd':(mixOrder<0.75?'mid':'ord');
+    const order=`<div class="mixgrp"><div class="mixgrp__h">${M.order[lang]}</div>${seg('order',[['rnd',M.o_rnd[lang]],['mid',M.o_mid[lang]],['ord',M.o_ord[lang]]],oCur)}</div>`;
     const bondApplies=RECT_FAM(mixShape||'brick') && (mixShape||'brick')!=='square';
     // paving patterns for Pflasterklinker · wall bonds for Mauerklinker
     const bondOpts=mixCat==='pflaster'
@@ -1412,29 +1569,33 @@
       : [['run',M.b_run[lang]],['cross',M.b_cross[lang]],['stack',M.b_stack[lang]],['wild',M.b_wild[lang]]];
     if(!bondOpts.some(o=>o[0]===mixBond)) mixBond='run';   // coerce to a valid option for this category
     const bond=bondApplies
-      ? `<div class="mixgrp"><div class="mixgrp__h">${M.verband[lang]}</div>${seg('bond',bondOpts,mixBond)}</div>`
+      ? `<div class="mixgrp"><div class="mixgrp__h">${M.verband[lang]}</div>${segIcons('bond',bondOpts,mixBond)}</div>`
       : '';
-    const joints=`<div class="mixgrp"><div class="mixgrp__h">${M.bed[lang]} · ${M.head[lang]}</div>
-      <div class="mixjoint"><span>${M.bed[lang]}</span>${seg('bed',[['glue',M.j_glue[lang]],['narrow',M.j_narrow[lang]],['normal',M.j_normal[lang]]],mixBed)}</div>
-      <div class="mixjoint"><span>${M.head[lang]}</span>${seg('head',[['glue',M.j_glue[lang]],['narrow',M.j_narrow[lang]],['normal',M.j_normal[lang]]],mixHead)}</div></div>`;
+    // Fugenfarbe: 8 kuratierte Töne, Rest auf Wunsch (aktive Farbe bleibt immer sichtbar)
+    const mshow=mortarsAll?MORTARS:MORTARS.slice(0,8).concat(MORTARS.slice(8).filter(c=>c[1]===mixJoint));
     const jcol=`<div class="mixgrp"><div class="mixgrp__h">${M.jcolor[lang]}</div>
-      <div class="mixmortars">${MORTARS.map(c=>`<button class="mixmortar${c[1]===mixJoint?' is-active':''}" style="background:${c[1]}" data-hex="${c[1]}" title="${c[0]}"></button>`).join('')}</div></div>`;
-    // building type — only relevant in the exterior view
-    const bld=(mixView==='exterior')
-      ? `<div class="mixgrp"><div class="mixgrp__h">${M.building[lang]}</div>${seg('bld',[['efh',M.b_efh[lang]],['villa',M.b_villa[lang]],['bungalow',M.b_bungalow[lang]],['office',M.b_office[lang]],['friesen',M.b_friesen[lang]]],mixBuilding)}</div>`
-      : '';
-    list.innerHTML=bld+ratio+order+bond+joints+jcol;
+      <div class="mixmortars">${mshow.map(c=>`<button class="mixmortar${c[1]===mixJoint?' is-active':''}" style="background:${c[1]}" data-hex="${c[1]}" title="${c[0]}"></button>`).join('')}
+      <button class="mixmore" id="mortMore">${mortarsAll?M.show_less[lang]:M.show_all[lang]}</button></div></div>`;
+    // Fachregler hinter «Details für Profis»
+    const profi=`<details class="mixpro"><summary>${M.pro[lang]}</summary>${order}
+      <div class="mixgrp"><div class="mixgrp__h">${M.bed[lang]} · ${M.head[lang]}</div>
+      <div class="mixjoint"><span>${M.bed[lang]}</span>${seg('bed',[['glue',M.j_glue[lang]],['narrow',M.j_narrow[lang]],['normal',M.j_normal[lang]]],mixBed)}</div>
+      <div class="mixjoint"><span>${M.head[lang]}</span>${seg('head',[['glue',M.j_glue[lang]],['narrow',M.j_narrow[lang]],['normal',M.j_normal[lang]]],mixHead)}</div></div></details>`;
+    list.innerHTML=zonesHtml+ratio+bond+jcol+profi;
+    bindZones();
     // handlers
     list.querySelectorAll('.mixratio__sl').forEach(sl=>sl.oninput=()=>{ mix[+sl.dataset.i].weight=+sl.value; genLayout(); updatePcts(); refreshWall(); });
     list.querySelectorAll('.mixchip__x').forEach(b=>b.onclick=()=>{ const p=P.find(x=>x.id===b.dataset.id); if(p) removeFromMixer(p); });
-    $('#mixOrderSl').oninput=e=>{ mixOrder=+e.target.value/100; refreshWall(); };
     list.querySelectorAll('.mixseg').forEach(s=>s.querySelectorAll('.mixseg__b').forEach(b=>b.onclick=()=>{
       const v=b.dataset.v, name=s.dataset.seg;
-      if(name==='bond') mixBond=v; else if(name==='bed') mixBed=v; else if(name==='head') mixHead=v; else if(name==='bld') mixBuilding=v;
-      s.querySelectorAll('.mixseg__b').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWall();
+      if(name==='bond') mixBond=v; else if(name==='bed') mixBed=v; else if(name==='head') mixHead=v;
+      else if(name==='order') mixOrder=(v==='rnd')?0:(v==='mid')?0.5:1;
+      s.querySelectorAll('.mixseg__b').forEach(x=>{ x.classList.remove('is-active'); x.setAttribute('aria-pressed','false'); });
+      b.classList.add('is-active'); b.setAttribute('aria-pressed','true'); refreshWall();
     }));
     list.querySelectorAll('.mixmortar').forEach(b=>b.onclick=()=>{ mixJoint=b.dataset.hex;
       list.querySelectorAll('.mixmortar').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWall(); });
+    { const mm=list.querySelector('#mortMore'); if(mm) mm.onclick=()=>{ mortarsAll=!mortarsAll; renderMixer(); }; }
   }
   // form per stone — pre-fill the contact form with the selected product
   function requestSample(p){
@@ -1451,13 +1612,7 @@
 
   // Konfigurator-Mix ins Kontaktformular übernehmen (stärkster Lead-Pfad)
   function requestMix(){
-    saveActive();
-    const M=MIX(), parts=[];
-    [['all_facade','surf_facade'],['all_floor','surf_floor']].forEach(([zn,lbl])=>{
-      const z=zoneData[zn]; if(!z||!z.mix.length) return;
-      const total=z.mix.reduce((a,m)=>a+m.weight,0)||1;
-      parts.push(M[lbl][lang]+': '+z.mix.map(m=>Math.round(m.weight/total*100)+'% '+m.p.series+' '+m.p.name).join(' + '));
-    });
+    const M=MIX(), parts=mixSummaryLines();
     if(!parts.length){ toast(M.empty[lang]); return; }
     closeMixer();
     const f=$('#contactForm'); if(!f) return;
@@ -1624,7 +1779,16 @@
     $('#mixFab').onclick=openMixer; $('#mixClose').onclick=closeMixer;
     { const hc=$('#heroConfig'); if(hc) hc.onclick=openMixer; }
     $('#mixer').onclick=e=>{ if(e.target.id==='mixer') closeMixer(); };
-    $('#mixClear').onclick=clearMixer; $('#mixShuffle').onclick=()=>{ genLayout(); renderMixer(); };
+    $('#mixClear').onclick=()=>{ saveActive(); undoState=zonesSnapshot(); clearMixer(); offerUndo(MIX().cleared[lang]); };
+    $('#mixShuffle').onclick=()=>{ genLayout(); renderMixer(); };
+    // Startseiten-Teaser: Swatch wechselt das vorgerenderte Bild, CTA öffnet den Konfigurator
+    { const to=$('#teaserOpen'); if(to) to.onclick=openMixer; }
+    { const tw=$('#teaserSwatches'), ti=$('#teaserImg');
+      if(tw&&ti){
+        tw.addEventListener('pointerenter',()=>{ tw.querySelectorAll('.teaser__sw').forEach(b=>{ const im=new Image(); im.src=b.dataset.img; }); },{once:true});
+        tw.querySelectorAll('.teaser__sw').forEach(b=>b.onclick=()=>{ ti.src=b.dataset.img;
+          tw.querySelectorAll('.teaser__sw').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); });
+      } }
     $('#mixExport').onclick=exportWall;
     { const rq=$('#mixRequest'); if(rq) rq.onclick=requestMix; }
     document.addEventListener('keydown',e=>{
@@ -1676,6 +1840,10 @@
 
   // ===================== INIT =====================
   buildColorDots(); buildRefs(); bindForms(); bind(); applyLang(); smoothScroll(); protectImages();
+  // gespeicherte Zusammenstellung wiederherstellen + FAB-Zustand
+  try{ const s=localStorage.getItem('kb_mix'); if(s) zonesRestore(s); }catch(e){}
+  mixLoaded=true;
+  try{ if(localStorage.getItem('kb_fab')){ const fb=$('#mixFab'); if(fb) fb.classList.add('mixfab--min'); } }catch(e){}
   // Deep-Link: #p/<id> öffnet das Produkt direkt (teilbare Produktlinks)
   { const m=/^#p\/([\w-]+)/.exec(location.hash); if(m){ const p=P.find(x=>x.id===m[1]); if(p) setTimeout(()=>openLightbox(p),400); } }
   // clean the HAND-MADE stamp from the affected images, then refresh what's on screen
