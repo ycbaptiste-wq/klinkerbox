@@ -4,7 +4,7 @@
 // dunkle Paneel-Tür mit Oberlicht, Buchshecken + Dünengräser, Marsch-Kulisse.
 // Fassade (EG + Giebel + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette } from './scene3d-lib.js?v=37';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=38';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 
@@ -102,8 +102,8 @@ function friesenWindow(parent,x,y,w,h,glassM,z){
   const zz=z!=null?z:0;
   const sur=new THREE.Mesh(new THREE.BoxGeometry(w+0.22,h+0.22,0.05),mat(0xeceae6,0.7));
   sur.position.set(x,y,zz+0.03); parent.add(sur);              // weisser Blendrahmen
-  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w+0.02,h+0.02),interiorMaterial('home'));
-  inter.position.set(x,y,zz+0.056); parent.add(inter);         // Innenraum (Durchblick)
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w+0.02,h+0.02),interiorRoom(w+0.02,h+0.02,1.7,x*3.1+y*1.9));
+  inter.position.set(x,y,zz+0.056); parent.add(inter);         // 3D-Innenraum (Interior-Mapping)
   const glass=new THREE.Mesh(new THREE.PlaneGeometry(w+0.02,h+0.02),glassM);
   glass.position.set(x,y,zz+0.088); parent.add(glass);         // reflektierendes Glas
   const mm=(mw,mh,mx,my)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(mw,mh,0.02),mat(0xf6f5f2,0.55));
@@ -127,11 +127,11 @@ function buildScene(){
   scene.add(new THREE.HemisphereLight(0xdbe7f2,0x8d9084,0.35));
   scene.add(new THREE.AmbientLight(0xffffff,0.06));
   const sun=new THREE.DirectionalLight(0xffeed2,2.55);
-  sun.position.set(-16,19,10);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
+  sun.position.set(16,19,10);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,1);
   sun.castShadow=true;
   sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
-  sun.shadow.camera.left=-15; sun.shadow.camera.right=18;
+  sun.shadow.camera.left=-18; sun.shadow.camera.right=15;
   sun.shadow.camera.top=15;   sun.shadow.camera.bottom=-9;
   sun.shadow.camera.near=1; sun.shadow.camera.far=55;
   sun.shadow.camera.updateProjectionMatrix();
@@ -224,10 +224,20 @@ function buildScene(){
     const cheekM=mat(0xe7e5e1,0.85);
     const body=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),cheekM);
     body.position.set(x,baseY+bh/2,bz); body.castShadow=true; body.receiveShadow=true; scene.add(body);
-    // Giebeldreieck an der Gaubenfront
+    // Gaubenfront + Giebeldreieck tragen den Klinker des Zwerchgiebels
+    // (UVs massstabsgleich: Zwerchgiebel-Canvas deckt 3.6 m Breite / 7.5 m Höhe ab)
+    const uvSX=1/3.6, uvSY=1/7.5;
+    const frG=new THREE.PlaneGeometry(bw,bh);
+    { const uv=frG.attributes.uv;
+      for(let i=0;i<uv.count;i++) uv.setXY(i, uv.getX(i)*bw*uvSX, uv.getY(i)*bh*uvSY); }
+    const frontBrick=new THREE.Mesh(frG,gableMat);
+    frontBrick.position.set(x,baseY+bh/2,bz+bd/2+0.002); frontBrick.receiveShadow=true; scene.add(frontBrick);
     const tri=new THREE.Shape(); tri.moveTo(-bw/2,0); tri.lineTo(bw/2,0); tri.lineTo(0,gr); tri.closePath();
-    const triM=new THREE.Mesh(new THREE.ShapeGeometry(tri),cheekM);
-    triM.position.set(x,baseY+bh,bz+bd/2); scene.add(triM);
+    const triG=new THREE.ShapeGeometry(tri);
+    { const pos=triG.attributes.position, uv=triG.attributes.uv;
+      for(let i=0;i<pos.count;i++) uv.setXY(i,(pos.getX(i)+bw/2)*uvSX,(bh+pos.getY(i))*uvSY); }
+    const triM=new THREE.Mesh(triG,gableMat);
+    triM.position.set(x,baseY+bh,bz+bd/2+0.002); triM.receiveShadow=true; scene.add(triM);
     // zwei Dachschrägen (First front→hinten) + weisse Ortgänge
     const run=bw/2+0.16, len=Math.hypot(run,gr), ang=Math.atan2(gr,run);
     [[-1],[1]].forEach(([s])=>{
@@ -247,6 +257,12 @@ function buildScene(){
   // ---- EG-Fenster: je zwei links/rechts ----
   const wgrp=new THREE.Group(); scene.add(wgrp);
   [-4.55,-2.45,2.45,4.55].forEach(x=>friesenWindow(wgrp,x,1.62,1.35,1.75,glassM,0));
+  // Seitenfenster links/rechts (niedrige Traufwände)
+  [-1,1].forEach(s=>{
+    const sg=new THREE.Group(); sg.rotation.y=s*Math.PI/2; sg.position.set(s*HW/2,0,-HD/2); scene.add(sg);
+    friesenWindow(sg,-2.2,1.62,1.2,1.55,glassM,0);
+    friesenWindow(sg, 2.2,1.62,1.2,1.55,glassM,0);
+  });
 
   // ---- Haustür: dunkle Paneel-Tür mit Oberlicht + Tritt ----
   const dSur=new THREE.Mesh(new THREE.BoxGeometry(1.5,2.75,0.06),mat(0xeceae6,0.7));
@@ -363,10 +379,10 @@ function applyTex(m,cv,fallback,rough,ns){
   if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
   m.map=texFromCanvas(cv);
   m.color.set(cv?0xffffff:fallback);
-  if(rough!=null) m.roughness=cv?rough:0.9;
+  m.roughness=cv?(rough!=null?rough:1.0):0.95;   // Klinker matt
   if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; m.normalMap=nt; const s=ns!=null?ns:1.25; m.normalScale=new THREE.Vector2(s,s); } }
-  m.envMapIntensity=cv?0.5:0.35;
+    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.8; m.normalScale=new THREE.Vector2(s,s); } }
+  m.envMapIntensity=cv?0.18:0.3;                    // kaum Env-Reflexion
   m.needsUpdate=true;
 }
 window.Friesen3D={

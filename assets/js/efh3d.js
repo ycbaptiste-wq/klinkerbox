@@ -4,7 +4,7 @@
 // Giebelseiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 // Orbit + Zoom wie beim Bungalow/Innenraum.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette } from './scene3d-lib.js?v=37';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=38';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -85,8 +85,8 @@ function gableWallGeo(depth,eave,ridge){
 function makeWindow(parent,x,y,w,h,glassM,withBox){
   const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.04),mat(0xf2f1ee,0.6));
   frame.position.set(x,y,0.05); parent.add(frame);           // weisser Blendrahmen
-  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.14,h-0.14),interiorMaterial('home'));
-  inter.position.set(x,y,0.09); parent.add(inter);           // Innenraum (Durchblick)
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.14,h-0.14),interiorRoom(w-0.14,h-0.14,1.7,x*3.7+y*1.3));
+  inter.position.set(x,y,0.09); parent.add(inter);           // 3D-Innenraum (Interior-Mapping)
   const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.10,h-0.10),glassM);
   glass.position.set(x,y,0.105); parent.add(glass);          // reflektierendes Glas
   const post=new THREE.Mesh(new THREE.BoxGeometry(0.06,h-0.12,0.02),mat(0xf2f1ee,0.6));
@@ -111,7 +111,7 @@ function buildScene(){
   scene.add(new THREE.HemisphereLight(0xdbe7f2,0x8d9084,0.35));
   scene.add(new THREE.AmbientLight(0xffffff,0.06));
   const sun=new THREE.DirectionalLight(0xffeed2,2.6);
-  sun.position.set(-16,19,10);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
+  sun.position.set(16,19,10);                     // Sonne auf der Kameraseite → besonnte Front + rechte Wand
   sun.target.position.set(0,0,1);
   sun.castShadow=true;
   sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
@@ -193,6 +193,14 @@ function buildScene(){
   makeWindow(grp, 2.9,4.45,1.40,1.30,glassM,true);     // OG rechts
   makeWindow(grp,-2.9,1.95,1.70,2.30,glassM,true);     // EG links (bodentief)
   makeWindow(grp, 2.9,2.30,1.40,1.50,glassM,true);     // EG rechts
+  // Seitenfenster (Giebelwände links/rechts): je zwei Achsen, OG + EG
+  [-1,1].forEach(s=>{
+    const sg=new THREE.Group(); sg.rotation.y=s*Math.PI/2; sg.position.set(s*HW/2,0,-HD/2); scene.add(sg);
+    makeWindow(sg,-1.9,4.45,1.40,1.30,glassM,true);
+    makeWindow(sg, 1.9,4.45,1.40,1.30,glassM,true);
+    makeWindow(sg,-1.9,2.30,1.40,1.50,glassM,true);
+    makeWindow(sg, 1.9,2.30,1.40,1.50,glassM,true);
+  });
 
   // ---- Eingangsportal (Rücksprung) mit Holztür + Seitenteil + Stufen ----
   const portal=new THREE.Mesh(new THREE.BoxGeometry(2.0,2.95,0.10),mat(0x8f8b85,0.9));
@@ -319,10 +327,10 @@ function applyTex(m,cv,fallback,rough,ns){
   if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
   m.map=texFromCanvas(cv);
   m.color.set(cv?0xffffff:fallback);
-  if(rough!=null) m.roughness=cv?rough:0.9;
+  m.roughness=cv?(rough!=null?rough:1.0):0.95;   // Klinker matt
   if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; m.normalMap=nt; const s=ns!=null?ns:1.25; m.normalScale=new THREE.Vector2(s,s); } }
-  m.envMapIntensity=cv?0.5:0.35;
+    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.8; m.normalScale=new THREE.Vector2(s,s); } }
+  m.envMapIntensity=cv?0.18:0.3;                    // kaum Env-Reflexion
   m.needsUpdate=true;
 }
 window.Efh3D={

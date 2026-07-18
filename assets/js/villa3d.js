@@ -4,7 +4,7 @@
 // Portikus mit Freitreppe und Geländer, Buchs-Vorgarten mit Metallzaun.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette } from './scene3d-lib.js?v=37';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=38';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -88,8 +88,8 @@ function hipRoofGeo(w,d,rise,ridgeHalf){
 function villaWindow(parent,x,y,w,h,glassM,pediment){
   const sur=new THREE.Mesh(new THREE.BoxGeometry(w+0.28,h+0.28,0.06),mat(0xeceae6,0.7));
   sur.position.set(x,y,0.03); parent.add(sur);
-  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),interiorMaterial('home'));
-  inter.position.set(x,y,0.055); parent.add(inter);          // Innenraum (Durchblick)
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),interiorRoom(w-0.02,h-0.02,2.0,x*2.9+y*1.7));
+  inter.position.set(x,y,0.055); parent.add(inter);          // 3D-Innenraum (Interior-Mapping)
   const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),glassM);
   glass.position.set(x,y,0.088); parent.add(glass);           // reflektierendes Glas
   const mv=new THREE.Mesh(new THREE.BoxGeometry(0.05,h-0.1,0.02),mat(0xf4f3f0,0.6));
@@ -116,11 +116,11 @@ function buildScene(){
   scene.add(new THREE.HemisphereLight(0xdbe7f2,0x8d9084,0.35));
   scene.add(new THREE.AmbientLight(0xffffff,0.06));
   const sun=new THREE.DirectionalLight(0xffeed2,2.6);
-  sun.position.set(-17,20,10.5);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
+  sun.position.set(17,20,10.5);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,1);
   sun.castShadow=true;
   sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
-  sun.shadow.camera.left=-15; sun.shadow.camera.right=18;
+  sun.shadow.camera.left=-18; sun.shadow.camera.right=15;
   sun.shadow.camera.top=16;   sun.shadow.camera.bottom=-9;
   sun.shadow.camera.near=1; sun.shadow.camera.far=60;
   sun.shadow.camera.updateProjectionMatrix();
@@ -185,6 +185,12 @@ function buildScene(){
   const wgrp=new THREE.Group(); scene.add(wgrp);
   [-5.2,-2.6,0,2.6,5.2].forEach(x=>villaWindow(wgrp,x,5.35,1.15,1.9,glassM,true));
   [-5.2,-2.6,2.6,5.2].forEach(x=>villaWindow(wgrp,x,2.05,1.2,2.1,glassM,false));
+  // Seitenfenster links/rechts: zwei Geschosse
+  [-1,1].forEach(s=>{
+    const sg=new THREE.Group(); sg.rotation.y=s*Math.PI/2; sg.position.set(s*HW/2,0,-HD/2); scene.add(sg);
+    [-2.6,0,2.6].forEach(lx=>villaWindow(sg,lx,5.35,1.15,1.9,glassM,true));
+    [-2.6,2.6].forEach(lx=>villaWindow(sg,lx,2.05,1.2,2.1,glassM,false));
+  });
 
   // ---- Portikus: Pilaster + Gebälk + Doppeltür + Oberlicht ----
   const pil=(x)=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(0.38,2.85,0.22),mat(0xeceae6,0.7));
@@ -353,10 +359,10 @@ function applyTex(m,cv,fallback,rough,ns){
   if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
   m.map=texFromCanvas(cv);
   m.color.set(cv?0xffffff:fallback);
-  if(rough!=null) m.roughness=cv?rough:0.9;
+  m.roughness=cv?(rough!=null?rough:1.0):0.95;   // Klinker matt
   if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; m.normalMap=nt; const s=ns!=null?ns:1.25; m.normalScale=new THREE.Vector2(s,s); } }
-  m.envMapIntensity=cv?0.5:0.35;
+    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.8; m.normalScale=new THREE.Vector2(s,s); } }
+  m.envMapIntensity=cv?0.18:0.3;                    // kaum Env-Reflexion
   m.needsUpdate=true;
 }
 window.Villa3D={

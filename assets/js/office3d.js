@@ -4,7 +4,7 @@
 // beleuchteter Lobby, grosser Vorplatz, Gräser-Beete, Stadt-Kulisse.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette } from './scene3d-lib.js?v=37';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=38';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 
@@ -67,8 +67,8 @@ function makeEnvironment(){
 function officeWindow(parent,x,y,w,h,glassM){
   const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.04),mat(0x3a3e43,0.55,0.2));
   frame.position.set(x,y,0.05); parent.add(frame);           // dunkler Rahmen
-  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.12,h-0.12),interiorMaterial('office'));
-  inter.position.set(x,y,0.09); parent.add(inter);           // Büro-Innenraum (Durchblick)
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.12,h-0.12),interiorRoom(w-0.12,h-0.12,2.6,x*2.3+y*1.1,'office'));
+  inter.position.set(x,y,0.09); parent.add(inter);           // 3D-Büroraum (Interior-Mapping)
   const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.08,h-0.08),glassM);
   glass.position.set(x,y,0.105); parent.add(glass);          // reflektierendes Glas
   const mull=(mw,mh,mx,my)=>{ const m=new THREE.Mesh(new THREE.BoxGeometry(mw,mh,0.03),mat(0x33373c,0.55,0.2));
@@ -92,11 +92,11 @@ function buildScene(){
   scene.add(new THREE.HemisphereLight(0xdbe7f2,0x8d9084,0.35));
   scene.add(new THREE.AmbientLight(0xffffff,0.06));
   const sun=new THREE.DirectionalLight(0xffeed2,2.6);
-  sun.position.set(-19,23,12);                   // streifendes Nachmittagslicht → Relief + Schattenwurf
+  sun.position.set(19,23,12);                   // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,1);
   sun.castShadow=true;
   sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
-  sun.shadow.camera.left=-20; sun.shadow.camera.right=23;
+  sun.shadow.camera.left=-23; sun.shadow.camera.right=20;
   sun.shadow.camera.top=20;   sun.shadow.camera.bottom=-10;
   sun.shadow.camera.near=1; sun.shadow.camera.far=70;
   sun.shadow.camera.updateProjectionMatrix();
@@ -148,6 +148,14 @@ function buildScene(){
   });
   // EG: raumhohe Verglasung links/rechts vom Eingang
   [-7.35,-4.41,4.41,7.35].forEach(x=>officeWindow(wgrp,x,1.62,2.5,3.0,glassM));
+  // Seitenfenster links/rechts: drei Achsen über alle Geschosse
+  [-1,1].forEach(s=>{
+    const sg=new THREE.Group(); sg.rotation.y=s*Math.PI/2; sg.position.set(s*HW/2,0,-HD/2); scene.add(sg);
+    [-4.2,0,4.2].forEach(lx=>{
+      [1,2].forEach(fl=>officeWindow(sg,lx,fl*FH+1.85,2.5,2.55,glassM));
+      officeWindow(sg,lx,1.62,2.5,3.0,glassM);
+    });
+  });
 
   // ---- Eingang: Glasfront + Vordach + warm beleuchtete Lobby ----
   const lobbyGlow=new THREE.Mesh(new THREE.PlaneGeometry(5.6,3.1),
@@ -277,10 +285,10 @@ function applyTex(m,cv,fallback,rough,ns){
   if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
   m.map=texFromCanvas(cv);
   m.color.set(cv?0xffffff:fallback);
-  if(rough!=null) m.roughness=cv?rough:0.9;
+  m.roughness=cv?(rough!=null?rough:1.0):0.95;   // Klinker matt
   if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; m.normalMap=nt; const s=ns!=null?ns:1.25; m.normalScale=new THREE.Vector2(s,s); } }
-  m.envMapIntensity=cv?0.5:0.35;
+    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.8; m.normalScale=new THREE.Vector2(s,s); } }
+  m.envMapIntensity=cv?0.18:0.3;                    // kaum Env-Reflexion
   m.needsUpdate=true;
 }
 window.Office3D={

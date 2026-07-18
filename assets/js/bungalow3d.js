@@ -4,7 +4,7 @@
 // Flachdach mit Attika, Vordach mit Stütze, dunkle Holztür, Glasfront,
 // Pflanzkübel, Kiesbeete, Gartenmauern, Himmel. Orbit + Zoom wie innen.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette } from './scene3d-lib.js?v=37';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=38';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -88,11 +88,11 @@ function buildScene(){
   scene.add(new THREE.HemisphereLight(0xdbe7f2,0x8d9084,0.35));
   scene.add(new THREE.AmbientLight(0xffffff,0.06));
   const sun=new THREE.DirectionalLight(0xffeed2,2.6);
-  sun.position.set(-12,14.2,7.5);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
+  sun.position.set(12,14.2,7.5);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,2);
   sun.castShadow=true;
   sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
-  sun.shadow.camera.left=-12; sun.shadow.camera.right=15;
+  sun.shadow.camera.left=-15; sun.shadow.camera.right=12;
   sun.shadow.camera.top=12;   sun.shadow.camera.bottom=-8;
   sun.shadow.camera.near=1; sun.shadow.camera.far=45;
   sun.shadow.camera.updateProjectionMatrix();
@@ -168,8 +168,8 @@ function buildScene(){
   const bandX0=-0.9, bandX1=6.0, bandY=2.62;
   const bandFrame=new THREE.Mesh(new THREE.BoxGeometry(bandX1-bandX0+0.16,bandY+0.12,0.05),mat(0x2e3134,0.5,0.2));
   bandFrame.position.set((bandX0+bandX1)/2,(bandY)/2+0.02,0.045); scene.add(bandFrame);
-  // Wohnraum hinter der Glasfront (Durchblick)
-  const bandInt=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),interiorMaterial('home'));
+  // Wohnraum hinter der Glasfront (Interior-Mapping → echte Raumtiefe)
+  const bandInt=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),interiorRoom(bandX1-bandX0,bandY-0.10,3.4,5.0));
   bandInt.position.set((bandX0+bandX1)/2,bandY/2,0.085); scene.add(bandInt);
   const bandGlass=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),glassM);
   bandGlass.position.set((bandX0+bandX1)/2,bandY/2,0.10); scene.add(bandGlass);
@@ -178,6 +178,22 @@ function buildScene(){
     m.position.set(x,y,0.12); scene.add(m); };
   mull(bandX1-bandX0,0.07,(bandX0+bandX1)/2,2.06);                  // Kämpfer
   [ -0.9+1.72, -0.9+3.45, -0.9+5.17 ].forEach(x=>mull(0.07,bandY-0.1,x,bandY/2));
+
+  // ---- Seitenfenster links/rechts (dunkle Rahmen wie die Front) ----
+  const sideWin=(parent,x,y,w,h)=>{
+    const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.04),mat(0x2e3134,0.5,0.2));
+    frame.position.set(x,y,0.05); parent.add(frame);
+    const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.12,h-0.12),interiorRoom(w-0.12,h-0.12,1.8,x*3.1+y));
+    inter.position.set(x,y,0.09); parent.add(inter);
+    const g2=new THREE.Mesh(new THREE.PlaneGeometry(w-0.10,h-0.10),glassM);
+    g2.position.set(x,y,0.105); parent.add(g2);
+    const sill=new THREE.Mesh(new THREE.BoxGeometry(w+0.14,0.05,0.14),mat(0xe8e6e2,0.7));
+    sill.position.set(x,y-h/2-0.025,0.07); sill.castShadow=true; parent.add(sill);
+  };
+  [-1,1].forEach(s=>{
+    const sg=new THREE.Group(); sg.rotation.y=s*Math.PI/2; sg.position.set(s*HW/2,0,-HD/2); scene.add(sg);
+    sideWin(sg,-2.0,1.75,1.6,1.2); sideWin(sg,2.0,1.75,1.6,1.2);
+  });
 
   // ---- Eingangspodest + Stufen + Betonbank ----
   const step1=new THREE.Mesh(new THREE.BoxGeometry(3.4,0.16,1.6),mat(0xc9c6c0,0.85));
@@ -294,10 +310,10 @@ function applyTex(m,cv,fallback,rough,ns){
   if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
   m.map=texFromCanvas(cv);
   m.color.set(cv?0xffffff:fallback);
-  if(rough!=null) m.roughness=cv?rough:0.9;
+  m.roughness=cv?(rough!=null?rough:1.0):0.95;   // Klinker matt
   if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; m.normalMap=nt; const s=ns!=null?ns:1.25; m.normalScale=new THREE.Vector2(s,s); } }
-  m.envMapIntensity=cv?0.5:0.35;
+    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.8; m.normalScale=new THREE.Vector2(s,s); } }
+  m.envMapIntensity=cv?0.18:0.3;                    // kaum Env-Reflexion
   m.needsUpdate=true;
 }
 window.Bungalow3D={

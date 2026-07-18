@@ -1251,7 +1251,7 @@
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=43', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=44', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)

@@ -62,7 +62,7 @@ export function buildEnv(renderer){
   es.add(sky);
   const sun=new THREE.Mesh(new THREE.SphereGeometry(3.2,16,12),
     new THREE.MeshBasicMaterial({color:new THREE.Color(11,9.5,7.5)}));
-  sun.position.set(-24,30,24);                       // gleiche Richtung wie das Sonnenlicht der Szenen
+  sun.position.set(24,30,24);                       // gleiche Richtung wie das Sonnenlicht der Szenen
   es.add(sun);
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(200,200),
     new THREE.MeshBasicMaterial({color:0x8f9289}));
@@ -82,8 +82,8 @@ export function glassMaterial(opts){
     metalness:0,
     roughness: opts.roughness!=null?opts.roughness:0.06,
     transparent:true,
-    opacity: opts.opacity!=null?opts.opacity:0.46,   // durchsichtiger → man sieht in den Raum
-    envMapIntensity: opts.env!=null?opts.env:2.4,    // HDR-Sonne liefert das Glanzlicht (Env ist gedimmt)
+    opacity: opts.opacity!=null?opts.opacity:0.32,   // durchsichtiger → der 3D-Innenraum bleibt erkennbar
+    envMapIntensity: opts.env!=null?opts.env:1.6,    // HDR-Sonne liefert das Glanzlicht (Env ist gedimmt)
     clearcoat:1, clearcoatRoughness:0.06,
     ior:1.5, reflectivity:0.7,
     side:THREE.FrontSide, depthWrite:false
@@ -183,6 +183,71 @@ export function normalFromCanvas(cv,maxW){
   }
   c.putImageData(out,0,0);
   return new THREE.CanvasTexture(sc);
+}
+
+// ---------- Interior-Mapping: echter 3D-Raum hinter jeder Fensterscheibe ----------
+// Shader schneidet den Blickstrahl mit einem virtuellen Raumquader hinter der
+// Scheibe (Rückwand/Boden/Decke/Seitenwände) → korrekte Parallaxe beim Orbiten,
+// ohne zusätzliche Geometrie. kind: 'home' (warm, Lampe, Sofa) · 'office'
+// (kühler, Deckenleuchten, Schreibtisch). seed variiert Lampe/Möbel je Fenster.
+const INT_VERT=`varying vec3 vP;varying vec3 vC;
+void main(){
+  vP=position;
+  vC=(cameraPosition-vec3(modelMatrix[3]))*mat3(modelMatrix);
+  gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
+}`;
+const INT_FRAG=`precision highp float;
+uniform float uW,uH,uD,uSeed,uKind;
+varying vec3 vP;varying vec3 vC;
+float hash(float n){ return fract(sin(n)*43758.5453123); }
+void main(){
+  vec3 rd=normalize(vP-vC);
+  if(rd.z>-0.02) rd.z=-0.02;
+  vec3 ro=vec3(vP.x,vP.y,0.0);
+  float w2=uW*0.5, h2=uH*0.5;
+  float tz=-uD/rd.z;
+  float tx=((rd.x>0.0?w2:-w2)-ro.x)/rd.x;
+  float ty=((rd.y>0.0?h2:-h2)-ro.y)/rd.y;
+  float t=min(tz,min(tx,ty));
+  vec3 hit=ro+rd*t;
+  float dz=clamp(-hit.z/uD,0.0,1.0);
+  float lampOn=0.5+0.7*hash(uSeed*7.31+1.7);
+  bool office=uKind>0.5;
+  vec3 col;
+  // Räume lesen sich von aussen DUNKEL (Tageslicht-Kontrast) — warme Akzente bleiben
+  if(tz<=tx && tz<=ty){
+    // Rueckwand: Verlauf + Lampenschein + Moebel-Silhouette + Bild
+    float v=(hit.y+h2)/uH;
+    col=office? mix(vec3(0.15,0.16,0.185),vec3(0.21,0.225,0.25),v)
+              : mix(vec3(0.19,0.165,0.14),vec3(0.27,0.24,0.20),v);
+    vec2 lp=vec2((hash(uSeed)*0.6-0.3)*uW, -h2+uH*(office?0.45:0.60));
+    float dl=length(hit.xy-lp);
+    vec3 lc=office? vec3(0.55,0.68,0.9):vec3(1.0,0.72,0.38);
+    col+=lc*lampOn*0.8*exp(-dl*dl*(16.0/(uW*uW+0.4)));
+    float fw=office?0.42:0.34;
+    if(hit.y<-h2+uH*(office?0.30:0.34) && abs(hit.x-(hash(uSeed*3.3)*0.4-0.2)*uW)<uW*fw*0.5) col*=0.4;
+    if(!office && abs(hit.x+uW*0.24)<uW*0.085 && abs(hit.y-uH*0.10)<uH*0.13) col=mix(col,vec3(0.40,0.36,0.29),0.9);
+  } else if(tx<=ty){
+    float v=(hit.y+h2)/uH;
+    col=(office? mix(vec3(0.13,0.14,0.16),vec3(0.19,0.20,0.22),v)
+               : mix(vec3(0.16,0.145,0.125),vec3(0.24,0.215,0.185),v))*(1.0-0.35*dz);
+  } else if(rd.y<0.0){
+    col=(office? vec3(0.15,0.155,0.165):vec3(0.15,0.11,0.075))*(1.0-0.45*dz);
+  } else {
+    col=(office? vec3(0.30,0.31,0.32):vec3(0.34,0.32,0.29))*(1.0-0.35*dz);
+    if(office){
+      float s=fract(-hit.z/1.1);
+      if(s<0.22 && abs(hit.x)<uW*0.42) col=vec3(0.95,0.90,0.72)*lampOn;
+    }
+  }
+  col*=1.0-0.3*dz;
+  gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(0.4545)),1.0);
+}`;
+export function interiorRoom(w,h,depth,seed,kind){
+  return new THREE.ShaderMaterial({
+    uniforms:{uW:{value:w},uH:{value:h},uD:{value:depth||1.7},uSeed:{value:seed!=null?seed:1},uKind:{value:kind==='office'?1:0}},
+    vertexShader:INT_VERT, fragmentShader:INT_FRAG
+  });
 }
 
 // ---------- dezente Vignette über dem 3D-Canvas (Foto-Look) ----------
