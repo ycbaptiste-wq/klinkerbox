@@ -205,34 +205,73 @@ void main(){
   if(rd.z>-0.02) rd.z=-0.02;
   vec3 ro=vec3(vP.x,vP.y,0.0);
   float w2=uW*0.5, h2=uH*0.5;
+  bool office=uKind>0.5;
+  float lampOn=0.5+0.7*hash(uSeed*7.31+1.7);
+  float lit=0.7+0.6*hash(uSeed*4.71+0.9);          // Grundhelligkeit variiert je Fenster
+  // ---- seitliche Vorhänge direkt hinter dem Glas (nur Wohnen, nicht überall) ----
+  if(!office && hash(uSeed*2.13)>0.3){
+    float tc=(-0.09)/rd.z;
+    vec2 pc=ro.xy+rd.xy*tc;
+    float cw=uW*(0.14+0.10*hash(uSeed*5.7));
+    if(abs(pc.x)>w2-cw && pc.y>-h2+0.02){
+      float fold=0.82+0.18*sin(pc.x*90.0/uW+uSeed);
+      vec3 cc=mix(vec3(0.62,0.58,0.50),vec3(0.52,0.47,0.41),(h2-pc.y)/uH)*fold*0.6*lit;
+      gl_FragColor=vec4(pow(max(cc,vec3(0.0)),vec3(0.4545)),1.0); return;
+    }
+  }
+  // ---- Raumquader ----
   float tz=-uD/rd.z;
   float tx=((rd.x>0.0?w2:-w2)-ro.x)/rd.x;
   float ty=((rd.y>0.0?h2:-h2)-ro.y)/rd.y;
   float t=min(tz,min(tx,ty));
   vec3 hit=ro+rd*t;
   float dz=clamp(-hit.z/uD,0.0,1.0);
-  float lampOn=0.5+0.7*hash(uSeed*7.31+1.7);
-  bool office=uKind>0.5;
+  // Wandton variiert je Fenster: greige / warmweiss / terracotta / salbei
+  float hue=hash(uSeed*3.9+2.2);
+  vec3 wallA = hue<0.25? vec3(0.20,0.17,0.14) : hue<0.5? vec3(0.215,0.195,0.17) : hue<0.75? vec3(0.225,0.16,0.125) : vec3(0.175,0.19,0.155);
+  if(office) wallA=vec3(0.15,0.16,0.185);
+  vec3 wallB=wallA*1.45;
+  vec2 lp=vec2((hash(uSeed)*0.6-0.3)*uW, -h2+uH*(office?0.45:0.58));
+  vec3 lc=office? vec3(0.55,0.68,0.9):vec3(1.0,0.72,0.38);
   vec3 col;
-  // Räume lesen sich von aussen DUNKEL (Tageslicht-Kontrast) — warme Akzente bleiben
   if(tz<=tx && tz<=ty){
-    // Rueckwand: Verlauf + Lampenschein + Moebel-Silhouette + Bild
+    // Rueckwand: Verlauf + Lampe (Schein + heller Kern) + Moebel + Bild/Monitore + Pflanze
     float v=(hit.y+h2)/uH;
-    col=office? mix(vec3(0.15,0.16,0.185),vec3(0.21,0.225,0.25),v)
-              : mix(vec3(0.19,0.165,0.14),vec3(0.27,0.24,0.20),v);
-    vec2 lp=vec2((hash(uSeed)*0.6-0.3)*uW, -h2+uH*(office?0.45:0.60));
+    col=mix(wallA,wallB,v);
     float dl=length(hit.xy-lp);
-    vec3 lc=office? vec3(0.55,0.68,0.9):vec3(1.0,0.72,0.38);
     col+=lc*lampOn*0.8*exp(-dl*dl*(16.0/(uW*uW+0.4)));
+    col+=lc*lampOn*1.6*exp(-dl*dl*(420.0/(uW*uW+0.4)));
+    float fx=(hash(uSeed*3.3)*0.4-0.2)*uW;
     float fw=office?0.42:0.34;
-    if(hit.y<-h2+uH*(office?0.30:0.34) && abs(hit.x-(hash(uSeed*3.3)*0.4-0.2)*uW)<uW*fw*0.5) col*=0.4;
-    if(!office && abs(hit.x+uW*0.24)<uW*0.085 && abs(hit.y-uH*0.10)<uH*0.13) col=mix(col,vec3(0.40,0.36,0.29),0.9);
+    if(hit.y<-h2+uH*(office?0.30:0.34) && abs(hit.x-fx)<uW*fw*0.5) col*=0.4;
+    if(office){
+      float my=-h2+uH*0.34;
+      if(abs(hit.y-my)<uH*0.06 && (abs(hit.x-fx-uW*0.09)<uW*0.055||abs(hit.x-fx+uW*0.09)<uW*0.055))
+        col=vec3(0.45,0.62,0.85)*lampOn;
+    } else {
+      float px=(hash(uSeed*6.1)-0.5)*0.5*uW;
+      if(abs(hit.x-px)<uW*0.085 && abs(hit.y-uH*0.10)<uH*0.13) col=mix(col,vec3(0.42,0.37,0.29),0.9);
+      if(hash(uSeed*8.3)>0.45){
+        float qx=(hash(uSeed*9.7)>0.5?1.0:-1.0)*uW*0.30;
+        vec2 q=hit.xy-vec2(qx,-h2+uH*0.30);
+        float leaf=min(min(length(q*vec2(1.0,1.4)),length((q-vec2(uW*0.05,uH*0.07))*vec2(1.2,1.5))),length((q+vec2(uW*0.05,-uH*0.05))*vec2(1.2,1.5)));
+        if(leaf<uW*0.085) col=vec3(0.09,0.14,0.08);
+        if(abs(q.x)<uW*0.035 && q.y<-uH*0.10 && q.y>-uH*0.20) col=vec3(0.16,0.11,0.08);
+      }
+    }
   } else if(tx<=ty){
     float v=(hit.y+h2)/uH;
-    col=(office? mix(vec3(0.13,0.14,0.16),vec3(0.19,0.20,0.22),v)
-               : mix(vec3(0.16,0.145,0.125),vec3(0.24,0.215,0.185),v))*(1.0-0.35*dz);
+    col=mix(wallA*0.8,wallB*0.85,v)*(1.0-0.35*dz);
   } else if(rd.y<0.0){
-    col=(office? vec3(0.15,0.155,0.165):vec3(0.15,0.11,0.075))*(1.0-0.45*dz);
+    // Boden: Holzdielen mit Lampen-Lichtfleck (Wohnen) / Teppich (Buero)
+    if(office) col=vec3(0.15,0.155,0.165)*(1.0-0.45*dz);
+    else{
+      float pk=floor(hit.x/0.16);
+      col=vec3(0.16,0.115,0.08)*(0.85+0.3*hash(pk*13.7+uSeed));
+      if(fract(hit.x/0.16)<0.06) col*=0.75;
+      col*=(1.0-0.45*dz);
+      col+=vec3(0.5,0.36,0.19)*lampOn*0.25*exp(-length(hit.xz-vec2(lp.x,-uD*0.55))*3.0);
+    }
   } else {
     col=(office? vec3(0.30,0.31,0.32):vec3(0.34,0.32,0.29))*(1.0-0.35*dz);
     if(office){
@@ -240,7 +279,7 @@ void main(){
       if(s<0.22 && abs(hit.x)<uW*0.42) col=vec3(0.95,0.90,0.72)*lampOn;
     }
   }
-  col*=1.0-0.3*dz;
+  col*=(1.0-0.3*dz)*lit;
   gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(0.4545)),1.0);
 }`;
 export function interiorRoom(w,h,depth,seed,kind){

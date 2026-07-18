@@ -4,7 +4,7 @@
 // beleuchteter Lobby, grosser Vorplatz, Gräser-Beete, Stadt-Kulisse.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=38';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=39';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 

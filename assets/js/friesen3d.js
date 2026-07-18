@@ -4,7 +4,7 @@
 // dunkle Paneel-Tür mit Oberlicht, Buchshecken + Dünengräser, Marsch-Kulisse.
 // Fassade (EG + Giebel + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=38';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=39';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 
@@ -232,6 +232,16 @@ function buildScene(){
       for(let i=0;i<uv.count;i++) uv.setXY(i, uv.getX(i)*bw*uvSX, uv.getY(i)*bh*uvSY); }
     const frontBrick=new THREE.Mesh(frG,gableMat);
     frontBrick.position.set(x,baseY+bh/2,bz+bd/2+0.002); frontBrick.receiveShadow=true; scene.add(frontBrick);
+    // Wangen (Seitenflächen) ebenfalls in Klinker — gleiche Massstabs-UVs
+    [[-1],[1]].forEach(([sd])=>{
+      const chG=new THREE.PlaneGeometry(bd,bh);
+      { const uv=chG.attributes.uv;
+        for(let i=0;i<uv.count;i++) uv.setXY(i, uv.getX(i)*bd*uvSX, uv.getY(i)*bh*uvSY); }
+      const cheekBrick=new THREE.Mesh(chG,gableMat);
+      cheekBrick.rotation.y=sd*Math.PI/2;
+      cheekBrick.position.set(x+sd*(bw/2+0.002),baseY+bh/2,bz);
+      cheekBrick.receiveShadow=true; scene.add(cheekBrick);
+    });
     const tri=new THREE.Shape(); tri.moveTo(-bw/2,0); tri.lineTo(bw/2,0); tri.lineTo(0,gr); tri.closePath();
     const triG=new THREE.ShapeGeometry(tri);
     { const pos=triG.attributes.position, uv=triG.attributes.uv;

@@ -4,7 +4,7 @@
 // Flachdach mit Attika, Vordach mit Stütze, dunkle Holztür, Glasfront,
 // Pflanzkübel, Kiesbeete, Gartenmauern, Himmel. Orbit + Zoom wie innen.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=38';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=39';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
