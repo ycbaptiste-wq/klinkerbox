@@ -197,22 +197,27 @@ function buildScene(){
     cheek.rotation.y=(x<0)?-Math.PI/2:Math.PI/2;
     cheek.position.set(x,5.35/2,0.07); scene.add(cheek);
   });
-  // Zwerchgiebel-Satteldach: First vorne→hinten (bindet an den Hauptfirst an) + weisse Ortgänge
+  // Zwerchgiebel-Satteldach: reicht bis zum Hauptfirst (keine Lücke) + Ortgänge + Firstziegel
   const gRun=GW/2, gRise=2.10, gLen=Math.hypot(gRun,gRise), gAng=Math.atan2(gRise,gRun);
+  const gDepth=5.4, gZc=-1.9, gFrontZ=gZc+gDepth/2;   // Vorderkante bei ~0.8 (Überstand), Hinterkante am First
   [[-1],[1]].forEach(([s])=>{
-    const slab=new THREE.Mesh(new THREE.BoxGeometry(gLen,0.09,3.9),roofM);
+    const slab=new THREE.Mesh(new THREE.BoxGeometry(gLen+0.12,0.10,gDepth),roofM);
     slab.rotation.z=s*gAng;
-    slab.position.set(-s*gRun/2, 5.35+gRise/2, -1.55);
+    slab.position.set(-s*gRun/2, 5.35+gRise/2, gZc);
     slab.castShadow=true; scene.add(slab);
-    const barge=new THREE.Mesh(new THREE.BoxGeometry(gLen+0.12,0.13,0.08),mat(0xf2f1ee,0.6));
+    const barge=new THREE.Mesh(new THREE.BoxGeometry(gLen+0.16,0.14,0.09),mat(0xf2f1ee,0.6));
     barge.rotation.z=s*gAng;
-    barge.position.set(-s*gRun/2, 5.35+gRise/2+0.03, 0.24);
+    barge.position.set(-s*gRun/2, 5.35+gRise/2+0.04, gFrontZ+0.02);   // Ortgang an der Giebel-Vorderkante
     scene.add(barge);
   });
-  const finial=new THREE.Mesh(new THREE.SphereGeometry(0.15,14,14),mat(0x3a3d42,0.5,0.3));
-  finial.position.set(0,7.85,-0.3); scene.add(finial);
-  const finRod=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.5,8),mat(0x3a3d42,0.5,0.3));
-  finRod.position.set(0,7.55,-0.3); scene.add(finRod);
+  // Firstziegel deckt den Schnitt der beiden Dachflächen (sonst sichtbare Naht/Loch)
+  const gCap=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.12,gDepth),mat(0x33363b,0.7));
+  gCap.position.set(0,7.45,gZc); gCap.castShadow=true; scene.add(gCap);
+  // klassisches Giebel-Finial an der Vorderspitze
+  const finRod=new THREE.Mesh(new THREE.CylinderGeometry(0.026,0.026,0.44,8),mat(0x33363b,0.5,0.3));
+  finRod.position.set(0,7.64,gFrontZ); scene.add(finRod);
+  const finial=new THREE.Mesh(new THREE.SphereGeometry(0.13,16,14),mat(0x33363b,0.5,0.3));
+  finial.position.set(0,7.88,gFrontZ); finial.castShadow=true; scene.add(finial);
   // weisses Gesims am Giebelfuss (wie im Original über dem EG)
   const gBand=new THREE.Mesh(new THREE.BoxGeometry(GW+0.3,0.16,0.10),mat(0xeceae6,0.7));
   gBand.position.set(0,3.32,0.19); scene.add(gBand);
@@ -250,19 +255,23 @@ function buildScene(){
     triM.position.set(x,baseY+bh,bz+bd/2+0.002); triM.receiveShadow=true; scene.add(triM);
     // zwei Dachschrägen (First front→hinten) + weisse Ortgänge
     const run=bw/2+0.16, len=Math.hypot(run,gr), ang=Math.atan2(gr,run);
+    const dRd=bd+1.2, dRz=bz-0.35;   // tiefer → Hinterkante steckt im Hauptdach (kein Schweben)
     [[-1],[1]].forEach(([s])=>{
-      const sl=new THREE.Mesh(new THREE.BoxGeometry(len,0.07,bd+0.5),roofM);
-      sl.rotation.z=s*ang; sl.position.set(x - s*run/2, baseY+bh+gr/2, bz-0.02);
+      const sl=new THREE.Mesh(new THREE.BoxGeometry(len+0.08,0.08,dRd),roofM);
+      sl.rotation.z=s*ang; sl.position.set(x - s*run/2, baseY+bh+gr/2, dRz);
       sl.castShadow=true; scene.add(sl);
-      const vb=new THREE.Mesh(new THREE.BoxGeometry(len+0.06,0.10,0.07),mat(0xf2f1ee,0.6));
+      const vb=new THREE.Mesh(new THREE.BoxGeometry(len+0.08,0.10,0.07),mat(0xf2f1ee,0.6));
       vb.rotation.z=s*ang; vb.position.set(x - s*run/2, baseY+bh+gr/2+0.03, bz+bd/2+0.02); scene.add(vb);
     });
+    // Gauben-Firstziegel (deckt die Naht der beiden Dachflächen)
+    const dCap=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.10,dRd),mat(0x33363b,0.7));
+    dCap.position.set(x,baseY+bh+gr,dRz); scene.add(dCap);
     friesenWindow(scene,x,baseY+0.70,1.32,0.98,glassM,bz+bd/2);
   });
 
-  // ---- Giebel-Fenster (2 nebeneinander) ----
-  friesenWindow(scene,-0.82,4.35,1.05,1.45,glassM,0.15);
-  friesenWindow(scene, 0.82,4.35,1.05,1.45,glassM,0.15);
+  // ---- Giebel-Fenster (2 schlanke Sprossenfenster, schöner proportioniert) ----
+  friesenWindow(scene,-0.88,4.32,0.90,1.42,glassM,0.15);
+  friesenWindow(scene, 0.88,4.32,0.90,1.42,glassM,0.15);
 
   // ---- EG-Fenster: je zwei links/rechts ----
   const wgrp=new THREE.Group(); scene.add(wgrp);
@@ -283,6 +292,9 @@ function buildScene(){
     const pan=new THREE.Mesh(new THREE.BoxGeometry(0.40,0.72,0.02),mat(0x32231a,0.55));
     pan.position.set(px,py,0.245); scene.add(pan);
   });
+  // warm beleuchtetes Oberlicht (Fanlight) statt schwarzem Glas
+  const transomGlow=new THREE.Mesh(new THREE.PlaneGeometry(1.1,0.42),new THREE.MeshBasicMaterial({color:0xf3e2be}));
+  transomGlow.position.set(0,2.42,0.235); scene.add(transomGlow);
   const transom=new THREE.Mesh(new THREE.PlaneGeometry(1.1,0.42),glassM);
   transom.position.set(0,2.42,0.245); scene.add(transom);
   [[-0.28],[0.0],[0.28]].forEach(([px])=>{
@@ -397,6 +409,7 @@ function applyTex(m,cv,fallback,rough,ns){
 }
 window.Friesen3D={
   available(){ return !failed; },
+  dbg(){ return {scene,renderer,camera}; },
   mount(h){
     if(!ensureRenderer()) return false;
     host=h;

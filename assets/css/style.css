@@ -510,7 +510,7 @@ a.cinfo__val:hover{color:var(--clay)}
 .mixmortar:hover{transform:scale(1.12)}
 .mixmortar.is-active{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--clay)}
 /* ratio rows */
-.mixratio__row{display:grid;grid-template-columns:16px 1fr 96px 38px 20px;align-items:center;gap:.5rem;padding:.35rem 0;border-bottom:1px solid var(--line)}
+.mixratio__row{display:grid;grid-template-columns:44px 1fr 84px 40px 20px;align-items:center;gap:.55rem;padding:.4rem 0;border-bottom:1px solid var(--line)}
 .mixratio__name{font-size:.85rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mixratio__sl{width:100%;accent-color:var(--clay);cursor:pointer}
 .mixratio__pct{font-size:.85rem;font-weight:600;text-align:right;color:var(--clay-dark)}

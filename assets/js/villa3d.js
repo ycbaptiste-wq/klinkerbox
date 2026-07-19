@@ -170,16 +170,26 @@ function buildScene(){
   const roofM=new THREE.MeshStandardMaterial({map:rT,roughness:0.85,side:THREE.DoubleSide});
   const roof=new THREE.Mesh(hipRoofGeo(HW+0.9,HD+0.9,2.95,(HW-HD)/2+0.4),roofM);
   roof.position.set(0,HE+0.34,-HD/2); roof.castShadow=true; scene.add(roof);
-  const dormer=new THREE.Mesh(new THREE.BoxGeometry(3.3,1.6,1.8),mat(0xd8d5d0,0.9));
-  dormer.position.set(0,8.45,-1.85); dormer.castShadow=true; scene.add(dormer);
-  const dRoof=new THREE.Mesh(new THREE.BoxGeometry(3.6,0.12,2.1),mat(0x3b3e43,0.7));
-  dRoof.position.set(0,9.31,-1.85); dRoof.castShadow=true; scene.add(dRoof);
+  const dormer=new THREE.Mesh(new THREE.BoxGeometry(3.3,1.6,1.9),mat(0xe9e7e3,0.85));
+  dormer.position.set(0,8.5,-1.9); dormer.castShadow=true; dormer.receiveShadow=true; scene.add(dormer);
+  const dRoof=new THREE.Mesh(new THREE.BoxGeometry(3.7,0.12,2.15),mat(0x3b3e43,0.7));
+  dRoof.position.set(0,9.36,-1.9); dRoof.castShadow=true; scene.add(dRoof);
+  const dFascia=new THREE.Mesh(new THREE.BoxGeometry(3.7,0.12,0.06),mat(0xeceae6,0.7));
+  dFascia.position.set(0,9.26,-0.84); scene.add(dFascia);
   const glassM=glassMaterial();
-  [[-0.95],[0],[0.95]].forEach(([x])=>{
-    const f=new THREE.Mesh(new THREE.BoxGeometry(0.78,1.1,0.06),mat(0xf4f3f0,0.6));
-    f.position.set(x,8.42,-0.92); scene.add(f);
-    const g=new THREE.Mesh(new THREE.PlaneGeometry(0.62,0.94),glassM);
-    g.position.set(x,8.42,-0.885); scene.add(g);
+  // drei Gaubenfenster mit Attikaraum (Interior-Mapping) + weisser Fasche + Sprosse
+  const dFz=-0.95;   // Gaubenfront (Vorderseite, zur Kamera +z)
+  [[-0.98],[0],[0.98]].forEach(([x])=>{
+    const inter=new THREE.Mesh(new THREE.PlaneGeometry(0.72,1.02),interiorRoom(0.72,1.02,1.3,x*5.7+7.9,'home'));
+    inter.position.set(x,8.5,dFz+0.06); scene.add(inter);
+    const g=new THREE.Mesh(new THREE.PlaneGeometry(0.72,1.02),glassM);
+    g.position.set(x,8.5,dFz+0.085); scene.add(g);
+    [[0,0.55,0.84,0.05],[0,-0.55,0.84,0.05],[-0.40,0,0.05,1.12],[0.40,0,0.05,1.12]].forEach(([dx,dy,bw,bh])=>{
+      const b=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,0.04),mat(0xf4f3f0,0.6));
+      b.position.set(x+dx,8.5+dy,dFz+0.10); scene.add(b);
+    });
+    const mull=new THREE.Mesh(new THREE.BoxGeometry(0.03,1.0,0.02),mat(0xf4f3f0,0.6));
+    mull.position.set(x,8.5,dFz+0.095); scene.add(mull);
   });
 
   // ---- Fenster: OG fünf Achsen (mit Verdachung), EG vier Achsen ----
@@ -368,6 +378,7 @@ function applyTex(m,cv,fallback,rough,ns){
 }
 window.Villa3D={
   available(){ return !failed; },
+  dbg(){ return {scene,renderer,camera}; },
   mount(h){
     if(!ensureRenderer()) return false;
     host=h;

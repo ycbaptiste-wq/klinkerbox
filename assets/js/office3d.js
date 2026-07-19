@@ -13,7 +13,7 @@ let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
 let rafId=0, failed=false;
 
 const TARGET=new THREE.Vector3(0,4.6,1.0);
-let az=0.12, po=1.525, rad=25.5;
+let az=0.52, po=1.515, rad=25.0;                 // 3/4-Ansicht → Seitenfenster sofort sichtbar
 let azT=az, poT=po, radT=rad;
 const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.34, PO_MAX=1.565, R_MIN=16, R_MAX=36;
 
@@ -296,6 +296,7 @@ function applyTex(m,cv,fallback,rough,ns){
 }
 window.Office3D={
   available(){ return !failed; },
+  dbg(){ return {scene,renderer,camera}; },
   mount(h){
     if(!ensureRenderer()) return false;
     host=h;

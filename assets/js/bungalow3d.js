@@ -117,10 +117,19 @@ function buildScene(){
     g.rotation.x=-Math.PI/2; g.position.set(x,0.004,z); g.receiveShadow=true; scene.add(g);
   });
 
-  // ---- Hauskörper: Fassade vorne + Seiten (Produkt-Textur) ----
+  // ---- Hauskörper: Fassade vorne (mit Loch für die Glasfront) + Seiten ----
+  const GB={x0:-0.9,x1:6.0,y1:2.62};   // Glasfront-Öffnung (muss zum bandX0/bandX1/bandY unten passen)
   facadeMat=new THREE.MeshStandardMaterial({color:0xdad6d1,roughness:0.95});
-  const front=new THREE.Mesh(new THREE.PlaneGeometry(HW,HH),facadeMat);
-  front.position.set(0,HH/2,0.001); front.receiveShadow=true; scene.add(front);
+  const fShape=new THREE.Shape();
+  fShape.moveTo(-HW/2,0); fShape.lineTo(HW/2,0); fShape.lineTo(HW/2,HH); fShape.lineTo(-HW/2,HH); fShape.closePath();
+  const fHole=new THREE.Path();
+  fHole.moveTo(GB.x0,0.02); fHole.lineTo(GB.x1,0.02); fHole.lineTo(GB.x1,GB.y1); fHole.lineTo(GB.x0,GB.y1); fHole.closePath();
+  fShape.holes.push(fHole);
+  const fGeo=new THREE.ShapeGeometry(fShape);
+  { const uv=fGeo.attributes.uv, pos=fGeo.attributes.position;
+    for(let i=0;i<uv.count;i++) uv.setXY(i,(pos.getX(i)+HW/2)/HW, pos.getY(i)/HH); }   // UVs 0..1 → Klinker-Textur passt
+  const front=new THREE.Mesh(fGeo,facadeMat);
+  front.position.set(0,0,0.001); front.receiveShadow=true; scene.add(front);
   sideMatL=new THREE.MeshStandardMaterial({color:0xd7d3ce,roughness:0.95});
   sideMatR=new THREE.MeshStandardMaterial({color:0xd7d3ce,roughness:0.95});
   const sideL=new THREE.Mesh(new THREE.PlaneGeometry(HD,HH),sideMatL);
@@ -166,11 +175,52 @@ function buildScene(){
 
   // ---- Glasfront rechts (Schiebetüren + Festverglasung, dunkle Rahmen) ----
   const bandX0=-0.9, bandX1=6.0, bandY=2.62;
-  const bandFrame=new THREE.Mesh(new THREE.BoxGeometry(bandX1-bandX0+0.16,bandY+0.12,0.05),mat(0x2e3134,0.5,0.2));
-  bandFrame.position.set((bandX0+bandX1)/2,(bandY)/2+0.02,0.045); scene.add(bandFrame);
-  // grosszügiger, offener Wohnraum hinter der Glasfront (tiefer Raum → wirkt luxuriös)
-  const bandInt=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),interiorRoom(bandX1-bandX0,bandY-0.10,6.5,5.0,'home'));
-  bandInt.position.set((bandX0+bandX1)/2,bandY/2,0.085); scene.add(bandInt);
+  // Rahmen NUR als Ränder (Mitte offen), sonst verdeckt die Box den Raum dahinter
+  { const frameM=mat(0x2e3134,0.5,0.2), bcx=(bandX0+bandX1)/2, bw=bandX1-bandX0;
+    [[bcx,bandY+0.06,bw+0.16,0.12],[bcx,0.0,bw+0.16,0.10],[bandX0-0.04,bandY/2,0.09,bandY+0.14],[bandX1+0.04,bandY/2,0.09,bandY+0.14]]
+      .forEach(([x,y,w,h])=>{ const b=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.06),frameM); b.position.set(x,y,0.05); scene.add(b); }); }
+  // grosszügiger, offener Wohnraum hinter der Glasfront — ECHTE Möbel (Loft-Look)
+  // Der Innenraum liegt im Schatten von Dach/Attika → Flächen bekommen dezente
+  // Eigenhelligkeit (emissive), damit der Raum sichtbar ist OHNE dass Punktlichter
+  // durch die Wände nach aussen lecken und die matte Fassade aufhellen.
+  { const rx0=bandX0, rx1=bandX1, rcx=(rx0+rx1)/2, rw=rx1-rx0, rd=4.8, rBackZ=-rd;
+    // helper: Standardmaterial mit Selbstleuchten (emissive = f·Farbe)
+    const em=(c,rough,f)=>{ const m=new THREE.MeshStandardMaterial({color:c,roughness:rough!=null?rough:0.9,emissive:c,emissiveIntensity:f!=null?f:0.5}); return m; };
+    const flTex=noiseTex('#8a6b4a',16,256,256); flTex.repeat.set(6,4);
+    const flM=new THREE.MeshStandardMaterial({map:flTex,roughness:0.7,emissive:0x4a3826,emissiveIntensity:0.55,envMapIntensity:0.15});
+    const rfloor=new THREE.Mesh(new THREE.PlaneGeometry(rw,rd),flM);
+    rfloor.rotation.x=-Math.PI/2; rfloor.position.set(rcx,0.02,rBackZ/2); scene.add(rfloor);
+    const rback=new THREE.Mesh(new THREE.PlaneGeometry(rw,2.7),em(0xcabfa8,0.97,0.5));
+    rback.position.set(rcx,1.35,rBackZ+0.01); scene.add(rback);
+    // heller Fensterausblick in der Rückwand (Durchblick → Haus wirkt lichtdurchflutet)
+    const rwin=new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.35),new THREE.MeshBasicMaterial({color:0xeef4ee}));
+    rwin.position.set(rcx+1.7,1.55,rBackZ+0.02); scene.add(rwin);
+    const rwFrame=new THREE.Mesh(new THREE.BoxGeometry(2.55,0.06,0.03),em(0xdcdad4,0.5,0.4)); rwFrame.position.set(rcx+1.7,0.86,rBackZ+0.03); scene.add(rwFrame);
+    [[-1,rx0],[1,rx1]].forEach(([s,rx])=>{ const sw=new THREE.Mesh(new THREE.PlaneGeometry(rd,2.7),em(0xd8cfc0,0.98,0.45));
+      sw.rotation.y=-s*Math.PI/2; sw.position.set(rx,1.35,rBackZ/2); scene.add(sw); });
+    const rceil=new THREE.Mesh(new THREE.PlaneGeometry(rw,rd),em(0xf1efec,1,0.5));
+    rceil.rotation.x=Math.PI/2; rceil.position.set(rcx,2.7,rBackZ/2); scene.add(rceil);
+    const rug=new THREE.Mesh(new THREE.PlaneGeometry(3.0,2.1),em(0xd9cdb6,0.97,0.5));
+    rug.rotation.x=-Math.PI/2; rug.position.set(rcx,0.035,-2.2); scene.add(rug);
+    // Sofa (an Rückwand, zum Fenster gewandt)
+    const sofaM=em(0xe3dccb,0.9,0.5);
+    const sBase=new THREE.Mesh(new THREE.BoxGeometry(2.5,0.42,0.98),sofaM); sBase.position.set(rcx,0.34,-3.6); scene.add(sBase);
+    const sBack=new THREE.Mesh(new THREE.BoxGeometry(2.5,0.62,0.24),sofaM); sBack.position.set(rcx,0.72,-4.0); scene.add(sBack);
+    [[-1.12],[1.12]].forEach(([dx])=>{ const arm=new THREE.Mesh(new THREE.BoxGeometry(0.26,0.52,0.98),sofaM); arm.position.set(rcx+dx,0.42,-3.6); scene.add(arm); });
+    [[-0.65,0xc27a5c],[0.65,0x93a0a8]].forEach(([dx,c])=>{ const pil=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.42,0.14),em(c,0.92,0.5)); pil.position.set(rcx+dx,0.64,-3.75); pil.rotation.x=-0.25; scene.add(pil); });
+    // Couchtisch (Travertin)
+    const ct=new THREE.Mesh(new THREE.CylinderGeometry(0.44,0.44,0.32,28),em(0xcfc6b8,0.6,0.5)); ct.position.set(rcx,0.16,-2.5); scene.add(ct);
+    // Stehlampe (leuchtet warm)
+    const lp=new THREE.Mesh(new THREE.CylinderGeometry(0.02,0.02,1.5,8),em(0x3a3a3a,0.5,0.3)); lp.position.set(rx1-0.7,0.77,-3.6); scene.add(lp);
+    const lsh=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.2,0.28,20,1,true),new THREE.MeshStandardMaterial({color:0xf1e7d5,emissive:0xffdf9e,emissiveIntensity:1.7,side:THREE.DoubleSide})); lsh.position.set(rx1-0.7,1.52,-3.6); scene.add(lsh);
+    const lglow=new THREE.Mesh(new THREE.SphereGeometry(0.09,12,12),new THREE.MeshBasicMaterial({color:0xffe6b0})); lglow.position.set(rx1-0.7,1.5,-3.6); scene.add(lglow);
+    // Zimmerpflanze
+    const pot=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.13,0.38,18),em(0x3a3e42,0.7,0.35)); pot.position.set(rx0+0.6,0.19,-3.5); scene.add(pot);
+    const fol=new THREE.Mesh(new THREE.IcosahedronGeometry(0.42,1),em(0x5f7a4c,1,0.45)); fol.position.set(rx0+0.6,0.82,-3.5); fol.scale.set(1,1.3,1); scene.add(fol);
+    // Wandbild über dem Sofa
+    const artFr=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.8,0.03),em(0x2a241f,0.5,0.25)); artFr.position.set(rcx-0.2,1.75,rBackZ+0.005); scene.add(artFr);
+    const art=new THREE.Mesh(new THREE.PlaneGeometry(1.4,0.7),em(0xe9e2d4,0.9,0.5)); art.position.set(rcx-0.2,1.75,rBackZ+0.02); scene.add(art);
+  }
   const bandGlass=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),glassM);
   bandGlass.position.set((bandX0+bandX1)/2,bandY/2,0.10); scene.add(bandGlass);
   // Sprossen: Kämpfer + Pfosten
@@ -318,6 +368,7 @@ function applyTex(m,cv,fallback,rough,ns){
 }
 window.Bungalow3D={
   available(){ return !failed; },
+  dbg(){ return {scene,renderer,camera}; },
   mount(h){
     if(!ensureRenderer()) return false;
     host=h;

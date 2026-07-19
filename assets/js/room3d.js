@@ -447,12 +447,13 @@ function applyTex(m,cv,fallback,rough,ns){
   m.color.set(cv?0xffffff:fallback);
   if(rough!=null) m.roughness=cv?rough:0.9;
   if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:1.15; m.normalScale=new THREE.Vector2(s,s); } }
+    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.75; m.normalScale=new THREE.Vector2(s,s); } }
   m.envMapIntensity=cv?0.35:0.3;
   m.needsUpdate=true;
 }
 window.Room3D={
   available(){ return !failed; },
+  dbg(){ return {scene,renderer,camera}; },
   mount(h){
     if(!ensureRenderer()) return false;
     host=h;
