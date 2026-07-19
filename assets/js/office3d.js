@@ -13,7 +13,7 @@ let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
 let rafId=0, failed=false;
 
 const TARGET=new THREE.Vector3(0,4.6,1.0);
-let az=0.52, po=1.515, rad=25.0;                 // 3/4-Ansicht → Seitenfenster sofort sichtbar
+let az=0.65, po=1.505, rad=25.0;                 // 3/4-Ansicht → Front + Seitenfenster klar sichtbar
 let azT=az, poT=po, radT=rad;
 const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.34, PO_MAX=1.565, R_MIN=16, R_MAX=36;
 
