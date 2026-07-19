@@ -217,9 +217,9 @@ function buildScene(){
     // Zimmerpflanze
     const pot=new THREE.Mesh(new THREE.CylinderGeometry(0.17,0.13,0.38,18),em(0x3a3e42,0.7,0.35)); pot.position.set(rx0+0.6,0.19,-3.5); scene.add(pot);
     const fol=new THREE.Mesh(new THREE.IcosahedronGeometry(0.42,1),em(0x5f7a4c,1,0.45)); fol.position.set(rx0+0.6,0.82,-3.5); fol.scale.set(1,1.3,1); scene.add(fol);
-    // Wandbild über dem Sofa
-    const artFr=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.8,0.03),em(0x2a241f,0.5,0.25)); artFr.position.set(rcx-0.2,1.75,rBackZ+0.005); scene.add(artFr);
-    const art=new THREE.Mesh(new THREE.PlaneGeometry(1.4,0.7),em(0xe9e2d4,0.9,0.5)); art.position.set(rcx-0.2,1.75,rBackZ+0.02); scene.add(art);
+    // Wandbild über dem Sofa — Rahmen und Bild klar in der Tiefe getrennt (kein Z-Flackern)
+    const artFr=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.8,0.04),em(0x2a241f,0.5,0.25)); artFr.position.set(rcx-0.2,1.75,rBackZ+0.05); scene.add(artFr);
+    const art=new THREE.Mesh(new THREE.PlaneGeometry(1.36,0.66),em(0xe9e2d4,0.9,0.5)); art.position.set(rcx-0.2,1.75,rBackZ+0.09); scene.add(art);
   }
   const bandGlass=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),glassM);
   bandGlass.position.set((bandX0+bandX1)/2,bandY/2,0.10); scene.add(bandGlass);
