@@ -4,7 +4,7 @@
 // beleuchteter Lobby, grosser Vorplatz, Gräser-Beete, Stadt-Kulisse.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=40';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=41';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 
@@ -170,8 +170,11 @@ function buildScene(){
   desk.position.set(0,0.5,-0.9); scene.add(desk);
   const entFrame=new THREE.Mesh(new THREE.BoxGeometry(5.9,3.35,0.10),mat(0x3a3e43,0.55,0.2));
   entFrame.position.set(0,1.675,0.05); scene.add(entFrame);
+  // beleuchtete Lobby mit Raumtiefe hinter der Glasfront (statt flach-dunklem Glas)
+  const lobbyInt=new THREE.Mesh(new THREE.PlaneGeometry(5.7,3.2),interiorRoom(5.7,3.2,4.2,2.1,'office'));
+  lobbyInt.position.set(0,1.65,0.07); scene.add(lobbyInt);
   const entGlassM=new THREE.MeshPhysicalMaterial({color:0xdfe6e8,roughness:0.04,metalness:0,
-    transparent:true,opacity:0.30,envMapIntensity:1.0});
+    transparent:true,opacity:0.24,envMapIntensity:1.0});
   const entGlass=new THREE.Mesh(new THREE.PlaneGeometry(5.7,3.2),entGlassM);
   entGlass.position.set(0,1.65,0.105); scene.add(entGlass);
   [[-0.85],[0.85],[-2.0],[2.0]].forEach(([x])=>{

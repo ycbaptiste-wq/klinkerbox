@@ -4,7 +4,7 @@
 // Stehleuchte, Deko. Per Maus/Touch drehbar (Orbit mit Grenzen), Zoom per
 // Rad. Environment-Lighting + Soft-Shadows für einen fotonahen Look.
 import * as THREE from './three.module.min.js';
-import { buildEnv, normalFromCanvas, addVignette } from './scene3d-lib.js?v=40';
+import { buildEnv, normalFromCanvas, addVignette } from './scene3d-lib.js?v=41';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 let renderer=null, scene=null, camera=null, host=null, ro=null;

@@ -4,7 +4,7 @@
 // Giebelseiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 // Orbit + Zoom wie beim Bungalow/Innenraum.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=40';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=41';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -82,10 +82,10 @@ function gableWallGeo(depth,eave,ridge){
   return g;
 }
 // Fenster mit weissem Rahmen, Glas, Sims und dunklem Rollladen-Kasten
-function makeWindow(parent,x,y,w,h,glassM,withBox){
+function makeWindow(parent,x,y,w,h,glassM,withBox,corner){
   const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.04),mat(0xf2f1ee,0.6));
   frame.position.set(x,y,0.05); parent.add(frame);           // weisser Blendrahmen
-  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.14,h-0.14),interiorRoom(w-0.14,h-0.14,1.7,x*3.7+y*1.3));
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.14,h-0.14),interiorRoom(w-0.14,h-0.14,1.7,x*3.7+y*1.3,'home',corner||0));
   inter.position.set(x,y,0.09); parent.add(inter);           // 3D-Innenraum (Interior-Mapping)
   const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.10,h-0.10),glassM);
   glass.position.set(x,y,0.105); parent.add(glass);          // reflektierendes Glas
@@ -188,11 +188,11 @@ function buildScene(){
   // ---- Fenster (weisse Rahmen, dunkle Rollladen-Kästen) ----
   const glassM=glassMaterial();
   const grp=new THREE.Group(); scene.add(grp);
-  makeWindow(grp,-2.9,4.45,1.70,1.30,glassM,true);     // OG links
-  makeWindow(grp, 0.0,4.50,0.95,1.15,glassM,true);     // OG mitte klein
-  makeWindow(grp, 2.9,4.45,1.40,1.30,glassM,true);     // OG rechts
-  makeWindow(grp,-2.9,1.95,1.70,2.30,glassM,true);     // EG links (bodentief)
-  makeWindow(grp, 2.9,2.30,1.40,1.50,glassM,true);     // EG rechts
+  makeWindow(grp,-2.9,4.45,1.70,1.30,glassM,true,-1);   // OG links → Seitenfenster links
+  makeWindow(grp, 0.0,4.50,0.95,1.15,glassM,true, 0);   // OG mitte klein
+  makeWindow(grp, 2.9,4.45,1.40,1.30,glassM,true, 1);   // OG rechts → Seitenfenster rechts
+  makeWindow(grp,-2.9,1.95,1.70,2.30,glassM,true,-1);   // EG links (bodentief)
+  makeWindow(grp, 2.9,2.30,1.40,1.50,glassM,true, 1);   // EG rechts
   // Seitenfenster (Giebelwände links/rechts): je zwei Achsen, OG + EG
   [-1,1].forEach(s=>{
     const sg=new THREE.Group(); sg.rotation.y=s*Math.PI/2; sg.position.set(s*HW/2,0,-HD/2); scene.add(sg);
@@ -207,12 +207,19 @@ function buildScene(){
   portal.position.set(0,1.475,0.03); scene.add(portal);
   const portalIn=new THREE.Mesh(new THREE.BoxGeometry(1.84,2.80,0.06),mat(0x6e6a64,0.95));
   portalIn.position.set(0,1.40,0.075); scene.add(portalIn);
-  const door=new THREE.Mesh(new THREE.BoxGeometry(1.02,2.35,0.07),mat(0x6d4a2f,0.55));
+  const door=new THREE.Mesh(new THREE.BoxGeometry(1.02,2.35,0.07),mat(0x5a3d29,0.5));
   door.position.set(-0.28,1.175,0.115); scene.add(door);
+  // vertiefte Türfüllungen (Paneele) + Edelstahl-Stossgriff → wirkt wie eine echte Haustür
+  const panelM=mat(0x49301f,0.55);
+  [0.62,-0.02,-0.62].forEach(dy=>{ const pn=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.52,0.015),panelM);
+    pn.position.set(-0.28,1.175+dy,0.151); scene.add(pn); });
+  const dBar=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,1.3,10),mat(0xc6c9cb,0.3,0.85));
+  dBar.position.set(0.06,1.175,0.17); scene.add(dBar);
+  // beleuchteter Flur hinter dem Seitenteil (statt flach-schwarzem Glas)
+  const dSideInt=new THREE.Mesh(new THREE.PlaneGeometry(0.42,2.35),interiorRoom(0.42,2.35,1.7,7.3,'home'));
+  dSideInt.position.set(0.52,1.175,0.112); scene.add(dSideInt);
   const doorGlass=new THREE.Mesh(new THREE.PlaneGeometry(0.42,2.35),glassM);
-  doorGlass.position.set(0.52,1.175,0.115); scene.add(doorGlass);
-  const dHandle=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.30,8),mat(0xb9bcbe,0.3,0.8));
-  dHandle.position.set(0.10,1.15,0.16); dHandle.rotation.x=Math.PI/2; scene.add(dHandle);
+  doorGlass.position.set(0.52,1.175,0.132); scene.add(doorGlass);
   const step1=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.14,0.9),mat(0xc9c6c0,0.85));
   step1.position.set(0,0.07,0.55); step1.castShadow=true; step1.receiveShadow=true; scene.add(step1);
   const step2=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.07,1.2),mat(0xc4c1bb,0.85));

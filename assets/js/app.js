@@ -410,6 +410,8 @@
       zoneData[k]=z; });
     if(d.bld) mixBuilding=d.bld;
     loadActive(zoneData[activeZone]?activeZone:'all_facade'); genLayout(); zoneData[activeZone].layout=mixLayout; zoneData[activeZone].seq=mixSeq; zoneData[activeZone].wild=wildOff;
+    // Einzelstein-Zuschnitte nachziehen — sonst malt die Nahansicht mit den rohen Mehrstein-Fotos
+    Object.values(zoneData).forEach(z=>z.mix.forEach(m=>makeBrick(m.p,()=>{ if(!$('#mixer').hidden) refreshWall(); })));
     updateFab(); if(!$('#mixer').hidden) renderMixer();
   }catch(e){} }
   let mixLoaded=false;   // Persistenz erst nach dem Init-Restore aktiv (sonst überschreibt der Startzustand den Speicher)
@@ -703,13 +705,16 @@
   function paintCourses(cx,W,H,map,fam,bed,head){
     // Seitenverhältnis aus der ECHTEN Steingrösse (falls parsebar), sonst Familien-Default
     const rf=(mix&&mix.length)?fmtOf(mix[0].p):null, ar=(rf&&rf.ar)||FAM_AR[fam]||3.4;
-    const bw=W*(FAM_BW[fam]||15.6)/100/texDiv, bh=bw/ar;
+    // Nahansicht (texDiv=1): Steinbreite massstäblich zur realen Länge — ~1.55 m sichtbare Wand
+    const bw=(texDiv===1 && rf && rf.len)? W*rf.len/1.55 : W*(FAM_BW[fam]||15.6)/100/texDiv, bh=bw/ar;
     const rows=Math.ceil(H/(bh+bed))+1, cols=Math.ceil(W/(bw+head))+2, sq=(fam==='square');
     for(let r=0;r<rows;r++){ const off=(sq?0:bondOffset(r))*(bw+head), y=r*(bh+bed);
       for(let c=-1;c<cols;c++){ const {im,b}=pickCell(map,c,r); drawUnit(cx,im,c*(bw+head)-off,y,bw,bh,b); } }
   }
   function paintSquare(cx,W,H,map,gap){
-    const n=Math.max(9,Math.round(3*texDiv)), tw=(W-(n+1)*gap)/n, rows=Math.ceil(H/(tw+gap))+1;
+    const rf=(mix&&mix.length)?fmtOf(mix[0].p):null;
+    const n=(texDiv===1)? Math.max(3,Math.round(1.55/((rf&&rf.len)||REAL.sq))) : Math.max(9,Math.round(3*texDiv));
+    const tw=(W-(n+1)*gap)/n, rows=Math.ceil(H/(tw+gap))+1;
     for(let r=0;r<rows;r++) for(let c=0;c<n;c++){ const {im,b}=pickCell(map,c,r);
       drawUnit(cx,im,gap+c*(tw+gap),gap+r*(tw+gap),tw,tw,b); }
   }
@@ -1278,7 +1283,7 @@
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=46', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=47', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)

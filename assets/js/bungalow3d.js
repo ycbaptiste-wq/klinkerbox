@@ -4,7 +4,7 @@
 // Flachdach mit Attika, Vordach mit Stütze, dunkle Holztür, Glasfront,
 // Pflanzkübel, Kiesbeete, Gartenmauern, Himmel. Orbit + Zoom wie innen.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=40';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=41';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -168,8 +168,8 @@ function buildScene(){
   const bandX0=-0.9, bandX1=6.0, bandY=2.62;
   const bandFrame=new THREE.Mesh(new THREE.BoxGeometry(bandX1-bandX0+0.16,bandY+0.12,0.05),mat(0x2e3134,0.5,0.2));
   bandFrame.position.set((bandX0+bandX1)/2,(bandY)/2+0.02,0.045); scene.add(bandFrame);
-  // Wohnraum hinter der Glasfront (Interior-Mapping → echte Raumtiefe)
-  const bandInt=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),interiorRoom(bandX1-bandX0,bandY-0.10,3.4,5.0));
+  // grosszügiger, offener Wohnraum hinter der Glasfront (tiefer Raum → wirkt luxuriös)
+  const bandInt=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),interiorRoom(bandX1-bandX0,bandY-0.10,6.5,5.0,'home'));
   bandInt.position.set((bandX0+bandX1)/2,bandY/2,0.085); scene.add(bandInt);
   const bandGlass=new THREE.Mesh(new THREE.PlaneGeometry(bandX1-bandX0,bandY-0.10),glassM);
   bandGlass.position.set((bandX0+bandX1)/2,bandY/2,0.10); scene.add(bandGlass);

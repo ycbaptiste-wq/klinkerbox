@@ -197,7 +197,7 @@ void main(){
   gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
 }`;
 const INT_FRAG=`precision highp float;
-uniform float uW,uH,uD,uSeed,uKind;
+uniform float uW,uH,uD,uSeed,uKind,uCorner;
 varying vec3 vP;varying vec3 vC;
 float hash(float n){ return fract(sin(n)*43758.5453123); }
 void main(){
@@ -238,6 +238,7 @@ void main(){
   float t=min(tz,min(tx,ty));
   vec3 hit=ro+rd*t;
   float dz=clamp(-hit.z/uD,0.0,1.0);
+  float dm=clamp(-hit.z/4.5,0.0,1.0);   // Distanz-Abdunklung in METERN — grosse Räume bleiben hinten hell
   // Wandton variiert je Fenster: greige / warmweiss / terracotta / salbei
   float hue=hash(uSeed*3.9+2.2);
   vec3 wallA = hue<0.25? vec3(0.20,0.17,0.14) : hue<0.5? vec3(0.215,0.195,0.17) : hue<0.75? vec3(0.225,0.16,0.125) : vec3(0.175,0.19,0.155);
@@ -253,31 +254,61 @@ void main(){
     float dl=length(hit.xy-lp);
     col+=lc*lampOn*0.8*exp(-dl*dl*(16.0/(uW*uW+0.4)));
     col+=lc*lampOn*1.6*exp(-dl*dl*(420.0/(uW*uW+0.4)));
+    if(!office && uW>3.0){
+      // grosse Wohnräume (Glasfront): zweite Leuchte spiegelbildlich
+      float dl2=length(hit.xy-vec2(-lp.x,lp.y));
+      col+=lc*0.7*exp(-dl2*dl2*(16.0/(uW*uW+0.4)));
+      col+=lc*1.4*exp(-dl2*dl2*(420.0/(uW*uW+0.4)));
+    }
+    // Durchblick: helles Fenster in der Rueckwand (Garten unten / Himmel oben) → Haus wirkt durchsichtig
+    float bwx=(hash(uSeed*5.1)-0.5)*0.38*uW;
+    float bwHW=uW*(office?0.24:0.19), bwHH=uH*0.24, bwCY=uH*0.12;
+    vec2 bwd=abs(hit.xy-vec2(bwx,bwCY));
+    bool inBW=bwd.x<bwHW && bwd.y<bwHH;
+    if(inBW){
+      if(office){ float gv=clamp((hit.y-bwCY)/bwHH*0.5+0.5,0.0,1.0);
+        col=mix(vec3(0.58,0.63,0.70),vec3(0.80,0.86,0.94),gv); }        // Büro: Stadt/Himmel
+      else { float gv=clamp((hit.y-bwCY)/bwHH*0.5+0.5,0.0,1.0);
+        col=mix(vec3(0.50,0.60,0.40),vec3(0.76,0.84,0.94),gv); }        // Wohnen: Garten → Himmel
+      if(bwd.x>bwHW-uW*0.013||bwd.y>bwHH-uH*0.019) col=vec3(0.66,0.64,0.59); // heller Rahmen
+      else if(abs(hit.x-bwx)<uW*0.006||abs(hit.y-bwCY)<uH*0.008) col*=0.72; // Sprossenkreuz
+    }
     float fx=(hash(uSeed*3.3)*0.4-0.2)*uW;
     float fw=office?0.5:0.34;
-    if(hit.y<-h2+uH*(office?0.26:0.34) && abs(hit.x-fx)<uW*fw*0.5) col*=office?0.55:0.4;
     if(office){
-      // Whiteboard/Screen an der Rueckwand + Monitor-Reihe auf Schreibtischhoehe
-      float wx=(hash(uSeed*11.3)-0.5)*0.4*uW;
-      if(hash(uSeed*12.7)>0.4 && abs(hit.x-wx)<uW*0.16 && abs(hit.y-uH*0.12)<uH*0.14)
-        col=mix(col,vec3(0.55,0.56,0.57),0.92);
+      // Screen/Whiteboard NEBEN dem Fenster
+      float wx=bwx+(hash(uSeed*11.3)>0.5?1.0:-1.0)*uW*0.36;
+      if(!inBW && hash(uSeed*12.7)>0.5 && abs(hit.x-wx)<uW*0.11 && abs(hit.y-uH*0.14)<uH*0.12)
+        col=mix(col,vec3(0.55,0.56,0.57),0.9);
+    } else {
+      float px=bwx+(hash(uSeed*6.1)>0.5?1.0:-1.0)*uW*0.34;
+      if(!inBW && abs(hit.x-px)<uW*0.075 && abs(hit.y-uH*0.14)<uH*0.12) col=mix(col,vec3(0.42,0.37,0.29),0.9);
+    }
+    // Vordergrund unten: Sofa/Schreibtisch-Silhouette + Monitore/Pflanze — VOR dem Fenster
+    if(hit.y<-h2+uH*(office?0.26:0.34) && abs(hit.x-fx)<uW*fw*0.5) col*=office?0.5:0.4;
+    if(office){
       float my=-h2+uH*0.30;
       if(abs(hit.y-my)<uH*0.055 && (abs(hit.x-fx-uW*0.10)<uW*0.05||abs(hit.x-fx+uW*0.02)<uW*0.05||abs(hit.x-fx+uW*0.14)<uW*0.05))
         col=vec3(0.5,0.68,0.95)*(0.6+lampOn);
-    } else {
-      float px=(hash(uSeed*6.1)-0.5)*0.5*uW;
-      if(abs(hit.x-px)<uW*0.085 && abs(hit.y-uH*0.10)<uH*0.13) col=mix(col,vec3(0.42,0.37,0.29),0.9);
-      if(hash(uSeed*8.3)>0.45){
-        float qx=(hash(uSeed*9.7)>0.5?1.0:-1.0)*uW*0.30;
-        vec2 q=hit.xy-vec2(qx,-h2+uH*0.30);
-        float leaf=min(min(length(q*vec2(1.0,1.4)),length((q-vec2(uW*0.05,uH*0.07))*vec2(1.2,1.5))),length((q+vec2(uW*0.05,-uH*0.05))*vec2(1.2,1.5)));
-        if(leaf<uW*0.085) col=vec3(0.09,0.14,0.08);
-        if(abs(q.x)<uW*0.035 && q.y<-uH*0.10 && q.y>-uH*0.20) col=vec3(0.16,0.11,0.08);
-      }
+    } else if(hash(uSeed*8.3)>0.5){
+      float qx=(hash(uSeed*9.7)>0.5?1.0:-1.0)*uW*0.36;
+      vec2 q=hit.xy-vec2(qx,-h2+uH*0.28);
+      float leaf=min(min(length(q*vec2(1.0,1.4)),length((q-vec2(uW*0.05,uH*0.07))*vec2(1.2,1.5))),length((q+vec2(uW*0.05,-uH*0.05))*vec2(1.2,1.5)));
+      if(leaf<uW*0.08) col=vec3(0.09,0.14,0.08);
+      if(abs(q.x)<uW*0.03 && q.y<-uH*0.08 && q.y>-uH*0.18) col=vec3(0.16,0.11,0.08);
     }
   } else if(tx<=ty){
     float v=(hit.y+h2)/uH;
-    col=mix(wallA*0.8,wallB*0.85,v)*(1.0-0.35*dz);
+    col=mix(wallA*0.8,wallB*0.85,v)*(1.0-0.35*dm);
+    // Eckzimmer: Seitenfenster mit Tageslicht auf der passenden Seitenwand
+    if((uCorner>0.5 && hit.x>0.0)||(uCorner<-0.5 && hit.x<0.0)){
+      float zz=-hit.z;
+      if(zz>uD*0.22 && zz<uD*0.72 && abs(hit.y)<h2*0.74){
+        float bx=min(zz-uD*0.22, uD*0.72-zz), by=h2*0.74-abs(hit.y);
+        if(bx<uD*0.045||by<h2*0.10) col=vec3(0.82,0.83,0.81);
+        else col=mix(vec3(0.70,0.78,0.86),vec3(0.95,0.96,0.93),(hit.y+h2*0.74)/(1.48*h2));
+      }
+    }
   } else if(rd.y<0.0){
     // Boden: Holzdielen mit Lampen-Lichtfleck (Wohnen) / Teppichfliesen (Buero)
     if(office){
@@ -289,8 +320,10 @@ void main(){
       float pk=floor(hit.x/0.16);
       col=vec3(0.16,0.115,0.08)*(0.85+0.3*hash(pk*13.7+uSeed));
       if(fract(hit.x/0.16)<0.06) col*=0.75;
-      col*=(1.0-0.45*dz);
+      col*=(1.0-0.5*dm);
       col+=vec3(0.5,0.36,0.19)*lampOn*0.25*exp(-length(hit.xz-vec2(lp.x,-uD*0.55))*3.0);
+      if(abs(uCorner)>0.5){ float wx=uCorner>0.0?w2:-w2;   // Lichtschein des Seitenfensters
+        col+=vec3(0.26,0.28,0.27)*exp(-(abs(hit.x-wx)*1.6+abs(-hit.z-uD*0.47)*1.1)); }
     }
   } else {
     // Decke: Rasterdecke mit Leuchtpanels (Buero) / warmweiss (Wohnen)
@@ -304,9 +337,11 @@ void main(){
   col*=(1.0-0.3*dz)*lit;
   gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(0.4545)),1.0);
 }`;
-export function interiorRoom(w,h,depth,seed,kind){
+// corner: -1 = Fenster nahe der linken Gebäudeecke, +1 = rechte Ecke (→ Seitenfenster im Raum), 0 = keins
+export function interiorRoom(w,h,depth,seed,kind,corner){
   return new THREE.ShaderMaterial({
-    uniforms:{uW:{value:w},uH:{value:h},uD:{value:depth||1.7},uSeed:{value:seed!=null?seed:1},uKind:{value:kind==='office'?1:0}},
+    uniforms:{uW:{value:w},uH:{value:h},uD:{value:depth||1.7},uSeed:{value:seed!=null?seed:1},
+      uKind:{value:kind==='office'?1:0},uCorner:{value:corner||0}},
     vertexShader:INT_VERT, fragmentShader:INT_FRAG
   });
 }

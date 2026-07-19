@@ -4,7 +4,7 @@
 // Portikus mit Freitreppe und Geländer, Buchs-Vorgarten mit Metallzaun.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=40';
+import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=41';
 
 const MOBILE=matchMedia('(pointer:coarse)').matches;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -88,14 +88,15 @@ function hipRoofGeo(w,d,rise,ridgeHalf){
 function villaWindow(parent,x,y,w,h,glassM,pediment){
   const sur=new THREE.Mesh(new THREE.BoxGeometry(w+0.28,h+0.28,0.06),mat(0xeceae6,0.7));
   sur.position.set(x,y,0.03); parent.add(sur);
-  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),interiorRoom(w-0.02,h-0.02,2.0,x*2.9+y*1.7));
-  inter.position.set(x,y,0.055); parent.add(inter);          // 3D-Innenraum (Interior-Mapping)
+  // Innenraum VOR die Fassung (sonst verdeckt die weisse Fassungs-Front den Raum → wirkte flach)
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),interiorRoom(w-0.02,h-0.02,2.2,x*2.9+y*1.7,'home'));
+  inter.position.set(x,y,0.075); parent.add(inter);           // 3D-Innenraum (Interior-Mapping)
   const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),glassM);
-  glass.position.set(x,y,0.088); parent.add(glass);           // reflektierendes Glas
+  glass.position.set(x,y,0.096); parent.add(glass);           // reflektierendes Glas
   const mv=new THREE.Mesh(new THREE.BoxGeometry(0.05,h-0.1,0.02),mat(0xf4f3f0,0.6));
-  mv.position.set(x,y,0.1); parent.add(mv);
+  mv.position.set(x,y,0.108); parent.add(mv);
   const mh=new THREE.Mesh(new THREE.BoxGeometry(w-0.1,0.05,0.02),mat(0xf4f3f0,0.6));
-  mh.position.set(x,y+h*0.18,0.1); parent.add(mh);
+  mh.position.set(x,y+h*0.18,0.108); parent.add(mh);
   const sill=new THREE.Mesh(new THREE.BoxGeometry(w+0.34,0.07,0.14),mat(0xe6e4e0,0.7));
   sill.position.set(x,y-h/2-0.17,0.07); sill.castShadow=true; parent.add(sill);
   if(pediment){
