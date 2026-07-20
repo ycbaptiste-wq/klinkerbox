@@ -391,8 +391,9 @@
   // (Muster, Innen, Aussen zeigen dieselbe Auswahl — Fassade bzw. Boden gilt überall)
   function blankZone(){ return {mix:[],cat:null,shape:null,bond:'run',bed:'normal',head:'normal',joint:'#9d988f',order:0,layout:[],seq:[0],wild:[]}; }
   let zoneData={all_facade:blankZone(),all_floor:blankZone()};
-  let activeZone='all_facade', mixScene='exterior', mixSurface='facade', mixBuilding='efh';
+  let activeZone='all_facade', mixScene='exterior', mixSurface='facade', mixBuilding='efh', mixRoomType='living';
   let mixTab='design', mortarsAll=false, stoneQ='';   // Seitenleisten-Tab · Fugenfarben-Ansicht · Steine-Suche
+  const INT_KEY={living:'interior',office:'roomoffice',hall:'roomhall'};   // Innenraum-Typ → 3D-Modul-Schlüssel
   const sceneNow=()=> (mixView==='interior')?'interior':(mixView==='exterior')?'exterior':mixScene;
   const zoneKey=(scene,surf)=> 'all_'+surf;
   const surfaceOf=cat=> (cat==='mauer')?'facade':'floor';   // Mauerklinker → Fassade · Pflaster/Tonplatten → Boden
@@ -1175,24 +1176,27 @@
     const sceneView=(mixView==='exterior'||mixView==='interior');
     if(!mix.length && !sceneView){ host.innerHTML=''; return; }
     saveActive();
-    // Innen-Ansicht: echter 3D-Raum (WebGL). Modul bei Bedarf laden.
-    if(mixView==='interior' && !window.Room3D){ load3D('interior',host); return; }
-    if(mixView==='interior' && window.Room3D && window.Room3D.available()){
-      stopAll3D('Room3D');
-      const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
-      mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
-      ensureImgObjs(map=>{
-        if(mixView!=='interior') return;              // Ansicht wurde inzwischen gewechselt
-        // Rückwand 6.4m + rechte Wand 8.4m (eigene Textur → kein Kachel-Nahtfehler),
-        // Steingrösse massstäblich (Riemchen ~24cm wie Vollstein)
-        const wFam=(zoneData[zoneKey('interior','facade')]||{}).shape||'brick';
-        const wLen=(zoneFmt(zoneKey('interior','facade'))||{}).len, flLenI=(zoneFmt(zoneKey('interior','floor'))||{}).len;
-        const wallCv=zoneTexFull(zoneKey('interior','facade'),1800,850,facadeDiv(6.4,wFam,wLen),map);
-        const wallSideCv=zoneTexFull(zoneKey('interior','facade'),2100,760,facadeDiv(8.4,wFam,wLen),map);
-        const fShape=(zoneData[zoneKey('interior','floor')]||{}).shape||'brick';
-        const floorCv=zoneTexFull(zoneKey('interior','floor'),1600,2100,floorDiv(6.4,fShape,flLenI),map);
-        if(window.Room3D.mount(host)) window.Room3D.setTextures(wallCv,wallSideCv,floorCv);
-      }, allP);
+    // Innen-Ansicht: echter 3D-Raum (WebGL) — Wohnzimmer · Büro · Maisonette-Gang.
+    if(mixView==='interior'){
+      const ik=INT_KEY[mixRoomType]||'interior', IG=window[GLOB3D[ik]];
+      if(!IG){ load3D(ik,host); return; }
+      if(IG.available()){
+        stopAll3D(GLOB3D[ik]);
+        const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
+        mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
+        ensureImgObjs(map=>{
+          if(mixView!=='interior') return;              // Ansicht wurde inzwischen gewechselt
+          // Rückwand 6.4m + rechte Wand 8.4m (eigene Textur → kein Kachel-Nahtfehler),
+          // Steingrösse massstäblich (Riemchen ~24cm wie Vollstein)
+          const wFam=(zoneData[zoneKey('interior','facade')]||{}).shape||'brick';
+          const wLen=(zoneFmt(zoneKey('interior','facade'))||{}).len, flLenI=(zoneFmt(zoneKey('interior','floor'))||{}).len;
+          const wallCv=zoneTexFull(zoneKey('interior','facade'),1800,850,facadeDiv(6.4,wFam,wLen),map);
+          const wallSideCv=zoneTexFull(zoneKey('interior','facade'),2100,760,facadeDiv(8.4,wFam,wLen),map);
+          const fShape=(zoneData[zoneKey('interior','floor')]||{}).shape||'brick';
+          const floorCv=zoneTexFull(zoneKey('interior','floor'),1600,2100,floorDiv(6.4,fShape,flLenI),map);
+          if(IG.mount(host)) IG.setTextures(wallCv,wallSideCv,floorCv);
+        }, allP);
+      }
       return;
     }
     // Aussen-Ansicht: 3D-Gebäude — Fassade/Boden als echte Texturen. Modul bei Bedarf laden.
@@ -1268,7 +1272,9 @@
     }, allP);
   }
   // 3D-Module laden asynchron (ES-Module) → betroffene Ansicht neu rendern, sobald bereit
-  window.addEventListener('room3d-ready',()=>{ if(mixView==='interior') refreshWall(); });
+  window.addEventListener('room3d-ready',()=>{ if(mixView==='interior'&&mixRoomType==='living') refreshWall(); });
+  window.addEventListener('roomoffice3d-ready',()=>{ if(mixView==='interior'&&mixRoomType==='office') refreshWall(); });
+  window.addEventListener('roomhall3d-ready',()=>{ if(mixView==='interior'&&mixRoomType==='hall') refreshWall(); });
   window.addEventListener('bungalow3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='bungalow') refreshWall(); });
   window.addEventListener('efh3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='efh') refreshWall(); });
   window.addEventListener('villa3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='villa') refreshWall(); });
@@ -1276,14 +1282,14 @@
   window.addEventListener('friesen3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='friesen') refreshWall(); });
   // three.js + Szenen-Module werden ERST beim Öffnen der jeweiligen 3D-Ansicht geladen
   // (nicht beim Seitenaufbau) → deutlich schnellerer Erststart.
-  const MOD3D={interior:'room3d',bungalow:'bungalow3d',efh:'efh3d',villa:'villa3d',office:'office3d',friesen:'friesen3d'};
-  const GLOB3D={interior:'Room3D',bungalow:'Bungalow3D',efh:'Efh3D',villa:'Villa3D',office:'Office3D',friesen:'Friesen3D'};
+  const MOD3D={interior:'room3d',roomoffice:'roomoffice3d',roomhall:'roomhall3d',bungalow:'bungalow3d',efh:'efh3d',villa:'villa3d',office:'office3d',friesen:'friesen3d'};
+  const GLOB3D={interior:'Room3D',roomoffice:'RoomOffice3D',roomhall:'RoomHall3D',bungalow:'Bungalow3D',efh:'Efh3D',villa:'Villa3D',office:'Office3D',friesen:'Friesen3D'};
   const _load3D={}, L3D={de:'3D wird geladen …',fr:'Chargement 3D …',it:'Caricamento 3D …',en:'Loading 3D …'};
   function load3D(key,host){
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=55', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=58', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -1340,11 +1346,18 @@
     el.innerHTML=`<div class="mixview__row"><span class="mixview__lbl">${M.lbl_view[lang]}</span>${views.map(o=>`<button class="mixview__b${o[0]===mixView?' is-active':''}" aria-pressed="${o[0]===mixView}" data-v="${o[0]}">${o[1]}</button>`).join('')}</div>`;
     el.querySelectorAll('.mixview__b[data-v]').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
   }
-  // Gebäudewahl als Bild-Thumbnails direkt auf dem 3D-Canvas — immer verfügbar
+  // Gebäude- bzw. Raumwahl als Bild-Thumbnails direkt auf dem 3D-Canvas
   function renderBld(){
     const el=$('#mixBld'); if(!el) return;
-    if(mixView!=='exterior'){ el.hidden=true; return; }
     const M=MIX();
+    if(mixView==='interior'){        // Innenraum-Typ: Wohnzimmer · Büro · Maisonette-Gang
+      el.hidden=false;
+      el.innerHTML=['living','office','hall'].map(k=>`<button class="mixbld__b${mixRoomType===k?' is-active':''}" aria-pressed="${mixRoomType===k}" data-r="${k}">
+        <span class="mixbld__im" style="background-image:url('assets/img/room/${k}.webp')"></span><span>${M['r_'+k][lang]}</span></button>`).join('');
+      el.querySelectorAll('.mixbld__b').forEach(b=>b.onclick=()=>{ mixRoomType=b.dataset.r; renderMixer(); });
+      return;
+    }
+    if(mixView!=='exterior'){ el.hidden=true; return; }
     el.hidden=false;
     el.innerHTML=['efh','villa','bungalow','office','friesen'].map(k=>`<button class="mixbld__b${mixBuilding===k?' is-active':''}" aria-pressed="${mixBuilding===k}" data-b="${k}">
       <span class="mixbld__im" style="background-image:url('assets/img/bld/${k}.webp')"></span><span>${M['b_'+k][lang]}</span></button>`).join('');
@@ -1398,7 +1411,7 @@
   function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); stopAll3D(); }
   // 3D-Render-Loops stoppen (alle ausser dem aktiven Modul) — Akku/GPU-Last, iOS-Kontextlimit
   function stopAll3D(except){
-    ['Room3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
+    ['Room3D','RoomOffice3D','RoomHall3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
       const m=window[n]; if(m && m.stop && n!==except) m.stop();
     });
   }
