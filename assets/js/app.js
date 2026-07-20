@@ -1350,12 +1350,17 @@
   function renderBld(){
     const el=$('#mixBld'); if(!el) return;
     const M=MIX();
-    if(mixView==='interior'){        // Innenraum-Typ: Wohnzimmer · Büro · Maisonette-Gang
+    if(mixView==='interior'){        // Innenraum-Typ: Büro + Maisonette-Gang vorübergehend deaktiviert → nur Wohnzimmer
+      mixRoomType='living';
+      el.hidden=true;                // Selektor ausgeblendet (nur ein Raumtyp sichtbar)
+      return;
+      /* --- Büro + Gang vorübergehend versteckt (Code bleibt für spätere Reaktivierung erhalten) ---
       el.hidden=false;
       el.innerHTML=['living','office','hall'].map(k=>`<button class="mixbld__b${mixRoomType===k?' is-active':''}" aria-pressed="${mixRoomType===k}" data-r="${k}">
         <span class="mixbld__im" style="background-image:url('assets/img/room/${k}.webp')"></span><span>${M['r_'+k][lang]}</span></button>`).join('');
       el.querySelectorAll('.mixbld__b').forEach(b=>b.onclick=()=>{ mixRoomType=b.dataset.r; renderMixer(); });
       return;
+      */
     }
     if(mixView!=='exterior'){ el.hidden=true; return; }
     el.hidden=false;
