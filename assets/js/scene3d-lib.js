@@ -152,28 +152,34 @@ export function normalFromCanvas(cv,maxW){
   }
   const jr=(((bestK>>8)&15)<<4)+8, jg=(((bestK>>4)&15)<<4)+8, jb=((bestK&15)<<4)+8;
   const isJoint=bestN>N*0.06;
-  // Höhenfeld 0..1
-  const h=new Float32Array(N);
+  // Höhenfeld 0..1 + Helligkeit + Fugen-Flag (für Relief pro Stein)
+  const h=new Float32Array(N), lum=new Float32Array(N); const jointPx=new Uint8Array(N);
   for(let p=0,i=0;p<N;p++,i+=4){
     const r=d[i],g=d[i+1],b=d[i+2];
-    let v=0.35+0.65*((r*0.299+g*0.587+b*0.114)/255);
-    if(isJoint && Math.abs(r-jr)<26 && Math.abs(g-jg)<26 && Math.abs(b-jb)<26) v=0.10;
+    const L=(r*0.299+g*0.587+b*0.114)/255;
+    lum[p]=L;
+    let v=0.30+0.70*L;
+    if(isJoint && Math.abs(r-jr)<26 && Math.abs(g-jg)<26 && Math.abs(b-jb)<26){ v=0.08; jointPx[p]=1; }
     h[p]=v;
   }
-  // 3×3-Blur gegen Pixelrauschen
-  const hb=new Float32Array(N);
+  // 3×3-Blur von Höhe UND Helligkeit (gegen Pixelrauschen)
+  const hb=new Float32Array(N), lb=new Float32Array(N);
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){
-    let s=0,n=0;
+    let s=0,sl=0,n=0;
     for(let dy=-1;dy<=1;dy++){ const yy=y+dy; if(yy<0||yy>=H) continue;
-      for(let dx=-1;dx<=1;dx++){ const xx=x+dx; if(xx<0||xx>=W) continue; s+=h[yy*W+xx]; n++; } }
-    hb[y*W+x]=s/n;
+      for(let dx=-1;dx<=1;dx++){ const xx=x+dx; if(xx<0||xx>=W) continue; const q=yy*W+xx; s+=h[q]; sl+=lum[q]; n++; } }
+    hb[y*W+x]=s/n; lb[y*W+x]=sl/n;
   }
-  // Sobel → Normal (Y+ oben; Canvas-y läuft nach unten, Textur ist geflippt)
-  const out=c.createImageData(W,H), od=out.data, K=2.4;
+  // Sobel → Normal. Relief pro Pixel nach Helligkeit skaliert: DUNKLE Steine flacher
+  // (stehen weniger weit hervor), helle Steine kräftiger; Fugen(kanten) bleiben tief.
+  const out=c.createImageData(W,H), od=out.data, K=2.6;
   for(let y=0;y<H;y++){ const y0=Math.max(0,y-1)*W, y1=Math.min(H-1,y+1)*W, row=y*W;
     for(let x=0;x<W;x++){
       const x0=Math.max(0,x-1), x1=Math.min(W-1,x+1);
-      const gx=(hb[row+x1]-hb[row+x0])*K, gy=(hb[y1+x]-hb[y0+x])*K;
+      let gx=(hb[row+x1]-hb[row+x0])*K, gy=(hb[y1+x]-hb[y0+x])*K;
+      const nearJoint = jointPx[row+x]||jointPx[row+x0]||jointPx[row+x1]||jointPx[y0+x]||jointPx[y1+x];
+      const rf = nearJoint ? 1.0 : (0.28 + 0.9*lb[row+x]);   // dunkler Stein → weniger Relief
+      gx*=rf; gy*=rf;
       const inv=1/Math.sqrt(gx*gx+gy*gy+1), i=(row+x)*4;
       od[i  ]=Math.round((-gx*inv*0.5+0.5)*255);
       od[i+1]=Math.round(( gy*inv*0.5+0.5)*255);
