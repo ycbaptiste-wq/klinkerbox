@@ -536,7 +536,8 @@ a.cinfo__val:hover{color:var(--clay)}
   .mixview__b--sm{font-size:.74rem;padding:.28rem .72rem}
   .mixsuggest{padding-top:3.6rem}          /* Platz unter dem schwebenden Umschalter */
   /* Aktionsleiste (Export/Neu/Leeren) am unteren Rand gut erreichbar */
-  .mixer__actions{position:sticky;bottom:0;margin-top:1rem;padding:.7rem 0 .2rem;background:linear-gradient(to top,#fff 72%,rgba(255,255,255,0))}
+  .mixer__actions{position:sticky;bottom:0;margin-top:.6rem;padding:.7rem 0 .4rem;background:#fff;box-shadow:0 -10px 16px -7px rgba(20,15,10,.13)}
+  .mixer__list{padding-bottom:.4rem}
 }
 .toast{position:fixed;left:50%;bottom:32px;translate:-50% 20px;z-index:200;background:#1c1b19;color:#fff;
   padding:.8rem 1.3rem;border-radius:100px;font-size:.9rem;box-shadow:var(--shadow-m);opacity:0;pointer-events:none;transition:opacity .3s,translate .3s}
