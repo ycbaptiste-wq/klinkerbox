@@ -528,6 +528,10 @@ a.cinfo__val:hover{color:var(--clay)}
   .mixer__body{flex-direction:column;gap:0;height:100%;min-height:0}
   .mixer__stage{order:-1;flex:0 0 56vh;min-height:56vh;padding:0}
   .mixer__preview{min-height:0;height:100%;border-radius:0;border:none;border-bottom:1px solid var(--line)}
+  /* Gebäude-Auswahl: passt nicht auf schmale Screens → horizontal scrollbar, alle erreichbar */
+  .mixbld{left:10px;right:10px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+  .mixbld::-webkit-scrollbar{display:none}
+  .mixbld__b{flex:0 0 auto}
   .mixer__side{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:.9rem 1rem 1.6rem}
   .mixer__head{margin-bottom:.5rem}
   .mixer__title{font-size:1.25rem}
