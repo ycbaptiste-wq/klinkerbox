@@ -95,7 +95,7 @@ function buildScene(){
   sun.position.set(19,23,12);                   // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,1);
   sun.castShadow=true;
-  sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
+  sun.shadow.mapSize.set(MOBILE?1024:4096,MOBILE?1024:4096);
   sun.shadow.camera.left=-23; sun.shadow.camera.right=20;
   sun.shadow.camera.top=20;   sun.shadow.camera.bottom=-10;
   sun.shadow.camera.near=1; sun.shadow.camera.far=70;
@@ -235,9 +235,9 @@ function applyCam(hard){
 function ensureRenderer(){
   if(renderer||failed) return !failed;
   try{
-    renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer=new THREE.WebGLRenderer({antialias:!MOBILE});
     renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type=MOBILE?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure=0.72;
@@ -262,7 +262,7 @@ function ensureRenderer(){
 function sizeToHost(){
   if(!renderer||!host) return;
   const w=Math.max(220,host.clientWidth||300), h=Math.max(220,host.clientHeight||240);
-  renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
+  renderer.setPixelRatio(Math.min(MOBILE?1:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
   camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);

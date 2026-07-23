@@ -147,7 +147,7 @@ function buildScene(){
   scene.add(new THREE.AmbientLight(0xffffff,0.17));
   const sun=new THREE.DirectionalLight(0xfff1da,2.15);
   sun.position.set(-7,4.0,4.6); sun.target.position.set(1.4,0.3,1.4);
-  sun.castShadow=true; sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
+  sun.castShadow=true; sun.shadow.mapSize.set(MOBILE?1024:4096,MOBILE?1024:4096);
   sun.shadow.camera.left=-7; sun.shadow.camera.right=7; sun.shadow.camera.top=5; sun.shadow.camera.bottom=-2;
   sun.shadow.camera.near=0.5; sun.shadow.camera.far=24; sun.shadow.camera.updateProjectionMatrix();
   sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.03;
@@ -391,9 +391,9 @@ function applyCam(hard){
 function ensureRenderer(){
   if(renderer||failed) return !failed;
   try{
-    renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer=new THREE.WebGLRenderer({antialias:!MOBILE});
     renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type=MOBILE?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure=1.06;
@@ -419,7 +419,7 @@ function ensureRenderer(){
 function sizeToHost(){
   if(!renderer||!host) return;
   const w=Math.max(220,host.clientWidth||300), h=Math.max(220,host.clientHeight||240);
-  renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
+  renderer.setPixelRatio(Math.min(MOBILE?1:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
   camera.fov=(camera.aspect>1.45)?44:(camera.aspect>1.1?52:58);
