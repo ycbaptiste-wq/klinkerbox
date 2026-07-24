@@ -532,7 +532,7 @@ a.cinfo__val:hover{color:var(--clay)}
   .mixbld{left:10px;right:10px;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
   .mixbld::-webkit-scrollbar{display:none}
   .mixbld__b{flex:0 0 auto}
-  .mixer__side{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:.9rem 1rem 1.6rem}
+  .mixer__side{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;padding:.9rem 1rem 1.6rem}
   .mixer__head{margin-bottom:.5rem}
   .mixer__title{font-size:1.25rem}
   .mixview{top:9px}
@@ -541,17 +541,17 @@ a.cinfo__val:hover{color:var(--clay)}
   .mixsuggest{padding-top:3.6rem}          /* Platz unter dem schwebenden Umschalter */
   /* Aktionsleiste (Export/Neu/Leeren) am unteren Rand gut erreichbar */
   .mixer__actions{position:sticky;bottom:0;margin-top:.6rem;padding:.7rem 0 .4rem;background:#fff;box-shadow:0 -10px 16px -7px rgba(20,15,10,.13)}
-  .mixer__list{padding-bottom:.4rem}
+  .mixer__list{padding-bottom:1.4rem}
   /* --- Mobile-Bedienbarkeit (Experten-Audit) --- */
-  .mixer__stage{flex:0 0 46dvh;min-height:0}                 /* mehr Platz fuer Bedienung; dvh statt vh (Tastatur/Chrome) */
+  .mixer__stage{flex:0 0 46vh;min-height:0}                  /* mehr Platz; statische vh (dvh reflowt beim Scrollen -> Jank/Blockade) */
   .mixbld__im{width:46px;height:32px}                        /* Gebaeude-Leiste kompakter -> verdeckt Canvas weniger */
   .mixbld{padding:.3rem;-webkit-mask-image:linear-gradient(90deg,#000 90%,transparent);mask-image:linear-gradient(90deg,#000 90%,transparent)}
   .mixseg{gap:.4rem}
   .mixseg__b{min-height:40px;padding:.5rem .9rem}            /* Tippflaeche >=40px */
   .mixmortars{gap:.45rem}
   .mixmortar{width:36px;height:36px}                         /* Fugenfarben groesser */
-  .mixratio__row{grid-template-columns:24px minmax(40px,1fr) minmax(104px,1.4fr) 34px 40px;column-gap:.45rem}
-  .mixratio__sl{height:38px}                                 /* breiterer Regler + grosse Tipp-Hoehe */
+  .mixratio__row{grid-template-columns:44px minmax(36px,1fr) minmax(84px,1.3fr) 32px 40px;column-gap:.4rem}
+  .mixratio__sl{height:38px;touch-action:pan-y}             /* breiterer Regler; pan-y = vertikal scrollt, horizontal stellt ein */
   .mixchip__x{min-width:40px;min-height:40px;display:flex;align-items:center;justify-content:center;font-size:1.4rem}
 }
 .toast{position:fixed;left:50%;bottom:32px;translate:-50% 20px;z-index:200;background:#1c1b19;color:#fff;
