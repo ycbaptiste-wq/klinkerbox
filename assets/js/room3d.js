@@ -391,9 +391,9 @@ function applyCam(hard){
 function ensureRenderer(){
   if(renderer||failed) return !failed;
   try{
-    renderer=new THREE.WebGLRenderer({antialias:!MOBILE});
+    renderer=new THREE.WebGLRenderer({antialias:true});
     renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=MOBILE?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure=1.06;
@@ -419,7 +419,7 @@ function ensureRenderer(){
 function sizeToHost(){
   if(!renderer||!host) return;
   const w=Math.max(220,host.clientWidth||300), h=Math.max(220,host.clientHeight||240);
-  renderer.setPixelRatio(Math.min(MOBILE?1:2,window.devicePixelRatio||1));
+  renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
   camera.fov=(camera.aspect>1.45)?44:(camera.aspect>1.1?52:58);
