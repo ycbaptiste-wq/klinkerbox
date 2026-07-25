@@ -540,8 +540,8 @@ a.cinfo__val:hover{color:var(--clay)}
   .mixview__b--sm{font-size:.74rem;padding:.28rem .72rem}
   .mixsuggest{padding-top:3.6rem}          /* Platz unter dem schwebenden Umschalter */
   /* Aktionsleiste (Export/Neu/Leeren) am unteren Rand gut erreichbar */
-  /* Samsung Internet: position:sticky im Scroll-Container blockiert Touch-Scroll -> Footer static (scrollt mit) */
-  .mixer__actions{position:static;margin-top:.9rem;padding:.9rem 0 .5rem;border-top:1px solid var(--line);background:#fff}
+  /* Footer bleibt sichtbar (Touch-Scroll wird von data-lenis-prevent am #mixer geloest, nicht hiervon) */
+  .mixer__actions{position:sticky;bottom:0;margin-top:.6rem;padding:.7rem 0 .4rem;background:#fff;box-shadow:0 -10px 16px -7px rgba(20,15,10,.13)}
   .mixer__list{padding-bottom:1.4rem}
   /* --- Mobile-Bedienbarkeit (Experten-Audit) --- */
   .mixer__stage{flex:0 0 46vh;min-height:0}                  /* mehr Platz; statische vh (dvh reflowt beim Scrollen -> Jank/Blockade) */

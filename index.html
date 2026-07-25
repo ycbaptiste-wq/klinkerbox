@@ -32,7 +32,7 @@
 <link rel="preload" as="font" type="font/woff2" href="assets/fonts/bricolage-500-latin.woff2" crossorigin>
 <link rel="preload" as="image" href="assets/img/hero.webp" type="image/webp" fetchpriority="high">
 <link rel="icon" type="image/png" href="assets/img/logo-mark.png">
-<link rel="stylesheet" href="assets/css/style.css?v=47">
+<link rel="stylesheet" href="assets/css/style.css?v=48">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -326,7 +326,7 @@
   <span class="mixfab__txt" id="mixFabTxt">Konfigurator</span>
   <span class="mixfab__count" id="mixCount">0</span>
 </button>
-<div class="mixer" id="mixer" role="dialog" aria-modal="true" aria-label="Konfigurator" hidden>
+<div class="mixer" id="mixer" role="dialog" aria-modal="true" aria-label="Konfigurator" data-lenis-prevent hidden>
   <div class="mixer__panel">
     <button class="mixer__close" id="mixClose" aria-label="Close">&times;</button>
     <div class="mixer__body">
@@ -356,7 +356,7 @@
 </div>
 
 <!-- ===== LIGHTBOX ===== -->
-<div class="lightbox" id="lightbox" hidden>
+<div class="lightbox" id="lightbox" data-lenis-prevent hidden>
   <button class="lightbox__close" id="lbClose" aria-label="Close">&times;</button>
   <div class="lightbox__inner" id="lbInner"></div>
 </div>
