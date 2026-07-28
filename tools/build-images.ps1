@@ -68,4 +68,24 @@ if (!(Test-Path $og)) {
   $bmp.Save($og, $enc, $ep)
   $g.Dispose(); $bmp.Dispose(); $src.Dispose()
 }
+# 5) Referenz-Marquee: die Kacheln sind hoechstens 360 CSS-px breit, geladen wurden
+#    aber die 1200er Originale (zusammen rund 1.5 MB fuer sieben Bilder).
+Convert-Tree 'assets\refs' 'assets\refs-720' 720 78
+
+# 6) Logos als WebP in Anzeigegroesse. Die PNGs sind 1133x281 fuer eine 153x38-
+#    Darstellung — zusammen 194 KB, davon 92 KB fuer das Dark-Logo, das bei
+#    "color-scheme: light only" praktisch nie sichtbar wird.
+foreach ($n in 'logo-light', 'logo-dark') {
+  $src = Join-Path $ROOT "assets\img\$n.png"
+  $dst = Join-Path $ROOT "assets\img\$n.webp"
+  if ((Test-Path $src) -and !(Test-Path $dst)) {
+    # lossless: die Wortmarke ist Flaechengrafik, dort schlaegt verlustfrei die
+    # verlustbehaftete Kompression sowohl in Groesse als auch in Kantenschaerfe
+    & $cw -quiet -lossless -z 9 -resize 480 0 $src -o $dst
+    $script:done++
+    Write-Host ("  {0}.webp  {1} KB (vorher {2} KB)" -f $n,
+      [int]((Get-Item $dst).Length / 1KB), [int]((Get-Item $src).Length / 1KB))
+  }
+}
+
 Write-Host "Fertig. Konvertiert: $script:done · übersprungen: $script:skip"
