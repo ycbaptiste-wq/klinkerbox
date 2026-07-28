@@ -5,15 +5,17 @@
   const urlLang = new URLSearchParams(location.search).get('lang');
   let lang = (['de','fr','it','en'].includes(urlLang) ? urlLang : null) || localStorage.getItem('kb_lang') || 'de';
 
-  // Referenzen — real project photos from the existing gallery (with captions)
+  // Referenzen — Fotos ausgefuehrter Projekte.
+  // WICHTIG: alt beschreibt bewusst nur Produkt und Material. Projektadressen
+  // werden weder angezeigt noch ins Markup geschrieben (Datenschutz).
   const REFS = [
-    {src:"assets/refs/ref-ancbelg-bronzegelb-basel.jpg",   cap:"Ancienne Belgique Bronzegelb · Eulenstrasse 18, Basel"},
-    {src:"assets/refs/ref-septima-aureum-udligenswil.jpg", cap:"SeptimA Aureum · Götzentalstrasse 1, Udligenswil"},
-    {src:"assets/refs/ref-lecorbusier-bern.jpg",           cap:"Gebäudekomplex Le-Corbusier-Platz, Bern"},
-    {src:"assets/refs/ref-ancbelg-kupferbraun-romont.jpg", cap:"Ancienne Belgique Kupferbraun · Romont"},
-    {src:"assets/refs/ref-route-de-suisse-coppet.jpg",     cap:"Route de Suisse 5, Coppet"},
-    {src:"assets/refs/ref-septima-mahagonie.jpg",          cap:"SeptimA Mahagonie"},
-    {src:"assets/refs/ref-denogent.jpg",                   cap:"Denogent SA"}
+    {src:"assets/refs/ref-ancbelg-bronzegelb-basel.jpg",   alt:"Ancienne Belgique Bronzegelb — ausgeführtes Klinkerprojekt"},
+    {src:"assets/refs/ref-septima-aureum-udligenswil.jpg", alt:"SeptimA Aureum — ausgeführtes Klinkerprojekt"},
+    {src:"assets/refs/ref-lecorbusier-bern.jpg",           alt:"Klinkerfassade an einem Gebäudekomplex — ausgeführtes Projekt"},
+    {src:"assets/refs/ref-ancbelg-kupferbraun-romont.jpg", alt:"Ancienne Belgique Kupferbraun — ausgeführtes Klinkerprojekt"},
+    {src:"assets/refs/ref-route-de-suisse-coppet.jpg",     alt:"Pflasterklinker-Belag — ausgeführtes Projekt"},
+    {src:"assets/refs/ref-septima-mahagonie.jpg",          alt:"SeptimA Mahagonie — ausgeführtes Klinkerprojekt"},
+    {src:"assets/refs/ref-denogent.jpg",                   alt:"Klinkerfassade eines Gewerbebaus — ausgeführtes Projekt"}
   ];
   // YouTube films embedded from the existing site
   const VIDEOS = [
@@ -21,16 +23,8 @@
     {id:"Pa4jem2yNjE", title:"Schulhaus"},
     {id:"mLcptkMgEjM", title:"Wohnsiedlung"}
   ];
-  // Extra installation photos per product (product galleries)
-  const EXTRA = {
-    "Ancienne Belgique|Bronzegelb":[{src:"assets/refs/ref-ancbelg-bronzegelb-basel.jpg",cap:"Eulenstrasse 18, Basel"}],
-    "Ancienne Belgique|Kupferbraun":[{src:"assets/refs/ref-ancbelg-kupferbraun-romont.jpg",cap:"Romont"}],
-    "SeptimA|Aureum":[{src:"assets/refs/ref-septima-aureum-udligenswil.jpg",cap:"Götzentalstrasse 1, Udligenswil"}],
-    "SeptimA|Mahagonie":[{src:"assets/refs/ref-septima-mahagonie.jpg",cap:"SeptimA Mahagonie"}]
-  };
-
-  const state = {cat:'pflaster', sub:null, stil:null, typ:null, color:null, size:'all', q:''};
-  let lbGallery=[], lbIndex=0;  // current lightbox gallery state
+  const state = {cat:'pflaster', sub:null, stil:null, typ:null, use:null, hand:false, color:null, size:'all', q:''};
+  let lbGallery=[], lbAlts=[], lbIndex=0;  // current lightbox gallery state (+ Alternativtexte)
 
   const $  = s => document.querySelector(s);
   const $$ = s => Array.from(document.querySelectorAll(s));
@@ -55,39 +49,40 @@
   }
   const finishLabel = p => { const t=finishTokens(p); return t? t.map(x=>FIN[x][lang]).join(' · ') : ''; };
   const enrich = p => (window.ENRICH && window.ENRICH[p.id]) || null;
-  // ---- runtime HAND-MADE stamp removal (clones brick texture over the bottom-right corner) ----
-  const STAMPED=new Set(['m240','m241','m242','m243','m244','m245']);
-  const cleanCache={};
-  const imgSrc=p=>cleanCache[p.id]||p.img;
   // Katalogkarte: 640px-WebP wenn vorhanden (assets/products-640), Original als Fallback
+  // (Der HAND-MADE-Stempel der Historika-Bilder ist offline entfernt — siehe tools/clean-stamp.ps1.
+  //  Frueher lief das bei jedem Seitenaufruf per Canvas und kostete 992 KB Originalbilder beim Start.)
   const cardWebp=p=>{ const m=/^assets\/products\/(.+)\.(?:jpe?g|png)$/i.exec(p.img||''); return m?('assets/products-640/'+m[1]+'.webp'):null; };
   function cardImgHtml(p){
-    const img=`<img loading="lazy" decoding="async" src="${imgSrc(p)}" alt="${p.series} ${p.name}">`;
-    const w=STAMPED.has(p.id)?null:cardWebp(p);   // gestempelte Bilder werden zur Laufzeit bereinigt → Original behalten
+    const img=`<img loading="lazy" decoding="async" src="${p.img}" alt="${p.series} ${p.name}">`;
+    const w=cardWebp(p);
     return w?`<picture><source srcset="${w}" type="image/webp">${img}</picture>`:img;
   }
   // kleine WebP-Thumbs für die Lightbox-Leiste (Fallback: Original über onerror)
   const thumbSrc=s=>{ const m=/^assets\/(gallery|products|refs)\/(.+)\.(?:jpe?g|png)$/i.exec(s||''); return m?('assets/thumbs-160/'+m[1]+'/'+m[2]+'.webp'):s; };
-  function cleanStamp(p, cb){
-    if(!STAMPED.has(p.id)){ cb&&cb(p.img); return; }
-    if(cleanCache[p.id]){ cb&&cb(cleanCache[p.id]); return; }
-    const im=new Image();
-    im.onload=()=>{ try{
-      const W=im.naturalWidth,H=im.naturalHeight;
-      const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
-      const cx=cv.getContext('2d'); cx.drawImage(im,0,0);
-      const rw=Math.round(W*0.46), rh=Math.round(H*0.40);     // bottom-right region with the stamp
-      cx.drawImage(cv, W-2*rw, H-rh, rw, rh, W-rw, H-rh, rw, rh); // clone the patch to its left
-      cleanCache[p.id]=cv.toDataURL('image/jpeg',0.9); cb&&cb(cleanCache[p.id]);
-    }catch(e){ cleanCache[p.id]=p.img; cb&&cb(p.img); } };
-    im.onerror=()=>{ cleanCache[p.id]=p.img; cb&&cb(p.img); };
-    im.src=p.img;
-  }
-  const baseOf=s=>s.split('/').pop();
+  // Referenz-Marquee: 720px-WebP statt Original (assets/refs-720)
+  const refWebp=s=>{ const m=/^assets\/refs\/(.+)\.(?:jpe?g|png)$/i.exec(s||''); return m?('assets/refs-720/'+m[1]+'.webp'):null; };
   function gallery(p){ const e=enrich(p); const g=(e && e.gallery && e.gallery.length)? e.gallery.slice() : [p.img];
-    const pb=baseOf(p.img);   // swap the (possibly stamped) gallery swatch for the clean card crop
-    return g.map(s=> baseOf(s)===pb ? imgSrc(p) : s); }
+    // Ist der Einsatzbereich gefiltert, kommen die passenden Fotos zuerst — sonst muss sich
+    // der Kunde durch die Aussenaufnahmen klicken, um die Innenbilder zu finden.
+    if(state.use && USE_RE[state.use]){ const re=USE_RE[state.use];
+      g.sort((a,b)=>(re.test(b)?1:0)-(re.test(a)?1:0)); }
+    return g; }
   function loadOf(p){ const e=enrich(p); return (e && e.load) || ''; }
+
+  // ===== Einsatzbereich (Innen / Sitzelemente & Treppen) =====
+  // Kein eigenes Datenfeld: der Einsatzbereich ergibt sich aus den Referenzfotos. Beim Import
+  // wandert der Drive-Ordner des Kunden ("Pflasterklinker Indoor" / "… Sitzelemente Treppen")
+  // als -Innen / -Stufen in den Dateinamen. Neue Bilder → Filter stimmt automatisch.
+  const USE_RE = { innen:/-innen|-indoor/i, stufen:/-stufen|-treppe/i };
+  const useLabel = v => (window.USES && window.USES[v] && window.USES[v][lang]) || v;
+  const useCache = new Map();
+  function usesOf(p){
+    if(useCache.has(p.id)) return useCache.get(p.id);
+    const e=enrich(p), g=(e && e.gallery) || [];
+    const u=Object.keys(USE_RE).filter(k=>g.some(s=>USE_RE[k].test(s)));
+    useCache.set(p.id,u); return u;
+  }
   const ALLFMT = "Alle Formate";
   const isAllFmt = p => p.size===ALLFMT;
   const isMulti = p => !!(p.formats && p.formats.length);      // available in several specific formats
@@ -129,7 +124,7 @@
     $('#langLabel').textContent = lang.toUpperCase();
     $$('#langMenu button').forEach(b=>b.classList.toggle('active', b.dataset.lang===lang));
     $('#search').placeholder = dict.search_ph;
-    buildSubChips(); buildStilChips(); buildTypChips(); buildSizeSelect(); buildVideos(); render();
+    buildSubChips(); buildStilChips(); buildTypChips(); buildUseChips(); buildHandChips(); buildSizeSelect(); buildUseCards(); buildVideos(); render();
     if(window.MIX){ updateFab(); if(!$('#mixer').hidden) renderMixer(); }
   }
 
@@ -182,6 +177,82 @@
       wrap.appendChild(b);
     });
   }
+  function buildUseChips(){
+    const group=$('#useGroup'), wrap=$('#useChips'); wrap.innerHTML='';
+    const uses=Object.keys(USE_RE).filter(u=>pool().some(p=>usesOf(p).includes(u)));
+    if(!uses.length){ group.hidden=true; state.use=null; return; }
+    if(state.use && !uses.includes(state.use)) state.use=null;
+    group.hidden=false;
+    uses.forEach(u=>{
+      const b=document.createElement('button');
+      b.className='chip'+(state.use===u?' is-active':'');
+      b.textContent=useLabel(u);
+      b.onclick=()=>{ state.use = state.use===u?null:u; buildUseChips(); buildHandChips(); render(); };
+      wrap.appendChild(b);
+    });
+  }
+  // ===== Anwendungs-Einstiege (Innenraum / Treppen & Sitzelemente) =====
+  // Bewusst als zweite Ebene unter den drei Materialwelten und NICHT in der
+  // Hauptnavigation: es sind Anwendungen, keine Materialien — und dahinter
+  // stehen derzeit 10 bzw. 5 Produkte. Die Kacheln entstehen aus den Daten und
+  // wachsen automatisch mit, sobald weitere -Innen-/-Stufen-Bilder dazukommen.
+  function buildUseCards(){
+    const box=$('#uses'), wrap=$('#usesGrid'); if(!box||!wrap) return;
+    wrap.innerHTML=''; let any=false;
+    Object.keys(USE_RE).forEach(u=>{
+      const hits=P.filter(p=>usesOf(p).includes(u));
+      if(!hits.length) return;
+      any=true;
+      // Einstieg in die Kategorie mit den meisten Treffern
+      const byCat={}; hits.forEach(p=>{ byCat[p.cat]=(byCat[p.cat]||0)+1; });
+      const cat=Object.keys(byCat).sort((a,b)=>byCat[b]-byCat[a])[0];
+      // erstes passendes Foto als Motiv
+      let img='';
+      for(const p of hits){ const e=enrich(p); if(!e||!e.gallery) continue;
+        const g=e.gallery.find(s=>USE_RE[u].test(s)); if(g){ img=g; break; } }
+      // Angezeigt wird die Zahl DER KATEGORIE, die geoeffnet wird — nicht die
+      // Gesamtzahl. Sonst verspricht die Kachel 10 und der Katalog zeigt 9,
+      // weil ein Produkt in einer anderen Kategorie liegt.
+      const d=I[lang];
+      const catName = cat==='pflaster'?d.nav_pflaster : cat==='mauer'?d.nav_mauer : d.nav_tonplatten;
+      const b=document.createElement('button');
+      b.type='button'; b.className='usecard';
+      b.innerHTML=`<span class="usecard__media">${img?`<img loading="lazy" decoding="async" src="${img}" alt="">`:''}</span>
+        <span class="usecard__body">
+          <span class="usecard__t">${useLabel(u)}</span>
+          <span class="usecard__n">${byCat[cat]} ${d.catalog_results} · ${catName}</span>
+        </span><span class="usecard__go" aria-hidden="true">→</span>`;
+      b.onclick=()=>openUse(cat,u);
+      wrap.appendChild(b);
+    });
+    box.hidden=!any;
+  }
+  // Katalog mit gesetztem Einsatzbereich oeffnen + teilbaren Link setzen
+  function openUse(cat,u){
+    const tab=document.querySelector(`#catTabs .tab[data-cat="${cat}"]`);
+    if(tab){ $$('#catTabs .tab').forEach(x=>x.classList.remove('is-active')); tab.classList.add('is-active'); state.cat=cat; }
+    state.sub=null; state.stil=null; state.typ=null; state.hand=false; state.color=null; state.q='';
+    const s=$('#search'); if(s) s.value='';
+    state.use=u;
+    buildSubChips(); buildStilChips(); buildTypChips(); buildUseChips(); buildHandChips();
+    buildColorDots(); buildSizeSelect(); render();
+    if(history.replaceState) history.replaceState(null,'','#'+cat+'/'+u);
+    scrollToEl($('#katalog'));
+  }
+
+  // Handgefertigt als eigener Filter — dieselbe Auszeichnung, die in der
+  // Lightbox als Pille "Handmade" steht, hier als Auswahl im Katalog.
+  function buildHandChips(){
+    const group=$('#handGroup'), wrap=$('#handChips'); if(!group||!wrap) return;
+    wrap.innerHTML='';
+    if(!pool().some(isHandmade)){ group.hidden=true; state.hand=false; return; }
+    group.hidden=false;
+    const b=document.createElement('button');
+    b.className='chip'+(state.hand?' is-active':'');
+    b.textContent=I[lang].lb_handmade;
+    b.onclick=()=>{ state.hand=!state.hand; buildHandChips(); render(); };
+    wrap.appendChild(b);
+  }
   function buildColorDots(){
     const wrap = $('#colorDots'); wrap.innerHTML='';
     const fams=[...new Set(pool().flatMap(p=>famsOf(p)))];     // only colours present in the current category
@@ -190,6 +261,10 @@
       const d=document.createElement('button');
       d.className='cdot'+(state.color===f?' is-active':'');
       d.style.background=window.FAMILY_HEX[f]||'#999'; d.dataset.name=famLabel(f);
+      // Ohne Namen waren das acht identische, unbeschriftete Schaltflaechen (WCAG 4.1.2),
+      // und die Bedeutung haing allein an der Farbe (1.4.1).
+      d.setAttribute('aria-label', famLabel(f));
+      d.setAttribute('aria-pressed', String(state.color===f));
       d.onclick=()=>{ state.color = state.color===f?null:f; buildColorDots(); render(); };
       wrap.appendChild(d);
     });
@@ -214,10 +289,13 @@
       if(state.stil && p.stil!==state.stil) return false;
       // every Mauerklinker is also available as Riemchen → the Riemchen filter matches all
       if(state.typ && p.typ!==state.typ && !(state.typ==='Riemchen' && p.cat==='mauer')) return false;
+      if(state.use && !usesOf(p).includes(state.use)) return false;
+      if(state.hand && !isHandmade(p)) return false;
       if(state.color && !famsOf(p).includes(state.color)) return false;
       if(state.size!=='all' && !isAllFmt(p) && p.size!==state.size && !(isMulti(p) && p.formats.includes(state.size))) return false;
       if(state.q){
-        const h=(p.series+' '+p.name+' '+famsOf(p).map(famLabel).join(' ')+' '+p.size).toLowerCase();
+        // Einsatzbereich mitdurchsuchen: wer "innen" tippt, findet die Steine mit Innenreferenz
+        const h=(p.series+' '+p.name+' '+famsOf(p).map(famLabel).join(' ')+' '+p.size+' '+usesOf(p).map(useLabel).join(' ')).toLowerCase();
         if(!h.includes(state.q.toLowerCase())) return false;
       }
       return true;
@@ -232,7 +310,7 @@
     const t = inMix ? window.MIX.remove[lang] : window.MIX.add[lang];
     btn.title=t; btn.setAttribute('aria-label',t);
   }
-  function makeCard(p,stagger){
+  function makeCard(p,stagger,target){
     const inMix=allZoneIds().has(p.id);
     const c=document.createElement('article'); c.className='card'+(inMix?' in-mix':'');
     c.dataset.pid=p.id;
@@ -244,8 +322,12 @@
         <div class="card__series">${p.series}</div>
         <div class="card__name">${p.name}</div>
         <div class="card__meta"><span class="card__swatch" style="background:${p.hex}"></span>${famLabel(p.family)} · ${sizeLabel(p)}</div>
-      </div>`;
-    c.onclick=()=>openLightbox(p);
+        ${usesOf(p).length?`<div class="card__uses">${usesOf(p).map(u=>`<span class="card__use">${useLabel(u)}</span>`).join('')}</div>`:''}
+      </div>
+      <button type="button" class="card__open"><span class="sr-only">${p.series} ${p.name} — ${I[lang].card_open}</span></button>`;
+    // Oeffnen laeuft ueber einen echten Button, der die Karte abdeckt — ein onclick
+    // auf dem <article> waere per Tastatur nicht erreichbar gewesen (WCAG 2.1.1).
+    c.querySelector('.card__open').onclick=()=>openLightbox(p);
     const addBtn=c.querySelector('.card__add');
     setCardAddState(addBtn, inMix);
     // Klick auf den Button schaltet um: auswählen ↔ wieder abwählen
@@ -255,28 +337,48 @@
         if(!had && !mixHas(p)) return;               // z.B. Indoor-Platte in Aussen abgelehnt
         toast('✓ '+p.series+' · '+p.name); }
     };
-    $('#grid').appendChild(c);
+    (target||$('#grid')).appendChild(c);
     requestAnimationFrame(()=>setTimeout(()=>c.classList.add('in'), Math.min(stagger*18,300)));
+    return c;
   }
   function updateMore(){
     const btn=$('#loadMore'); if(!btn) return;
     const rem=mList.length-mShown; btn.hidden=rem<=0;
     const n=btn.querySelector('.loadmore__n'); if(n) n.textContent=rem;
   }
+  // Seitenweise nachladen statt die ganze Restkategorie auf einmal: bei Mauerklinker
+  // waren das 109 Karten in einem synchronen Block (~77 ms Desktop, mobil weit ueber
+  // der INP-Schwelle). Alles landet erst in einem Fragment, dann ein einziger Einbau.
   function loadMore(){
-    const from=mShown, to=mList.length;              // alle restlichen Produkte der Kategorie zeigen
-    for(let i=from;i<to;i++) makeCard(mList[i], i-from);
+    const from=mShown, to=Math.min(mShown+PAGE*2, mList.length);
+    const frag=document.createDocumentFragment();
+    for(let i=from;i<to;i++) makeCard(mList[i], i-from, frag);
+    $('#grid').appendChild(frag);
     mShown=to; updateMore();
   }
   function render(){
     mList=filtered();
     $('#count').textContent=mList.length;
+    // Gesamtzahl mitzeigen — sonst erfaehrt niemand, dass hinter dem aktiven
+    // Tab noch 166 weitere Produkte liegen (Mauerklinker ist die groesste Kategorie)
+    { const t=$('#countTotal'); if(t) t.textContent = mList.length>=P.length ? '' : I[lang].catalog_total.replace('{t}', P.length); }
     $('#empty').hidden = mList.length>0;
     $('#grid').innerHTML='';
     mShown=Math.min(PAGE, mList.length);
-    for(let i=0;i<mShown;i++) makeCard(mList[i], i);
+    { const frag=document.createDocumentFragment();
+      for(let i=0;i<mShown;i++) makeCard(mList[i], i, frag);
+      $('#grid').appendChild(frag); }
     updateMore();
+    syncPressed();
   }
+  // Der aktive Zustand steckte bisher nur in der CSS-Klasse und war damit fuer
+  // Screenreader unsichtbar. Einmal zentral aus .is-active ableiten (WCAG 4.1.2).
+  function syncPressed(){
+    $$('#catTabs .tab, .chips .chip').forEach(b=>
+      b.setAttribute('aria-pressed', String(b.classList.contains('is-active'))));
+  }
+  function closeNav(){ $('#navLinks').classList.remove('open');
+    const b=$('#burger'); if(b) b.setAttribute('aria-expanded','false'); }
   // reflect current mixer selection on the product cards
   function markMixedCards(ids){
     ids=ids||allZoneIds();
@@ -292,10 +394,10 @@
     const load = loadOf(p);
     const multi = gal.length>1;
     const thumbs = multi ? `<div class="lb__thumbs">${gal.map((src,i)=>
-        `<button class="lb__thumb${i===0?' is-active':''}" data-i="${i}"><img loading="lazy" src="${thumbSrc(src)}" onerror="this.onerror=null;this.src='${src}'" alt=""></button>`).join('')}</div>` : '';
+        `<button class="lb__thumb${i===0?' is-active':''}" data-i="${i}" aria-label="${d.lb_img_n.replace('{n}',i+1).replace('{t}',gal.length)}"><img loading="lazy" src="${thumbSrc(src)}" onerror="this.onerror=null;this.src='${src}'" alt=""></button>`).join('')}</div>` : '';
     const counter = multi ? `<span class="lb__count" id="lbCount">1 / ${gal.length}</span>` : '';
-    const navArrows = multi ? `<button class="lb__nav lb__nav--prev" id="lbPrev" aria-label="‹">‹</button>
-        <button class="lb__nav lb__nav--next" id="lbNext" aria-label="›">›</button>` : '';
+    const navArrows = multi ? `<button class="lb__nav lb__nav--prev" id="lbPrev" aria-label="${d.lb_prev}">‹</button>
+        <button class="lb__nav lb__nav--next" id="lbNext" aria-label="${d.lb_next}">›</button>` : '';
     const hand = isHandmade(p);
     const loadPills = load ? ['F','A','B','G'].map(k=>`<span class="lb__load${load.includes(k)?' on':''}">${LO[k][lang]}</span>`).join('') : '';
     const handPill = hand ? `<span class="lb__load lb__load--hm on"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11V6a2 2 0 0 1 4 0v5M13 7a2 2 0 0 1 4 0v6M7 12V9a2 2 0 0 1 4 0M17 9a2 2 0 0 1 4 0v5a7 7 0 0 1-7 7h-2a7 7 0 0 1-5-2l-3.5-3.5a2 2 0 0 1 3-2.6L9 14"/></svg>${d.lb_handmade}</span>` : '';
@@ -338,27 +440,52 @@
     $('#lbCta').onclick=()=>requestSample(p);
     $('#lbMix').onclick=()=>{ addToMixer(p); const b=$('#lbMix'); if(b) b.textContent=window.MIX[mixHas(p)?'added':'add'][lang]; };
     lbGallery=gal; lbIndex=0;
+    lbAlts=gal.map((s,i)=> multi ? `${p.series} ${p.name} — ${d.lb_img_n.replace('{n}',i+1).replace('{t}',gal.length)}` : `${p.series} ${p.name}`);
     if(history.replaceState) history.replaceState(null,'','#p/'+p.id);   // teilbarer Produkt-Deep-Link
     $$('.lb__thumb').forEach(t=>t.onclick=()=>showLb(+t.dataset.i));
     if(multi){ $('#lbPrev').onclick=e=>{e.stopPropagation();showLb(lbIndex-1);}; $('#lbNext').onclick=e=>{e.stopPropagation();showLb(lbIndex+1);};
       attachSwipe($('.lb__img'), ()=>showLb(lbIndex-1), ()=>showLb(lbIndex+1)); }
-    openModal();
+    openModal(`${p.series} ${p.name}`);
   }
   function showLb(i){
     if(!lbGallery.length) return;
     lbIndex=(i+lbGallery.length)%lbGallery.length;
-    const main=$('#lbMain'); if(main) main.src=lbGallery[lbIndex];
+    const main=$('#lbMain'); if(main){ main.src=lbGallery[lbIndex]; main.alt=lbAlts[lbIndex]||''; }
     const c=$('#lbCount'); if(c) c.textContent=`${lbIndex+1} / ${lbGallery.length}`;
     $$('.lb__thumb').forEach(x=>x.classList.toggle('is-active', +x.dataset.i===lbIndex));
   }
-  function openImage(src){
-    lbGallery=[]; lbIndex=0;
-    $('#lbInner').innerHTML=`<img class="lb__solo" src="${src}" alt="">`;
-    openModal();
+  function openImage(src, alt){
+    lbGallery=[]; lbAlts=[]; lbIndex=0;
+    $('#lbInner').innerHTML=`<img class="lb__solo" src="${src}" alt="${alt||I[lang].lb_zoom}">`;
+    openModal(alt||I[lang].lb_zoom);
   }
-  function openModal(){ $('#lightbox').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop(); }
-  function closeLightbox(){ $('#lightbox').hidden=true; document.body.style.overflow=''; lbGallery=[]; if(window.__lenis) window.__lenis.start();
-    if(history.replaceState) history.replaceState(null,'',location.pathname+location.search); }
+  // Fokus vor dem Oeffnen merken und beim Schliessen zurueckgeben — sonst steht der
+  // Fokus weiter im verdeckten Hintergrund (WCAG 2.4.3).
+  let lastFocusLb=null;
+  function openModal(label){
+    lastFocusLb=document.activeElement;
+    const lb=$('#lightbox');
+    if(label) lb.setAttribute('aria-label', label);
+    lb.hidden=false; document.body.style.overflow='hidden';
+    if(window.__lenis) window.__lenis.stop();
+    const c=$('#lbClose'); if(c) c.focus({preventScroll:true});
+  }
+  function closeLightbox(){ $('#lightbox').hidden=true; document.body.style.overflow=''; lbGallery=[]; lbAlts=[]; if(window.__lenis) window.__lenis.start();
+    if(history.replaceState) history.replaceState(null,'',location.pathname+location.search);
+    if(lastFocusLb && lastFocusLb.focus) lastFocusLb.focus({preventScroll:true});
+    lastFocusLb=null; }
+  // Tabulator im offenen Dialog halten (WCAG 2.1.2 / 2.4.3)
+  const FOCUSABLE='a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  function trapFocus(e){
+    if(e.key!=='Tab') return;
+    const dlg = !$('#mixer').hidden ? $('#mixer') : (!$('#lightbox').hidden ? $('#lightbox') : null);
+    if(!dlg) return;
+    const items=Array.from(dlg.querySelectorAll(FOCUSABLE)).filter(el=>el.offsetWidth||el.offsetHeight||el.getClientRects().length);
+    if(!items.length) return;
+    const first=items[0], last=items[items.length-1];
+    if(e.shiftKey && document.activeElement===first){ e.preventDefault(); last.focus(); }
+    else if(!e.shiftKey && document.activeElement===last){ e.preventDefault(); first.focus(); }
+  }
   function scrollToEl(el){ if(window.__lenis) window.__lenis.scrollTo(el,{offset:-10}); else el.scrollIntoView({behavior:'smooth',block:'start'}); }
   // drag / trackpad swipe to flip through a gallery
   function attachSwipe(el, prev, next){
@@ -391,9 +518,8 @@
   // (Muster, Innen, Aussen zeigen dieselbe Auswahl — Fassade bzw. Boden gilt überall)
   function blankZone(){ return {mix:[],cat:null,shape:null,bond:'run',bed:'normal',head:'normal',joint:'#9d988f',order:0,layout:[],seq:[0],wild:[]}; }
   let zoneData={all_facade:blankZone(),all_floor:blankZone()};
-  let activeZone='all_facade', mixScene='exterior', mixSurface='facade', mixBuilding='efh', mixRoomType='living';
+  let activeZone='all_facade', mixScene='exterior', mixSurface='facade', mixBuilding='efh';
   let mixTab='design', mortarsAll=false, stoneQ='';   // Seitenleisten-Tab · Fugenfarben-Ansicht · Steine-Suche
-  const INT_KEY={living:'interior',office:'roomoffice',hall:'roomhall'};   // Innenraum-Typ → 3D-Modul-Schlüssel
   const sceneNow=()=> (mixView==='interior')?'interior':(mixView==='exterior')?'exterior':mixScene;
   const zoneKey=(scene,surf)=> 'all_'+surf;
   const surfaceOf=cat=> (cat==='mauer')?'facade':'floor';   // Mauerklinker → Fassade · Pflaster/Tonplatten → Boden
@@ -543,7 +669,7 @@
       }catch(e){ brickCache[p.id]=p.img; cb&&cb(p.img); }
     };
     im.onerror=()=>{ brickCache[p.id]=p.img; cb&&cb(p.img); };
-    im.src=imgSrc(p);
+    im.src=p.img;
   }
   function ensureBricks(cb){ let pend=mix.length; if(!pend){cb&&cb();return;} mix.forEach(m=>makeBrick(m.p,()=>{ if(--pend===0) cb&&cb(); })); }
   const brickSrc=p=>brickCache[p.id]||p.img;
@@ -1176,9 +1302,9 @@
     const sceneView=(mixView==='exterior'||mixView==='interior');
     if(!mix.length && !sceneView){ host.innerHTML=''; return; }
     saveActive();
-    // Innen-Ansicht: echter 3D-Raum (WebGL) — Wohnzimmer · Büro · Maisonette-Gang.
+    // Innen-Ansicht: echter 3D-Wohnraum (WebGL).
     if(mixView==='interior'){
-      const ik=INT_KEY[mixRoomType]||'interior', IG=window[GLOB3D[ik]];
+      const ik='interior', IG=window[GLOB3D[ik]];
       if(!IG){ load3D(ik,host); return; }
       if(IG.available()){
         stopAll3D(GLOB3D[ik]);
@@ -1272,9 +1398,7 @@
     }, allP);
   }
   // 3D-Module laden asynchron (ES-Module) → betroffene Ansicht neu rendern, sobald bereit
-  window.addEventListener('room3d-ready',()=>{ if(mixView==='interior'&&mixRoomType==='living') refreshWall(); });
-  window.addEventListener('roomoffice3d-ready',()=>{ if(mixView==='interior'&&mixRoomType==='office') refreshWall(); });
-  window.addEventListener('roomhall3d-ready',()=>{ if(mixView==='interior'&&mixRoomType==='hall') refreshWall(); });
+  window.addEventListener('room3d-ready',()=>{ if(mixView==='interior') refreshWall(); });
   window.addEventListener('bungalow3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='bungalow') refreshWall(); });
   window.addEventListener('efh3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='efh') refreshWall(); });
   window.addEventListener('villa3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='villa') refreshWall(); });
@@ -1282,14 +1406,14 @@
   window.addEventListener('friesen3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='friesen') refreshWall(); });
   // three.js + Szenen-Module werden ERST beim Öffnen der jeweiligen 3D-Ansicht geladen
   // (nicht beim Seitenaufbau) → deutlich schnellerer Erststart.
-  const MOD3D={interior:'room3d',roomoffice:'roomoffice3d',roomhall:'roomhall3d',bungalow:'bungalow3d',efh:'efh3d',villa:'villa3d',office:'office3d',friesen:'friesen3d'};
-  const GLOB3D={interior:'Room3D',roomoffice:'RoomOffice3D',roomhall:'RoomHall3D',bungalow:'Bungalow3D',efh:'Efh3D',villa:'Villa3D',office:'Office3D',friesen:'Friesen3D'};
+  const MOD3D={interior:'room3d',bungalow:'bungalow3d',efh:'efh3d',villa:'villa3d',office:'office3d',friesen:'friesen3d'};
+  const GLOB3D={interior:'Room3D',bungalow:'Bungalow3D',efh:'Efh3D',villa:'Villa3D',office:'Office3D',friesen:'Friesen3D'};
   const _load3D={}, L3D={de:'3D wird geladen …',fr:'Chargement 3D …',it:'Caricamento 3D …',en:'Loading 3D …'};
   function load3D(key,host){
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=58', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=75', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -1350,18 +1474,7 @@
   function renderBld(){
     const el=$('#mixBld'); if(!el) return;
     const M=MIX();
-    if(mixView==='interior'){        // Innenraum-Typ: Büro + Maisonette-Gang vorübergehend deaktiviert → nur Wohnzimmer
-      mixRoomType='living';
-      el.hidden=true;                // Selektor ausgeblendet (nur ein Raumtyp sichtbar)
-      return;
-      /* --- Büro + Gang vorübergehend versteckt (Code bleibt für spätere Reaktivierung erhalten) ---
-      el.hidden=false;
-      el.innerHTML=['living','office','hall'].map(k=>`<button class="mixbld__b${mixRoomType===k?' is-active':''}" aria-pressed="${mixRoomType===k}" data-r="${k}">
-        <span class="mixbld__im" style="background-image:url('assets/img/room/${k}.webp')"></span><span>${M['r_'+k][lang]}</span></button>`).join('');
-      el.querySelectorAll('.mixbld__b').forEach(b=>b.onclick=()=>{ mixRoomType=b.dataset.r; renderMixer(); });
-      return;
-      */
-    }
+    if(mixView==='interior'){ el.hidden=true; return; }   // Innen zeigt nur den Wohnraum → kein Selektor nötig
     if(mixView!=='exterior'){ el.hidden=true; return; }
     el.hidden=false;
     el.innerHTML=['efh','villa','bungalow','office','friesen'].map(k=>`<button class="mixbld__b${mixBuilding===k?' is-active':''}" aria-pressed="${mixBuilding===k}" data-b="${k}">
@@ -1373,7 +1486,9 @@
   function allZoneIds(){ saveActive(); const s=new Set(); Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>s.add(m.p.id))); return s; }
   function updateFab(){ const ids=allZoneIds(), n=ids.size, c=$('#mixCount'); c.textContent=n; c.hidden=n===0;
     $('#mixFabTxt').textContent=MIX().title[lang]; markMixedCards(ids); }
-  function openMixer(){ $('#mixer').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop();
+  let lastFocusMix=null;
+  function openMixer(){ lastFocusMix=document.activeElement;
+    $('#mixer').hidden=false; document.body.style.overflow='hidden'; if(window.__lenis) window.__lenis.stop();
     try{ localStorage.setItem('kb_fab','1'); }catch(e){}
     const fb=$('#mixFab'); if(fb) fb.classList.add('mixfab--min');
     mixTab=mix.length?'design':'stones';               // leerer Start → direkt zur Steinwahl
@@ -1413,10 +1528,12 @@
       $('#mixIntroH').textContent=M.intro_style[lang];
     });
   }
-  function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); stopAll3D(); }
+  function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); stopAll3D();
+    if(lastFocusMix && lastFocusMix.focus) lastFocusMix.focus({preventScroll:true});
+    lastFocusMix=null; }
   // 3D-Render-Loops stoppen (alle ausser dem aktiven Modul) — Akku/GPU-Last, iOS-Kontextlimit
   function stopAll3D(except){
-    ['Room3D','RoomOffice3D','RoomHall3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
+    ['Room3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
       const m=window[n]; if(m && m.stop && n!==except) m.stop();
     });
   }
@@ -1648,24 +1765,25 @@
   }
 
   // ===================== VIDEOS (lite YouTube embed) =====================
-  let vidObs=null;
+  // Klick-zu-Abspielen statt Autoplay-Endlosschleife: die alte Fassung startete drei
+  // Videos automatisch, in Dauerschleife, ohne Bedienleiste und mit disablekb=1 — es
+  // gab also keinerlei Moeglichkeit zu pausieren (WCAG 2.2.2). Nebeneffekt: keine drei
+  // parallelen YouTube-Streams mehr auf Mobilgeraeten.
   function buildVideos(){
     const wrap=$('#videos'); if(!wrap) return; wrap.innerHTML='';
-    if(vidObs) vidObs.disconnect();
-    vidObs=new IntersectionObserver((es)=>{
-      es.forEach(e=>{
-        const card=e.target, v=card.__v;
-        if(e.isIntersecting && !card.classList.contains('is-playing')){
-          card.insertAdjacentHTML('afterbegin',
-            `<iframe src="https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&mute=1&loop=1&playlist=${v.id}&controls=0&rel=0&modestbranding=1&iv_load_policy=3&fs=0&disablekb=1&playsinline=1" title="${v.title}" allow="autoplay; encrypted-media" loading="lazy"></iframe>`);
-          card.classList.add('is-playing');
-        }
-      });
-    },{threshold:.4});
+    const d=I[lang];
     VIDEOS.forEach(v=>{
-      const card=document.createElement('div'); card.className='vcard'; card.__v=v;
-      card.innerHTML=`<img class="vcard__poster" loading="lazy" referrerpolicy="no-referrer" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt="${v.title}"><span class="vcard__title">${v.title}</span>`;
-      wrap.appendChild(card); vidObs.observe(card);
+      const card=document.createElement('div'); card.className='vcard';
+      card.innerHTML=`<img class="vcard__poster" loading="lazy" decoding="async" referrerpolicy="no-referrer" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" alt="">
+        <button type="button" class="vcard__play" aria-label="${d.video_play}: ${v.title}"></button>
+        <span class="vcard__title">${v.title}</span>`;
+      card.querySelector('.vcard__play').onclick=()=>{
+        if(card.classList.contains('is-playing')) return;
+        card.insertAdjacentHTML('afterbegin',
+          `<iframe src="https://www.youtube-nocookie.com/embed/${v.id}?autoplay=1&rel=0&modestbranding=1&iv_load_policy=3&playsinline=1" title="${v.title}" allow="autoplay; encrypted-media; fullscreen" allowfullscreen loading="lazy"></iframe>`);
+        card.classList.add('is-playing');
+      };
+      wrap.appendChild(card);
     });
   }
 
@@ -1677,7 +1795,11 @@
     // duplicate the set once for a seamless infinite loop
     REFS.concat(REFS).forEach((r,i)=>{
       const fig=document.createElement('figure'); fig.className='reffig';
-      fig.innerHTML=`<img loading="lazy" decoding="async" src="${r.src}" alt="">`;
+      // 720er-WebP statt der 1200er Originale — die Kachel ist hoechstens 360 px breit
+      const rw=refWebp(r.src);
+      fig.innerHTML=rw
+        ? `<picture><source srcset="${rw}" type="image/webp"><img loading="lazy" decoding="async" src="${r.src}" alt="${r.alt}"></picture>`
+        : `<img loading="lazy" decoding="async" src="${r.src}" alt="${r.alt}">`;
       fig.onclick=()=>openRefGallery(i % REFS.length);
       track.appendChild(fig);
     });
@@ -1687,16 +1809,17 @@
       .observe($('#referenzen'));
   }
   function openRefGallery(i){
-    lbGallery=REFS.map(r=>r.src); lbIndex=i;
+    const d=I[lang];
+    lbGallery=REFS.map(r=>r.src); lbAlts=REFS.map(r=>r.alt); lbIndex=i;
     $('#lbInner').innerHTML=`<div class="lb__solowrap">
         <span class="lb__count lb__count--solo" id="lbCount">${i+1} / ${lbGallery.length}</span>
-        <button class="lb__nav lb__nav--prev" id="lbPrev" aria-label="‹">‹</button>
-        <button class="lb__nav lb__nav--next" id="lbNext" aria-label="›">›</button>
-        <img class="lb__solo" id="lbMain" src="${lbGallery[i]}" alt=""></div>`;
+        <button class="lb__nav lb__nav--prev" id="lbPrev" aria-label="${d.lb_prev}">‹</button>
+        <button class="lb__nav lb__nav--next" id="lbNext" aria-label="${d.lb_next}">›</button>
+        <img class="lb__solo" id="lbMain" src="${lbGallery[i]}" alt="${lbAlts[i]}"></div>`;
     $('#lbPrev').onclick=e=>{e.stopPropagation();showLb(lbIndex-1);};
     $('#lbNext').onclick=e=>{e.stopPropagation();showLb(lbIndex+1);};
     attachSwipe($('.lb__solowrap'), ()=>showLb(lbIndex-1), ()=>showLb(lbIndex+1));
-    openModal();
+    openModal(d.refs_projects);
   }
 
   // ===================== FORMS (Web3Forms → info@klinkerbox.ch) =====================
@@ -1711,20 +1834,26 @@
   async function web3send(payload){
     const r=await fetch('https://api.web3forms.com/submit',{method:'POST',
       headers:{'Content-Type':'application/json',Accept:'application/json'},
-      body:JSON.stringify(Object.assign({access_key:WEB3FORMS_KEY},payload))});
+      // botcheck wird serverseitig ausgewertet — der Honeypot allein wirkte nur im Browser
+      body:JSON.stringify(Object.assign({access_key:WEB3FORMS_KEY,botcheck:''},payload))});
     return r.json();
   }
   function bindForms(){
     const cf=$('#contactForm');
     if(cf) cf.onsubmit=async e=>{
       e.preventDefault();
-      const f=cf.elements;
-      if(f.website.value){ return; }                       // Honeypot
-      if(!f.name.value.trim()||!f.email.value.trim()||!f.message.value.trim()){
-        showHint($('#formHint'), I[lang].f_req, false); return;
+      const f=cf.elements, d=I[lang];
+      if(f.website.value){ showHint($('#formHint'), ft('err'), false); return; }   // Honeypot
+      // Feldgenau statt einer Sammelmeldung: bisher blieb offen, WELCHES Feld fehlt.
+      ['name','email'].forEach(n=>f[n].removeAttribute('aria-invalid'));
+      const missing=['name','email'].filter(n=>!f[n].value.trim());
+      if(missing.length){
+        missing.forEach(n=>f[n].setAttribute('aria-invalid','true'));
+        showHint($('#formHint'), d.f_req, false);
+        f[missing[0]].focus();
+        return;
       }
       const interests=$$('#interestChecks input:checked').map(c=>c.value).join(', ');
-      const d=I[lang];
       const btn=cf.querySelector('button[type=submit],[type=submit]'); const bTxt=btn?btn.textContent:'';
       if(btn) btn.disabled=true;
       showHint($('#formHint'), ft('sending'), true);
@@ -1736,7 +1865,7 @@
           [d.f_email]:f.email.value, [d.f_projaddr]:f.projaddr.value,
           [d.f_interest]:interests, [d.f_message]:f.message.value
         });
-        if(j&&j.success){ showHint($('#formHint'), I[lang].nl_done, true); cf.reset(); }
+        if(j&&j.success){ showHint($('#formHint'), d.f_done, true); cf.reset(); }
         else showHint($('#formHint'), ft('err'), false);
       }catch(err){ showHint($('#formHint'), ft('err'), false); }
       finally{ if(btn){ btn.disabled=false; btn.textContent=bTxt; } }
@@ -1744,21 +1873,27 @@
     const nf=$('#newsForm');
     if(nf) nf.onsubmit=async e=>{
       e.preventDefault();
-      const f=nf.elements; if(!f.email.value.trim()) return;
-      const d=I[lang], hint=$('#newsHint');
+      const f=nf.elements, d=I[lang], hint=$('#newsHint');
+      // Frueher brach das Formular hier ohne jede Rueckmeldung ab
+      if(!f.email.value.trim()){ showHint(hint, d.f_req, false); f.email.focus(); return; }
+      // UWG Art. 3 lit. o — ohne belegte Einwilligung kein Newsletter-Versand
+      if(f.consent && !f.consent.checked){ showHint(hint, d.nl_consent_req, false); f.consent.focus(); return; }
       const btn=nf.querySelector('button[type=submit],[type=submit]'); if(btn) btn.disabled=true;
       if(hint) showHint(hint, ft('sending'), true);
       try{
         const j=await web3send({ subject:'Newsletter-Anmeldung',
           from_name:(f.first.value+' '+f.last.value).trim()||'Newsletter', replyto:f.email.value,
-          [d.nl_first]:f.first.value, [d.nl_last]:f.last.value, [d.nl_email]:f.email.value });
+          [d.nl_first]:f.first.value, [d.nl_last]:f.last.value, [d.nl_email]:f.email.value,
+          'Einwilligung':'ja, bei der Anmeldung auf klinkerbox.ch erteilt' });
         if(j&&j.success){ nf.reset(); if(hint) showHint(hint, I[lang].nl_done, true); }
         else if(hint) showHint(hint, ft('err'), false);
       }catch(err){ if(hint) showHint(hint, ft('err'), false); }
       finally{ if(btn) btn.disabled=false; }
     };
   }
-  function showHint(el,msg,ok){ if(!el) return; el.hidden=false; el.textContent=msg; el.className='cform__hint '+(ok?'is-ok':'is-err'); }
+  // Der Hinweis ist eine Live-Region (role=status) und muss deshalb dauerhaft im DOM
+  // stehen — wird er per hidden ein- und ausgeblendet, kuendigen Screenreader nichts an.
+  function showHint(el,msg,ok){ if(!el) return; el.textContent=msg; el.className='cform__hint '+(ok?'is-ok':'is-err'); }
 
   // ===================== REVEAL OBSERVER =====================
   const revObs=new IntersectionObserver((es)=>{
@@ -1771,7 +1906,7 @@
     $$('#catTabs .tab').forEach(t=>t.onclick=()=>{
       $$('#catTabs .tab').forEach(x=>x.classList.remove('is-active')); t.classList.add('is-active');
       state.cat=t.dataset.cat; state.sub=null; state.stil=null;
-      buildSubChips(); buildStilChips(); buildTypChips(); buildColorDots(); buildSizeSelect(); render();
+      buildSubChips(); buildStilChips(); buildTypChips(); buildUseChips(); buildHandChips(); buildColorDots(); buildSizeSelect(); render();
       scrollToEl($('#katalog'));
     });
     $$('[data-cat]').forEach(el=>{ if(el.closest('#catTabs')) return;
@@ -1782,20 +1917,24 @@
       $$(`.nav__links a[href="${href}"]`).forEach(a=>a.addEventListener('click',()=>{
         const tab=document.querySelector(`#catTabs .tab[data-cat="${cat}"]`);
         if(tab){ $$('#catTabs .tab').forEach(x=>x.classList.remove('is-active')); tab.classList.add('is-active');
-          state.cat=cat; state.sub=null; state.stil=null; state.typ=null; buildSubChips(); buildStilChips(); buildTypChips(); buildColorDots(); buildSizeSelect(); render(); }
-        $('#navLinks').classList.remove('open');
+          state.cat=cat; state.sub=null; state.stil=null; state.typ=null; state.use=null; buildSubChips(); buildStilChips(); buildTypChips(); buildUseChips(); buildHandChips(); buildColorDots(); buildSizeSelect(); render(); }
+        closeNav();
       }));
     });
-    $$('.nav__links a').forEach(a=>a.addEventListener('click',()=>$('#navLinks').classList.remove('open')));
+    $$('.nav__links a').forEach(a=>a.addEventListener('click',()=>closeNav()));
     $('#search').oninput=e=>{ state.q=e.target.value; render(); };
     $('#resetBtn').onclick=()=>{ state.sub=null; state.stil=null; state.color=null; state.size='all'; state.q='';
-      $('#search').value=''; state.typ=null; $('#sizeSelect').value='all'; buildSubChips(); buildStilChips(); buildTypChips(); buildColorDots(); buildSizeSelect(); render(); };
-    $('#langBtn').onclick=e=>{ e.stopPropagation(); $('#lang').classList.toggle('open'); };
+      $('#search').value=''; state.typ=null; state.use=null; state.hand=false; $('#sizeSelect').value='all'; buildSubChips(); buildStilChips(); buildTypChips(); buildUseChips(); buildHandChips(); buildColorDots(); buildSizeSelect(); render(); };
+    $('#langBtn').onclick=e=>{ e.stopPropagation();
+      const open=$('#lang').classList.toggle('open');
+      $('#langBtn').setAttribute('aria-expanded', String(open)); };
     $$('#langMenu button').forEach(b=>b.onclick=()=>{ lang=b.dataset.lang; localStorage.setItem('kb_lang',lang);
       history.replaceState(null,'', (lang==='de'?location.pathname:location.pathname+'?lang='+lang)+location.hash);
       $('#lang').classList.remove('open'); applyLang(); buildColorDots(); });
-    document.addEventListener('click',()=>$('#lang').classList.remove('open'));
-    $('#burger').onclick=()=>$('#navLinks').classList.toggle('open');
+    document.addEventListener('click',()=>{ $('#lang').classList.remove('open');
+      $('#langBtn').setAttribute('aria-expanded','false'); });
+    $('#burger').onclick=()=>{ const open=$('#navLinks').classList.toggle('open');
+      $('#burger').setAttribute('aria-expanded', String(open)); };
     $('#lbClose').onclick=closeLightbox;
     $('#lightbox').onclick=e=>{ if(e.target.id==='lightbox') closeLightbox(); };
     $('#loadMore').onclick=loadMore;
@@ -1815,6 +1954,7 @@
     $('#mixExport').onclick=exportWall;
     { const rq=$('#mixRequest'); if(rq) rq.onclick=requestMix; }
     document.addEventListener('keydown',e=>{
+      trapFocus(e);
       if(e.key==='Escape' && !$('#mixer').hidden){ closeMixer(); return; }
       if($('#lightbox').hidden) return;
       if(e.key==='Escape') closeLightbox();
@@ -1867,9 +2007,16 @@
   try{ const s=localStorage.getItem('kb_mix'); if(s) zonesRestore(s); }catch(e){}
   mixLoaded=true;
   try{ if(localStorage.getItem('kb_fab')){ const fb=$('#mixFab'); if(fb) fb.classList.add('mixfab--min'); } }catch(e){}
+  // Kategorie-Deep-Link: /#pflaster, /#mauer, /#tonplatten aktivieren den Tab.
+  // Ohne das landete JEDER geteilte oder gebookmarkte Link auf Pflasterklinker —
+  // und genau diese Anker stehen in der Hauptnavigation.
+  // Optional mit Einsatzbereich: /#pflaster/innen bzw. /#pflaster/stufen —
+  // damit laesst sich eine gefilterte Auswahl direkt an Kunden verschicken.
+  { const m=/^#(pflaster|mauer|tonplatten)(?:\/(innen|stufen))?$/.exec(location.hash);
+    if(m){
+      if(m[2]) openUse(m[1], m[2]);
+      else { const t=document.querySelector(`#catTabs .tab[data-cat="${m[1]}"]`); if(t) t.click(); }
+    } }
   // Deep-Link: #p/<id> öffnet das Produkt direkt (teilbare Produktlinks)
   { const m=/^#p\/([\w-]+)/.exec(location.hash); if(m){ const p=P.find(x=>x.id===m[1]); if(p) setTimeout(()=>openLightbox(p),400); } }
-  // clean the HAND-MADE stamp from the affected images, then refresh what's on screen
-  P.filter(p=>STAMPED.has(p.id)).forEach(p=>cleanStamp(p,()=>{ if(!$('#grid')) return;
-    $$('#grid .card').forEach(c=>{ const img=c.querySelector('img'); if(img && img.alt===p.series+' '+p.name) img.src=imgSrc(p); }); }));
 })();

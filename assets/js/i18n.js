@@ -16,9 +16,9 @@ window.I18N = {
     cat_tonplatten_desc:"Handgefertigte Böden für innen und aussen.",
     cat_explore:"Entdecken →",
     catalog_eyebrow:"Die Kollektion", catalog_title:"Finden Sie Ihren Klinker.",
-    filter_all:"Alle", filter_sub:"Unterkategorie", filter_stil:"Stil", filter_typ:"Typ", filter_color:"Farbe",
+    filter_all:"Alle", filter_sub:"Unterkategorie", filter_stil:"Stil", filter_typ:"Typ", filter_use:"Einsatzbereich", uses_lead:"Auch für besondere Orte", filter_prop:"Eigenschaft", filter_color:"Farbe",
     filter_size:"Grösse / Format", filter_search:"Suche", filter_reset:"Zurücksetzen",
-    catalog_results:"Produkte", catalog_empty:"Keine Produkte für diese Auswahl.", load_more:"Mehr anzeigen",
+    catalog_results:"Produkte", catalog_total:"von {t} in der Kollektion", catalog_empty:"Keine Produkte für diese Auswahl.", load_more:"Mehr anzeigen",
     refs_eyebrow:"Referenzen", refs_title:"Gebaut, um zu bleiben.",
     refs_videos:"Filme aus der Praxis", refs_projects:"Ausgeführte Projekte",
     contact_eyebrow:"Kontakt", contact_title:"Sprechen wir über Ihr Projekt.",
@@ -28,10 +28,16 @@ window.I18N = {
     contact_hours_val:"Mo–Fr 7:30–18:00 · Sa/So geschlossen",
     contact_btn:"Anfrage senden", contact_tag:"Pflaster- & Mauerklinker aus Ton · Tonplatten",
     footer_made:"Bern · Schweiz", footer_agb:"AGB / Verkaufs- & Lieferbedingungen",
+    footer_imprint:"Impressum", footer_privacy:"Datenschutz",
+    f_privacy:'Ihre Angaben nutzen wir ausschliesslich zur Beantwortung Ihrer Anfrage und geben sie nicht weiter. Mehr dazu in der <a href="datenschutz/">Datenschutzerklärung</a>.',
+    nl_consent:'Ich möchte den Klinkerbox-Newsletter erhalten und kann mich jederzeit abmelden. Es gilt die <a href="datenschutz/">Datenschutzerklärung</a>.',
+    nl_consent_req:"Bitte bestätigen Sie die Einwilligung, damit wir Ihnen den Newsletter senden dürfen.",
     // form
     form_title:"Kontaktieren Sie uns", f_product:"Produkt", f_company:"Firma", f_name:"Name", f_phone:"Telefonnummer",
     f_email:"E-Mail", f_projaddr:"Projektadresse", f_interest:"Ich interessiere mich für",
-    f_message:"Nachricht", f_send:"Senden", f_req:"Bitte Name, E-Mail und Nachricht ausfüllen.",
+    f_message:"Nachricht", f_send:"Senden", f_req:"Bitte Name und E-Mail ausfüllen.",
+    f_message_ph:"Was planen Sie? Z. B. Vorplatz 120 m², Baustart Frühling 2027",
+    f_done:"Danke, Ihre Anfrage ist eingetroffen. Sie erhalten innert 24 Stunden an Werktagen eine Antwort — meist noch am selben Tag. Dringend? +41 79 830 15 34",
     f_reqnote:"Pflichtfelder", opt_samples:"Muster / Dokumentation",
     // newsletter
     nl_title:"Newsletter", nl_sub:"Neue Kollektionen und Projekte — ein paar Mal im Jahr, ohne Spam.",
@@ -41,7 +47,9 @@ window.I18N = {
     lb_series:"Serie", lb_color:"Farbe", lb_sub:"Ausführung", lb_size:"Format", lb_cat:"Kategorie",
     lb_finish:"Oberfläche", lb_cta:"Muster anfragen", search_ph:"Serie, Farbe …", size_all:"Alle Formate",
     lb_props:"Eigenschaft", lb_handmade:"Handmade", allformats:"Alle Formate", multiformats:"Mehrere Formate", lb_formats:"Mögliche Formate",
-    lb_specs:"Technische Daten", tf_format:"Format", tf_dicke:"Dicke", tf_units:"Stück / m²", tf_weight:"Gewicht / m²", req_note:"Pflichtfelder"
+    lb_specs:"Technische Daten", tf_format:"Format", tf_dicke:"Dicke", tf_units:"Stück / m²", tf_weight:"Gewicht / m²", req_note:"Pflichtfelder",
+    lb_img_n:"Bild {n} von {t}", lb_zoom:"Vergrösserte Ansicht", lb_prev:"Vorheriges Bild", lb_next:"Nächstes Bild",
+    card_open:"Details anzeigen", video_play:"Video abspielen", menu_open:"Menü öffnen", skip:"Direkt zum Inhalt"
   },
   fr:{
     nav_pflaster:"Pavés", nav_mauer:"Briques de parement", nav_tonplatten:"Tomettes",
@@ -59,9 +67,9 @@ window.I18N = {
     cat_tonplatten_desc:"Sols faits main pour l'intérieur et l'extérieur.",
     cat_explore:"Découvrir →",
     catalog_eyebrow:"La collection", catalog_title:"Trouvez votre clinker.",
-    filter_all:"Tous", filter_sub:"Sous-catégorie", filter_stil:"Style", filter_typ:"Type", filter_color:"Couleur",
+    filter_all:"Tous", filter_sub:"Sous-catégorie", filter_stil:"Style", filter_typ:"Type", filter_use:"Domaine d'emploi", uses_lead:"Aussi pour des lieux particuliers", filter_prop:"Caractéristique", filter_color:"Couleur",
     filter_size:"Taille / Format", filter_search:"Recherche", filter_reset:"Réinitialiser",
-    catalog_results:"produits", catalog_empty:"Aucun produit pour cette sélection.", load_more:"Afficher plus",
+    catalog_results:"produits", catalog_total:"sur {t} de la collection", catalog_empty:"Aucun produit pour cette sélection.", load_more:"Afficher plus",
     refs_eyebrow:"Réalisations", refs_title:"Conçu pour durer.",
     refs_videos:"Films de chantier", refs_projects:"Projets réalisés",
     contact_eyebrow:"Contact", contact_title:"Parlons de votre projet.",
@@ -71,9 +79,15 @@ window.I18N = {
     contact_hours_val:"Lu–Ve 7h30–18h00 · Sa/Di fermé",
     contact_btn:"Envoyer une demande", contact_tag:"Pavés & briques en terre cuite · Tomettes",
     footer_made:"Berne · Suisse", footer_agb:"CGV / Conditions de vente & livraison",
+    footer_imprint:"Mentions légales", footer_privacy:"Protection des données",
+    f_privacy:'Nous utilisons vos indications uniquement pour répondre à votre demande et ne les transmettons pas. Détails dans la <a href="datenschutz/">déclaration de protection des données</a>.',
+    nl_consent:'Je souhaite recevoir la newsletter Klinkerbox et peux me désabonner à tout moment. La <a href="datenschutz/">déclaration de protection des données</a> s’applique.',
+    nl_consent_req:"Merci de confirmer votre consentement pour que nous puissions vous envoyer la newsletter.",
     form_title:"Contactez-nous", f_product:"Produit", f_company:"Société", f_name:"Nom", f_phone:"Téléphone",
     f_email:"E-mail", f_projaddr:"Adresse du projet", f_interest:"Je suis intéressé par",
-    f_message:"Message", f_send:"Envoyer", f_req:"Veuillez remplir nom, e-mail et message.",
+    f_message:"Message", f_send:"Envoyer", f_req:"Veuillez remplir nom et e-mail.",
+    f_message_ph:"Quel est votre projet ? P. ex. parvis 120 m², début du chantier printemps 2027",
+    f_done:"Merci, votre demande nous est parvenue. Vous recevrez une réponse sous 24 heures ouvrables — souvent le jour même. Urgent ? +41 79 830 15 34",
     f_reqnote:"Champs obligatoires", opt_samples:"Échantillons / Documentation",
     nl_title:"Newsletter", nl_sub:"Nouvelles collections et projets — quelques fois par an, sans spam.",
     nl_first:"Prénom", nl_last:"Nom", nl_company:"Société", nl_email:"E-mail",
@@ -81,7 +95,9 @@ window.I18N = {
     lb_series:"Série", lb_color:"Couleur", lb_sub:"Finition", lb_size:"Format", lb_cat:"Catégorie",
     lb_finish:"Surface", lb_cta:"Demander un échantillon", search_ph:"Série, couleur …", size_all:"Tous les formats",
     lb_props:"Caractéristique", lb_handmade:"Fait main", allformats:"Tous formats", multiformats:"Plusieurs formats", lb_formats:"Formats possibles",
-    lb_specs:"Données techniques", tf_format:"Format", tf_dicke:"Épaisseur", tf_units:"Pièces / m²", tf_weight:"Poids / m²", req_note:"Champs obligatoires"
+    lb_specs:"Données techniques", tf_format:"Format", tf_dicke:"Épaisseur", tf_units:"Pièces / m²", tf_weight:"Poids / m²", req_note:"Champs obligatoires",
+    lb_img_n:"Image {n} sur {t}", lb_zoom:"Vue agrandie", lb_prev:"Image précédente", lb_next:"Image suivante",
+    card_open:"Voir les détails", video_play:"Lire la vidéo", menu_open:"Ouvrir le menu", skip:"Aller au contenu"
   },
   it:{
     nav_pflaster:"Pavimenti in klinker", nav_mauer:"Mattoni faccia a vista", nav_tonplatten:"Pianelle in cotto",
@@ -99,9 +115,9 @@ window.I18N = {
     cat_tonplatten_desc:"Pavimenti fatti a mano per interni ed esterni.",
     cat_explore:"Scopri →",
     catalog_eyebrow:"La collezione", catalog_title:"Trova il tuo klinker.",
-    filter_all:"Tutti", filter_sub:"Sottocategoria", filter_stil:"Stile", filter_typ:"Tipo", filter_color:"Colore",
+    filter_all:"Tutti", filter_sub:"Sottocategoria", filter_stil:"Stile", filter_typ:"Tipo", filter_use:"Ambito d'impiego", uses_lead:"Anche per luoghi particolari", filter_prop:"Caratteristica", filter_color:"Colore",
     filter_size:"Dimensione / Formato", filter_search:"Cerca", filter_reset:"Reimposta",
-    catalog_results:"prodotti", catalog_empty:"Nessun prodotto per questa selezione.", load_more:"Mostra altri",
+    catalog_results:"prodotti", catalog_total:"su {t} della collezione", catalog_empty:"Nessun prodotto per questa selezione.", load_more:"Mostra altri",
     refs_eyebrow:"Referenze", refs_title:"Costruito per durare.",
     refs_videos:"Filmati dai cantieri", refs_projects:"Progetti realizzati",
     contact_eyebrow:"Contatto", contact_title:"Parliamo del vostro progetto.",
@@ -111,9 +127,15 @@ window.I18N = {
     contact_hours_val:"Lu–Ve 7:30–18:00 · Sa/Do chiuso",
     contact_btn:"Invia richiesta", contact_tag:"Pavimenti e mattoni in cotto · Pianelle",
     footer_made:"Berna · Svizzera", footer_agb:"Condizioni di vendita & fornitura",
+    footer_imprint:"Colophon", footer_privacy:"Protezione dei dati",
+    f_privacy:'Utilizziamo i suoi dati esclusivamente per rispondere alla sua richiesta e non li trasmettiamo a terzi. Maggiori informazioni nell’<a href="datenschutz/">informativa sulla protezione dei dati</a>.',
+    nl_consent:'Desidero ricevere la newsletter di Klinkerbox e posso disiscrivermi in qualsiasi momento. Si applica l’<a href="datenschutz/">informativa sulla protezione dei dati</a>.',
+    nl_consent_req:"La preghiamo di confermare il consenso affinché possiamo inviarle la newsletter.",
     form_title:"Contattateci", f_product:"Prodotto", f_company:"Azienda", f_name:"Nome", f_phone:"Telefono",
     f_email:"E-mail", f_projaddr:"Indirizzo del progetto", f_interest:"Sono interessato a",
-    f_message:"Messaggio", f_send:"Invia", f_req:"Compilare nome, e-mail e messaggio.",
+    f_message:"Messaggio", f_send:"Invia", f_req:"Compili nome ed e-mail.",
+    f_message_ph:"Che cosa sta progettando? Ad es. piazzale 120 m², inizio lavori primavera 2027",
+    f_done:"Grazie, la sua richiesta è arrivata. Riceverà una risposta entro 24 ore lavorative — spesso lo stesso giorno. Urgente? +41 79 830 15 34",
     f_reqnote:"Campi obbligatori", opt_samples:"Campioni / Documentazione",
     nl_title:"Newsletter", nl_sub:"Nuove collezioni e progetti — poche volte l'anno, niente spam.",
     nl_first:"Nome", nl_last:"Cognome", nl_company:"Azienda", nl_email:"E-mail",
@@ -121,7 +143,9 @@ window.I18N = {
     lb_series:"Serie", lb_color:"Colore", lb_sub:"Finitura", lb_size:"Formato", lb_cat:"Categoria",
     lb_finish:"Superficie", lb_cta:"Richiedi campione", search_ph:"Serie, colore …", size_all:"Tutti i formati",
     lb_props:"Caratteristica", lb_handmade:"Fatto a mano", allformats:"Tutti i formati", multiformats:"Più formati", lb_formats:"Formati possibili",
-    lb_specs:"Dati tecnici", tf_format:"Formato", tf_dicke:"Spessore", tf_units:"Pezzi / m²", tf_weight:"Peso / m²", req_note:"Campi obbligatori"
+    lb_specs:"Dati tecnici", tf_format:"Formato", tf_dicke:"Spessore", tf_units:"Pezzi / m²", tf_weight:"Peso / m²", req_note:"Campi obbligatori",
+    lb_img_n:"Immagine {n} di {t}", lb_zoom:"Vista ingrandita", lb_prev:"Immagine precedente", lb_next:"Immagine successiva",
+    card_open:"Mostra dettagli", video_play:"Riproduci video", menu_open:"Apri il menu", skip:"Vai al contenuto"
   },
   en:{
     nav_pflaster:"Paving bricks", nav_mauer:"Facing bricks", nav_tonplatten:"Clay tiles",
@@ -139,9 +163,9 @@ window.I18N = {
     cat_tonplatten_desc:"Handcrafted floors for indoors and out.",
     cat_explore:"Explore →",
     catalog_eyebrow:"The collection", catalog_title:"Find your clinker.",
-    filter_all:"All", filter_sub:"Sub-category", filter_stil:"Style", filter_typ:"Type", filter_color:"Colour",
+    filter_all:"All", filter_sub:"Sub-category", filter_stil:"Style", filter_typ:"Type", filter_use:"Application", uses_lead:"Also for special places", filter_prop:"Property", filter_color:"Colour",
     filter_size:"Size / Format", filter_search:"Search", filter_reset:"Reset",
-    catalog_results:"products", catalog_empty:"No products for this selection.", load_more:"Show more",
+    catalog_results:"products", catalog_total:"of {t} in the collection", catalog_empty:"No products for this selection.", load_more:"Show more",
     refs_eyebrow:"References", refs_title:"Built to last.",
     refs_videos:"Films from site", refs_projects:"Completed projects",
     contact_eyebrow:"Contact", contact_title:"Let's talk about your project.",
@@ -151,9 +175,15 @@ window.I18N = {
     contact_hours_val:"Mon–Fri 7:30–18:00 · Sat/Sun closed",
     contact_btn:"Send enquiry", contact_tag:"Clay paving & facing bricks · Clay tiles",
     footer_made:"Bern · Switzerland", footer_agb:"Terms of sale & delivery",
+    footer_imprint:"Imprint", footer_privacy:"Privacy",
+    f_privacy:'We use your details solely to answer your enquiry and do not pass them on. More in our <a href="datenschutz/">privacy policy</a>.',
+    nl_consent:'I would like to receive the Klinkerbox newsletter and can unsubscribe at any time. Our <a href="datenschutz/">privacy policy</a> applies.',
+    nl_consent_req:"Please confirm your consent so that we may send you the newsletter.",
     form_title:"Contact us", f_product:"Product", f_company:"Company", f_name:"Name", f_phone:"Phone",
     f_email:"Email", f_projaddr:"Project address", f_interest:"I'm interested in",
-    f_message:"Message", f_send:"Send", f_req:"Please fill in name, email and message.",
+    f_message:"Message", f_send:"Send", f_req:"Please fill in name and e-mail.",
+    f_message_ph:"What are you planning? E.g. forecourt 120 m², start spring 2027",
+    f_done:"Thank you, your enquiry has arrived. You will hear back within 24 hours on working days — often the same day. Urgent? +41 79 830 15 34",
     f_reqnote:"Required fields", opt_samples:"Samples / Documentation",
     nl_title:"Newsletter", nl_sub:"New collections and projects — a few times a year, no spam.",
     nl_first:"First name", nl_last:"Last name", nl_company:"Company", nl_email:"Email",
@@ -161,7 +191,9 @@ window.I18N = {
     lb_series:"Series", lb_color:"Colour", lb_sub:"Finish", lb_size:"Format", lb_cat:"Category",
     lb_finish:"Surface", lb_cta:"Request a sample", search_ph:"Series, colour …", size_all:"All formats",
     lb_props:"Property", lb_handmade:"Handmade", allformats:"All formats", multiformats:"Multiple formats", lb_formats:"Available formats",
-    lb_specs:"Technical data", tf_format:"Format", tf_dicke:"Thickness", tf_units:"Units / m²", tf_weight:"Weight / m²", req_note:"Required fields"
+    lb_specs:"Technical data", tf_format:"Format", tf_dicke:"Thickness", tf_units:"Units / m²", tf_weight:"Weight / m²", req_note:"Required fields",
+    lb_img_n:"Image {n} of {t}", lb_zoom:"Enlarged view", lb_prev:"Previous image", lb_next:"Next image",
+    card_open:"View details", video_play:"Play video", menu_open:"Open menu", skip:"Skip to content"
   }
 };
 
@@ -182,6 +214,13 @@ window.FAMILY_HEX = {rot:"#b04632",terra:"#bd7a5a",braun:"#6f4a32",beige:"#cdb38
   gruen:"#7d7f57",grau:"#9a9c9d",blau:"#4d5168",schwarz:"#33373a",bunt:"#9b7a5c"};
 
 // Sub-category / finish labels per language
+// Einsatzbereich — Filterzeile im Katalog. Ergibt sich aus den Referenzfotos eines Produkts,
+// nicht aus einem eigenen Datenfeld (siehe usesOf() in app.js).
+window.USES = {
+  "innen":  {de:"Innenräume",               fr:"Intérieur",          it:"Interno",          en:"Indoor"},
+  "stufen": {de:"Sitzelemente & Treppen",fr:"Assises & escaliers",it:"Sedute e scale",   en:"Seating & steps"}
+};
+
 window.SUBS = {
   "getrommelt":  {de:"Getrommelt",  fr:"Vieilli",       it:"Anticato",       en:"Tumbled"},
   "scharfkantig":{de:"Scharfkantig",fr:"Arête vive",    it:"Spigolo vivo",   en:"Sharp-edged"},
@@ -221,9 +260,6 @@ window.MIX = {
   b_bungalow:   {de:"Bungalow", fr:"Bungalow", it:"Bungalow", en:"Bungalow"},
   b_office:     {de:"Bürogebäude", fr:"Immeuble de bureaux", it:"Edificio per uffici", en:"Office building"},
   b_friesen:    {de:"Friesenhaus", fr:"Maison frisonne", it:"Casa frisone", en:"Frisian house"},
-  r_living:     {de:"Wohnzimmer", fr:"Salon", it:"Soggiorno", en:"Living room"},
-  r_office:     {de:"Büro", fr:"Bureau", it:"Ufficio", en:"Office"},
-  r_hall:       {de:"Maisonette-Gang", fr:"Couloir duplex", it:"Corridoio duplex", en:"Maisonette hall"},
   add:    {de:"Auswählen", fr:"Sélectionner", it:"Seleziona", en:"Select"},
   added:  {de:"Ausgewählt ✓", fr:"Sélectionné ✓", it:"Selezionato ✓", en:"Selected ✓"},
   remove: {de:"Entfernen", fr:"Retirer", it:"Rimuovi", en:"Remove"},

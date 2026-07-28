@@ -4,3 +4,9 @@ Thumbs.db
 node_modules/
 .claude/
 gen.sh /
+
+# Zuordnung alt -> neu der Bild-Umbenennung. Enthaelt die ALTEN Dateinamen
+# samt Strasse, Hausnummer und PLZ - darf nicht ins oeffentliche Repo.
+tools/rename-plan.txt
+# persoenliche Notizen
+KONFIGURATOR-MOBILE-TODO.md

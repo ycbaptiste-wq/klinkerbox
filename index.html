@@ -31,8 +31,11 @@
 <link rel="preload" as="font" type="font/woff2" href="assets/fonts/inter-var-latin.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="assets/fonts/bricolage-500-latin.woff2" crossorigin>
 <link rel="preload" as="image" href="assets/img/hero.webp" type="image/webp" fetchpriority="high">
+<link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" href="assets/img/logo-mark.png">
-<link rel="stylesheet" href="assets/css/style.css?v=48">
+<link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#fbfaf8">
+<link rel="stylesheet" href="assets/css/style.css?v=50">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -64,12 +67,14 @@
 </head>
 <body>
 
+<a class="skiplink" href="#top" data-t="skip">Direkt zum Inhalt</a>
+
 <!-- ===== HEADER ===== -->
 <header id="nav" class="nav">
   <div class="nav__inner">
     <a href="#top" class="nav__brand" aria-label="Klinkerbox">
-      <img src="assets/img/logo-light.png" alt="Klinkerbox — Feuer, Ton und Leidenschaft" class="nav__logo nav__logo--light">
-      <img src="assets/img/logo-dark.png" alt="" aria-hidden="true" class="nav__logo nav__logo--dark">
+      <img src="assets/img/logo-light.webp" width="153" height="38" alt="Klinkerbox — Feuer, Ton und Leidenschaft" class="nav__logo nav__logo--light">
+      <img src="assets/img/logo-dark.webp" width="153" height="38" alt="" aria-hidden="true" class="nav__logo nav__logo--dark">
     </a>
     <nav class="nav__links" id="navLinks">
       <a href="#pflaster" data-t="nav_pflaster">Pflasterklinker</a>
@@ -80,7 +85,7 @@
     </nav>
     <div class="nav__tools">
       <div class="lang" id="lang">
-        <button class="lang__current" id="langBtn"><span id="langLabel">DE</span>
+        <button class="lang__current" id="langBtn" aria-haspopup="true" aria-expanded="false" aria-controls="langMenu"><span id="langLabel">DE</span>
           <svg width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>
         </button>
         <div class="lang__menu" id="langMenu">
@@ -90,12 +95,12 @@
           <button data-lang="en">English</button>
         </div>
       </div>
-      <button class="nav__burger" id="burger" aria-label="Menu"><span></span><span></span></button>
+      <button class="nav__burger" id="burger" aria-label="Menu" aria-expanded="false" aria-controls="navLinks"><span></span><span></span></button>
     </div>
   </div>
 </header>
 
-<main id="top">
+<main id="top" tabindex="-1">
 
   <!-- ===== HERO ===== -->
   <section class="hero">
@@ -122,7 +127,7 @@
     </div>
     <div class="cats__grid">
       <a href="#pflaster" class="catcard reveal" data-cat="pflaster">
-        <div class="catcard__img" style="background-image:url('assets/products/pflaster/SeptimA-Noblesse.jpg')"></div>
+        <div class="catcard__img" style="background-image:image-set(url('assets/products-640/pflaster/SeptimA-Noblesse.webp') type('image/webp'),url('assets/products/pflaster/SeptimA-Noblesse.jpg') type('image/jpeg'))"></div>
         <div class="catcard__body">
           <h3 data-t="nav_pflaster">Pflasterklinker</h3>
           <p data-t="cat_pflaster_desc">Robuste Beläge für Wege, Plätze und Einfahrten.</p>
@@ -130,7 +135,7 @@
         </div>
       </a>
       <a href="#mauer" class="catcard reveal" data-cat="mauer">
-        <div class="catcard__img" style="background-image:url('assets/products/mauer/linea-3005.jpg')"></div>
+        <div class="catcard__img" style="background-image:image-set(url('assets/products-640/mauer/linea-3005.webp') type('image/webp'),url('assets/products/mauer/linea-3005.jpg') type('image/jpeg'))"></div>
         <div class="catcard__body">
           <h3 data-t="nav_mauer">Mauerklinker</h3>
           <p data-t="cat_mauer_desc">Verblender und Riemchen für Fassaden mit Tiefe.</p>
@@ -138,13 +143,23 @@
         </div>
       </a>
       <a href="#tonplatten" class="catcard reveal" data-cat="tonplatten">
-        <div class="catcard__img" style="background-image:url('assets/products/tonplatten/patine-main-rouge-2.jpg')"></div>
+        <div class="catcard__img" style="background-image:image-set(url('assets/products-640/tonplatten/patine-main-rouge-2.webp') type('image/webp'),url('assets/products/tonplatten/patine-main-rouge-2.jpg') type('image/jpeg'))"></div>
         <div class="catcard__body">
           <h3 data-t="nav_tonplatten">Tonplatten</h3>
           <p data-t="cat_tonplatten_desc">Handgefertigte Böden für innen und aussen.</p>
           <span class="catcard__link" data-t="cat_explore">Entdecken →</span>
         </div>
       </a>
+    </div>
+
+    <!-- Anwendungs-Einstiege: bewusst als ZWEITE Ebene unter den drei
+         Materialwelten. Innenraum und Treppe sind Orte, keine Materialien -
+         deshalb hier und nicht in der Hauptnavigation. Wird aus den Daten
+         gebaut (assets/js/app.js: buildUseCards) und waechst automatisch mit,
+         sobald weitere -Innen-/-Stufen-Bilder dazukommen. -->
+    <div class="uses reveal" id="uses" hidden>
+      <p class="uses__lead" data-t="uses_lead">Auch für besondere Orte</p>
+      <div class="uses__grid" id="usesGrid"></div>
     </div>
   </section>
 
@@ -186,35 +201,45 @@
         <button class="tab" data-cat="tonplatten" id="tonplatten" data-t="nav_tonplatten">Tonplatten</button>
       </div>
       <div class="filters__row">
+        <!-- Chip-Gruppen: <span> statt <label>, denn ein <label> ohne Formularfeld
+             ist ein Waisen-Label. Die Verbindung laeuft ueber aria-labelledby. -->
         <div class="filters__group">
-          <label class="filters__label" data-t="filter_sub">Unterkategorie</label>
-          <div class="chips" id="subChips"></div>
+          <span class="filters__label" id="subLbl" data-t="filter_sub">Unterkategorie</span>
+          <div class="chips" id="subChips" role="group" aria-labelledby="subLbl"></div>
         </div>
         <div class="filters__group" id="stilGroup" hidden>
-          <label class="filters__label" data-t="filter_stil">Stil</label>
-          <div class="chips" id="stilChips"></div>
+          <span class="filters__label" id="stilLbl" data-t="filter_stil">Stil</span>
+          <div class="chips" id="stilChips" role="group" aria-labelledby="stilLbl"></div>
         </div>
         <div class="filters__group" id="typGroup" hidden>
-          <label class="filters__label" data-t="filter_typ">Typ</label>
-          <div class="chips" id="typChips"></div>
+          <span class="filters__label" id="typLbl" data-t="filter_typ">Typ</span>
+          <div class="chips" id="typChips" role="group" aria-labelledby="typLbl"></div>
+        </div>
+        <div class="filters__group" id="useGroup" hidden>
+          <span class="filters__label" id="useLbl" data-t="filter_use">Einsatzbereich</span>
+          <div class="chips" id="useChips" role="group" aria-labelledby="useLbl"></div>
+        </div>
+        <div class="filters__group" id="handGroup" hidden>
+          <span class="filters__label" id="handLbl" data-t="filter_prop">Eigenschaft</span>
+          <div class="chips" id="handChips" role="group" aria-labelledby="handLbl"></div>
         </div>
         <div class="filters__group">
-          <label class="filters__label" data-t="filter_color">Farbe</label>
-          <div class="colors" id="colorDots"></div>
+          <span class="filters__label" id="colorLbl" data-t="filter_color">Farbe</span>
+          <div class="colors" id="colorDots" role="group" aria-labelledby="colorLbl"></div>
         </div>
         <div class="filters__group filters__group--size">
-          <label class="filters__label" data-t="filter_size">Grösse / Format</label>
+          <label class="filters__label" for="sizeSelect" data-t="filter_size">Grösse / Format</label>
           <select id="sizeSelect" class="select"></select>
         </div>
         <div class="filters__group filters__group--search">
-          <label class="filters__label" data-t="filter_search">Suche</label>
+          <label class="filters__label" for="search" data-t="filter_search">Suche</label>
           <input type="search" id="search" class="input" placeholder="…">
         </div>
         <button class="filters__reset" id="resetBtn" data-t="filter_reset">Zurücksetzen</button>
       </div>
     </div>
 
-    <p class="catalog__count"><span id="count">0</span> <span data-t="catalog_results">Produkte</span></p>
+    <p class="catalog__count" role="status" aria-live="polite"><span id="count">0</span> <span data-t="catalog_results">Produkte</span> <span class="catalog__total" id="countTotal"></span></p>
     <div class="grid" id="grid"></div>
     <p class="catalog__empty" id="empty" hidden data-t="catalog_empty">Keine Produkte für diese Auswahl.</p>
     <div class="loadmore"><button class="loadmore__btn" id="loadMore" hidden><span data-t="load_more">Mehr anzeigen</span> · <span class="loadmore__n">0</span></button></div>
@@ -269,12 +294,12 @@
       <form class="cform" id="contactForm" novalidate>
         <h3 class="cform__title" data-t="form_title">Kontaktieren Sie uns</h3>
         <div class="cform__grid">
-          <label class="field field--full" id="produktField"><span data-t="f_product">Produkt</span><input type="text" name="produkt" placeholder="—"></label>
-          <label class="field"><span><span data-t="f_name">Name</span> <i class="req">*</i></span><input type="text" name="name" required aria-required="true"></label>
-          <label class="field"><span data-t="f_company">Firma</span><input type="text" name="company"></label>
-          <label class="field"><span data-t="f_phone">Telefonnummer</span><input type="tel" name="phone"></label>
-          <label class="field"><span><span data-t="f_email">E-Mail</span> <i class="req">*</i></span><input type="email" name="email" required aria-required="true"></label>
-          <label class="field field--full"><span data-t="f_projaddr">Projektadresse</span><input type="text" name="projaddr"></label>
+          <label class="field field--full" id="produktField"><span data-t="f_product">Produkt</span><input type="text" name="produkt" placeholder="—" autocomplete="off"></label>
+          <label class="field"><span><span data-t="f_name">Name</span> <i class="req">*</i></span><input type="text" name="name" required aria-required="true" autocomplete="name"></label>
+          <label class="field"><span data-t="f_company">Firma</span><input type="text" name="company" autocomplete="organization"></label>
+          <label class="field"><span data-t="f_phone">Telefonnummer</span><input type="tel" name="phone" autocomplete="tel" inputmode="tel"></label>
+          <label class="field"><span><span data-t="f_email">E-Mail</span> <i class="req">*</i></span><input type="email" name="email" required aria-required="true" autocomplete="email" inputmode="email"></label>
+          <label class="field field--full"><span data-t="f_projaddr">Projektadresse</span><input type="text" name="projaddr" autocomplete="street-address"></label>
         </div>
         <fieldset class="cform__interest">
           <legend data-t="f_interest">Ich interessiere mich für</legend>
@@ -285,11 +310,14 @@
             <label class="check"><input type="checkbox" name="interest" value="Muster"><span data-t="opt_samples">Muster / Dokumentation</span></label>
           </div>
         </fieldset>
-        <label class="field field--full"><span><span data-t="f_message">Nachricht</span> <i class="req">*</i></span><textarea name="message" rows="4" required aria-required="true"></textarea></label>
+        <!-- Nachricht bewusst NICHT mehr Pflicht: wer aus dem Konfigurator kommt, hat den
+             Text schon; wer direkt hier landet, musste bisher erst einen Aufsatz schreiben. -->
+        <label class="field field--full"><span data-t="f_message">Nachricht</span><textarea name="message" rows="4" data-ph="f_message_ph" placeholder="Was planen Sie? Z. B. Vorplatz 120 m², Baustart Frühling 2027"></textarea></label>
         <input type="text" name="website" class="cform__hp" tabindex="-1" autocomplete="off" aria-hidden="true">
         <p class="cform__note"><i class="req">*</i> <span data-t="req_note">Pflichtfelder</span></p>
+        <p class="cform__privacy" data-t="f_privacy">Ihre Angaben nutzen wir ausschliesslich zur Beantwortung Ihrer Anfrage und geben sie nicht weiter. Mehr dazu in der <a href="datenschutz/">Datenschutzerklärung</a>.</p>
         <button type="submit" class="btn btn--solid" data-t="f_send">Senden</button>
-        <p class="cform__hint" id="formHint" hidden></p>
+        <p class="cform__hint" id="formHint" role="status" aria-live="polite"></p>
       </form>
     </div>
   </section>
@@ -306,7 +334,9 @@
         <input type="text" name="last" data-ph="nl_last" placeholder="Nachname">
         <input type="email" name="email" required data-ph="nl_email" placeholder="E-Mail">
         <button type="submit" class="btn btn--solid" data-t="nl_btn">Abonnieren</button>
-        <p class="cform__hint" id="newsHint" hidden></p>
+        <label class="news__consent"><input type="checkbox" name="consent" required>
+          <span data-t="nl_consent">Ich möchte den Klinkerbox-Newsletter erhalten und kann mich jederzeit abmelden. Es gilt die <a href="datenschutz/">Datenschutzerklärung</a>.</span></label>
+        <p class="cform__hint" id="newsHint" role="status" aria-live="polite"></p>
       </form>
     </div>
   </section>
@@ -315,7 +345,11 @@
 <footer class="footer">
   <div class="footer__inner">
     <span>© <span id="year"></span> Klinkerbox · Daniel Ryser</span>
-    <a class="footer__agb" href="assets/docs/AGB-Klinkerbox.pdf" target="_blank" rel="noopener" download data-t="footer_agb">AGB / Verkaufs- &amp; Lieferbedingungen</a>
+    <nav class="footer__links" aria-label="Rechtliches">
+      <a href="impressum/" data-t="footer_imprint">Impressum</a>
+      <a href="datenschutz/" data-t="footer_privacy">Datenschutz</a>
+      <a class="footer__agb" href="assets/docs/AGB-Klinkerbox.pdf" target="_blank" rel="noopener" data-t="footer_agb">AGB / Verkaufs- &amp; Lieferbedingungen</a>
+    </nav>
     <span data-t="footer_made">Bern · Schweiz</span>
   </div>
 </footer>
@@ -356,18 +390,20 @@
 </div>
 
 <!-- ===== LIGHTBOX ===== -->
-<div class="lightbox" id="lightbox" data-lenis-prevent hidden>
+<div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Produktdetails" data-lenis-prevent hidden>
   <button class="lightbox__close" id="lbClose" aria-label="Close">&times;</button>
   <div class="lightbox__inner" id="lbInner"></div>
 </div>
 
-<script src="assets/js/lenis.min.js"></script>
-<script src="assets/js/products.js?v=30"></script>
-<script src="assets/js/enrich.js?v=30"></script>
-<script src="assets/js/specs.js?v=27"></script>
-<script src="assets/js/i18n.js?v=35"></script>
-<script src="assets/js/app.js?v=49"></script>
-<script src="assets/js/touchzoom.js?v=1"></script>
+<!-- defer: die Reihenfolge bleibt garantiert, der Parser wird aber nicht mehr
+     an jedem Tag angehalten (rund 273 KB JS vor dem ersten Katalog-Render) -->
+<script defer src="assets/js/lenis.min.js"></script>
+<script defer src="assets/js/products.js?v=30"></script>
+<script defer src="assets/js/enrich.js?v=31"></script>
+<script defer src="assets/js/specs.js?v=27"></script>
+<script defer src="assets/js/i18n.js?v=39"></script>
+<script defer src="assets/js/app.js?v=72"></script>
+<script defer src="assets/js/touchzoom.js?v=1"></script>
 <!-- 3D-Module (three.js) werden erst beim Öffnen des Konfigurators dynamisch geladen → schnellerer Seitenaufbau -->
 </body>
 </html>
