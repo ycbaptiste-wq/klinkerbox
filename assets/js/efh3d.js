@@ -49,6 +49,31 @@ function roofCanvas(){
   }
   return cv;
 }
+// Zaunfeld: Sockelmauer mit Abdeckplatte, zwei Riegel, Stabgitter dazwischen.
+// Die Stäbe laufen als EIN InstancedMesh und enden sauber an den Riegeln.
+function fenceRun(x0,x1,z,parent){
+  const len=x1-x0, cx=(x0+x1)/2;
+  const railM=mat(0x2c2e31,0.45,0.55);
+  const base=new THREE.Mesh(new THREE.BoxGeometry(len,0.34,0.24),mat(0xb6b2aa,0.9));
+  base.position.set(cx,0.17,z); base.castShadow=true; base.receiveShadow=true; parent.add(base);
+  const cap=new THREE.Mesh(new THREE.BoxGeometry(len,0.05,0.30),mat(0xa19d95,0.85));
+  cap.position.set(cx,0.365,z); cap.castShadow=true; cap.receiveShadow=true; parent.add(cap);
+  [1.32,0.52].forEach(y=>{ const r=new THREE.Mesh(new THREE.BoxGeometry(len,0.045,0.032),railM);
+    r.position.set(cx,y,z); r.castShadow=true; parent.add(r); });
+  const n=Math.max(2,Math.round(len/0.125));
+  const bars=new THREE.InstancedMesh(new THREE.BoxGeometry(0.020,0.90,0.020),railM,n);
+  bars.castShadow=true;
+  const M=new THREE.Matrix4();
+  for(let i=0;i<n;i++){ M.makeTranslation(x0+0.06+i*(len-0.12)/(n-1),0.92,z); bars.setMatrixAt(i,M); }
+  bars.instanceMatrix.needsUpdate=true; parent.add(bars);
+}
+// Zaunpfeiler mit Abdeckstein — Anfang, Ende und Einfahrt brauchen einen Halt
+function pier(x,z,h,parent){
+  const p=new THREE.Mesh(new THREE.BoxGeometry(0.40,h,0.40),mat(0xb6b2aa,0.9));
+  p.position.set(x,h/2,z); p.castShadow=true; p.receiveShadow=true; parent.add(p);
+  const c=new THREE.Mesh(new THREE.BoxGeometry(0.50,0.07,0.50),mat(0x9a968e,0.8));
+  c.position.set(x,h+0.035,z); c.castShadow=true; parent.add(c);
+}
 // Geschnittene Hecke als Kulisse — schliesst das Grundstück wie in echten Visualisierungen
 function hedge(x,z,len,rotY,parent){
   const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=rotY||0;
@@ -327,24 +352,21 @@ function buildScene(){
   bushClump(1.3,0.62,0.32,0x536444,beds);  bushClump(3.6,0.56,0.36,0x71785f,beds);
   bushClump(-5.2,0.82,0.40,0x4c5c40,beds); bushClump(5.2,0.82,0.38,0x5f6d4a,beds);
   // Hecken schliessen das Grundstück seitlich und hinten ab
-  hedge(-10.6,-1.0,13,Math.PI/2,scene);
-  hedge( 10.6,-1.0,13,Math.PI/2,scene);
+  // Länge und Lage so, dass die Seitenhecken bis an die Zaunpfeiler bei z=8.8 reichen
+  hedge(-10.6,0.4,17,Math.PI/2,scene);
+  hedge( 10.6,0.4,17,Math.PI/2,scene);
   hedge(  0.0,-13.5,22,0,scene);
 
-  // ---- Betonmauern + Metallzaun links/rechts ----
-  const cwM=mat(0xcfccc6,0.9);
-  [[-1,0],[1,0]].forEach(([s])=>{
-    const wall=new THREE.Mesh(new THREE.BoxGeometry(3.2,1.5,0.18),cwM);
-    wall.position.set(s*(HW/2+3.6),0.75,3.2); wall.rotation.y=s*0.06;
-    wall.castShadow=true; wall.receiveShadow=true; scene.add(wall);
-    const railM=mat(0x2c2e31,0.5,0.6);
-    const rail=new THREE.Mesh(new THREE.BoxGeometry(2.4,0.04,0.04),railM);
-    rail.position.set(s*(HW/2+1.35),1.15,2.2); scene.add(rail);
-    for(let i=0;i<11;i++){
-      const bar=new THREE.Mesh(new THREE.BoxGeometry(0.025,1.15,0.025),railM);
-      bar.position.set(s*(HW/2+0.35+i*0.22),0.6,2.2); scene.add(bar);
-    }
-  });
+  // ---- Grundstücksgrenze zur Strasse: Pfeiler, Sockelmauer, Stabgitter ----
+  // Vorher standen zwei Mauerscheiben und zwei Zaunfelder unverbunden im Gelände;
+  // die Stäbe hörten mitten in der Luft auf. Jetzt eine durchgehende Grenze mit
+  // Einfahrtsöffnung, die auf beiden Seiten in der Seitenhecke endet.
+  const FZ=8.8;                                    // Grenzlinie am Ende des Vorplatzes
+  const GATE=3.30;                                 // halbe Einfahrtsbreite
+  pier(-GATE,FZ,1.62,scene); pier(GATE,FZ,1.62,scene);
+  pier(-10.35,FZ,1.48,scene); pier(10.35,FZ,1.48,scene);
+  fenceRun(-10.14,-GATE+0.21,FZ,scene);
+  fenceRun(GATE-0.21,10.14,FZ,scene);
 
   // ---- Kulisse: Hügel + Bäume + ferne Häuser ----
   [[-20,-18,9,0x8d9c80],[18,-20,11,0x879579],[0,-26,15,0x96a389]].forEach(([x,z,r,c])=>{

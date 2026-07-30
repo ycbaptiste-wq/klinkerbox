@@ -1466,7 +1466,10 @@
       texJointMul=1; texDiv=1;
       [mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff]=B;
     }
-    if(tex) tex.__klbKey=klbTexKey(name,tex.width,tex.height,div,z);
+    // Die Moertelfarbe wird in paintWall als flaeche Fuellung gesetzt und ist damit
+    // exakt bekannt. Ohne diese Angabe muesste die 3D-Seite sie aus dem Histogramm
+    // raten - und raet bei duennen Fugen den haeufigsten STEIN statt den Moertel.
+    if(tex){ tex.__klbKey=klbTexKey(name,tex.width,tex.height,div,z); tex.__klbJoint=z.joint; }
     return tex;
   }
   function switchView(v){

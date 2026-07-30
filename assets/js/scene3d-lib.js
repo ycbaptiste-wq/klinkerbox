@@ -228,43 +228,101 @@ export function surfaceMaps(cv,maxW){
   c.drawImage(cv,0,0,W,H);
   let d; try{ d=c.getImageData(0,0,W,H).data; }catch(e){ return null; }
   const N=W*H;
-  // dominante quantisierte Farbe (4 Bit/Kanal) = Fugenfarbe, wenn sie genug Fläche hat
-  const hist=new Map(); let bestK=-1, bestN=0;
-  for(let p=0,i=0;p<N;p++,i+=4){
-    const k=((d[i]>>4)<<8)|((d[i+1]>>4)<<4)|(d[i+2]>>4);
-    const n=(hist.get(k)||0)+1; hist.set(k,n);
-    if(n>bestN){ bestN=n; bestK=k; }
+  // ---- Fugenfarbe ----
+  // Vorrang hat die vom Konfigurator durchgereichte Moertelfarbe (cv.__klbJoint):
+  // sie wird in paintWall als flaeche Fuellung gesetzt und ist damit exakt bekannt.
+  // Nur ohne diese Angabe wird geraten - und das Raten ueber die haeufigste Farbe
+  // greift daneben, sobald die Fugen duenn sind: dann ist die haeufigste Farbe ein
+  // dunkler STEIN, und die halbe Wand wird faelschlich als Fuge vertieft.
+  let jr, jg, jb, isJoint=true;
+  const jhex=cv.__klbJoint && /^#?[0-9a-f]{6}$/i.test(String(cv.__klbJoint).trim())
+    ? parseInt(String(cv.__klbJoint).trim().replace('#',''),16) : null;
+  if(jhex!=null){ jr=(jhex>>16)&255; jg=(jhex>>8)&255; jb=jhex&255; }
+  else{
+    const hist=new Map(); let bestK=-1, bestN=0;
+    for(let p=0,i=0;p<N;p++,i+=4){
+      const k=((d[i]>>4)<<8)|((d[i+1]>>4)<<4)|(d[i+2]>>4);
+      const n=(hist.get(k)||0)+1; hist.set(k,n);
+      if(n>bestN){ bestN=n; bestK=k; }
+    }
+    jr=(((bestK>>8)&15)<<4)+8; jg=(((bestK>>4)&15)<<4)+8; jb=((bestK&15)<<4)+8;
+    isJoint=bestN>N*0.06;
   }
-  const jr=(((bestK>>8)&15)<<4)+8, jg=(((bestK>>4)&15)<<4)+8, jb=((bestK&15)<<4)+8;
-  const isJoint=bestN>N*0.06;
-  // Höhenfeld 0..1 + Helligkeit + Fugen-Flag (für Relief pro Stein)
-  const h=new Float32Array(N), lum=new Float32Array(N); const jointPx=new Uint8Array(N);
+  // ---- Fugenmaske, weich ----
+  // Bei rund 1 cm pro Pixel ist eine 12-mm-Fuge nur ein bis zwei Pixel breit. Ein
+  // harter Schwellwert verliert sie stellenweise ganz, deshalb ein weicher Rand:
+  // voll bis Abstand 22, ausgeblendet bis 48 (euklidisch im RGB).
+  const lum=new Float32Array(N), jf=new Float32Array(N), jbin=new Uint8Array(N);
   for(let p=0,i=0;p<N;p++,i+=4){
     const r=d[i],g=d[i+1],b=d[i+2];
-    const L=(r*0.299+g*0.587+b*0.114)/255;
-    lum[p]=L;
-    let v=0.42+0.58*L;
-    if(isJoint && Math.abs(r-jr)<26 && Math.abs(g-jg)<26 && Math.abs(b-jb)<26){ v=0.26; jointPx[p]=1; }
-    h[p]=v;
+    lum[p]=(r*0.299+g*0.587+b*0.114)/255;
+    if(!isJoint) continue;
+    const dr=r-jr, dg=g-jg, db=b-jb;
+    const dist=Math.sqrt(dr*dr+dg*dg+db*db);
+    if(dist>=48) continue;
+    const f=dist<=22?1:(48-dist)/26;
+    jf[p]=f; if(f>0.55) jbin[p]=1;
+  }
+  // ---- Steine als Zusammenhangsflächen ----
+  // Jeder Stein bekommt eine eigene Verlegetoleranz: kleiner Höhenversatz und eine
+  // leichte Schiefstellung. Ohne das hat JEDER Stein exakt dasselbe Profil und die
+  // Wand liest sich als Wabenmuster statt als Mauerwerk.
+  const lbl=new Int32Array(N).fill(-1), stk=new Int32Array(N);
+  const bOff=[], bTx=[], bTy=[], bCx=[], bCy=[], bHw=[], bHh=[];
+  const hsh=n=>{ n=Math.imul(n^(n>>>15),2246822519); n=Math.imul(n^(n>>>13),3266489917);
+                 return ((n^(n>>>16))>>>0)/4294967295; };
+  let nb=0;
+  for(let s=0;s<N;s++){
+    if(jbin[s]||lbl[s]>=0) continue;
+    const id=nb++;
+    let sp=0; stk[sp++]=s; lbl[s]=id;
+    let minx=W,maxx=0,miny=H,maxy=0,cnt=0;
+    while(sp){
+      const q=stk[--sp], x=q%W, y=(q/W)|0; cnt++;
+      if(x<minx)minx=x; if(x>maxx)maxx=x; if(y<miny)miny=y; if(y>maxy)maxy=y;
+      if(x>0   && !jbin[q-1] && lbl[q-1]<0){ lbl[q-1]=id; stk[sp++]=q-1; }
+      if(x<W-1 && !jbin[q+1] && lbl[q+1]<0){ lbl[q+1]=id; stk[sp++]=q+1; }
+      if(y>0   && !jbin[q-W] && lbl[q-W]<0){ lbl[q-W]=id; stk[sp++]=q-W; }
+      if(y<H-1 && !jbin[q+W] && lbl[q+W]<0){ lbl[q+W]=id; stk[sp++]=q+W; }
+    }
+    const merged=cnt>N*0.2;                    // Fuge nicht sauber erkannt → keine Toleranz
+    bOff.push(merged?0:(hsh(id*7919+13)-0.5)*0.10);
+    bTx.push(merged?0:(hsh(id*104729+7)-0.5)*0.055);
+    bTy.push(merged?0:(hsh(id*15485863+3)-0.5)*0.055);
+    bCx.push((minx+maxx)*0.5); bCy.push((miny+maxy)*0.5);
+    bHw.push(Math.max(1,(maxx-minx)*0.5)); bHh.push(Math.max(1,(maxy-miny)*0.5));
+  }
+  // ---- Höhenfeld ----
+  // Die Steinfläche ist FLACH. Die Helligkeit geht NICHT in die Höhe ein: ein
+  // dunkler Klinker steht genauso weit vor wie ein heller. Aus dem Foto bleibt nur
+  // die Feinstruktur — hochpassgefiltert, damit der Mittelwert je Stein herausfällt
+  // und dunkle Steine nicht als Vertiefung gelesen werden.
+  const lumLo=boxBlur(lum,W,H,Math.max(2,Math.round(Math.min(W,H)/90)));
+  const h=new Float32Array(N);
+  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
+    const p=y*W+x, id=lbl[p];
+    let face=0.94;
+    if(id>=0) face+=bOff[id]+bTx[id]*(x-bCx[id])/bHw[id]+bTy[id]*(y-bCy[id])/bHh[id];
+    face+=(lum[p]-lumLo[p])*0.26;              // Poren, Brandspuren, Sinterhaut
+    const f=jf[p];
+    h[p]=(1-f)*face+f*0.14;                    // Fuge liegt tief
   }
   const hb=boxBlur(h,W,H,1), lb=boxBlur(lum,W,H,1);
   // Kavitätsfeld: Höhe gegen weit geglättete Höhe → negativ genau dort, wo die
   // Fläche zurückspringt (Fugen, Steinkanten). Das ist die Ambient Occlusion.
   const R=Math.max(2,Math.round(Math.min(W,H)/110));
   const hWide=boxBlur(hb,W,H,R);
-  // Sobel → Normal. Relief pro Pixel nach Helligkeit skaliert: DUNKLE Steine flacher
-  // (stehen weniger weit hervor), helle Steine kräftiger; Fugen(kanten) bleiben tief.
-  const nOut=c.createImageData(W,H), nd=nOut.data, K=2.6;
+  const nOut=c.createImageData(W,H), nd=nOut.data, K=2.0;
   const oCv=document.createElement('canvas'); oCv.width=W; oCv.height=H;
   const oc=oCv.getContext('2d',{willReadFrequently:true});
   const oOut=oc.createImageData(W,H), od=oOut.data;
   for(let y=0;y<H;y++){ const y0=Math.max(0,y-1)*W, y1=Math.min(H-1,y+1)*W, row=y*W;
     for(let x=0;x<W;x++){
       const x0=Math.max(0,x-1), x1=Math.min(W-1,x+1), p=row+x, i=p*4;
-      let gx=(hb[row+x1]-hb[row+x0])*K, gy=(hb[y1+x]-hb[y0+x])*K;
-      const nearJoint = jointPx[p]||jointPx[row+x0]||jointPx[row+x1]||jointPx[y0+x]||jointPx[y1+x];
-      const rf = nearJoint ? 1.0 : (0.28 + 0.9*lb[p]);   // dunkler Stein → weniger Relief
-      gx*=rf; gy*=rf;
+      // Kein Helligkeits-Faktor mehr: wie weit ein Klinker vorsteht, hat mit seiner
+      // Farbe nichts zu tun. Der frühere Faktor liess dunkle Steine flacher wirken
+      // und erzeugte damit das Wabenmuster.
+      const gx=(hb[row+x1]-hb[row+x0])*K, gy=(hb[y1+x]-hb[y0+x])*K;
       const inv=1/Math.sqrt(gx*gx+gy*gy+1);
       nd[i  ]=Math.round((-gx*inv*0.5+0.5)*255);
       nd[i+1]=Math.round(( gy*inv*0.5+0.5)*255);
@@ -272,11 +330,12 @@ export function surfaceMaps(cv,maxW){
       nd[i+3]=255;
       // R: AO — Kavität verschattet, echte Fugenpixel zusätzlich. Zurückhaltend
       // dosiert: die Fuge liegt im Schatten, sie ist kein schwarzes Loch.
-      let ao=0.80+(hb[p]-hWide[p])*1.7;
-      if(jointPx[p]) ao-=0.15;
+      let ao=0.82+(hb[p]-hWide[p])*1.8;
+      ao-=jf[p]*0.13;
       od[i  ]=Math.round(255*Math.min(1,Math.max(0.50,ao)));
-      // G: Roughness — Mörtel stumpf, heller Stein kreidiger, dunkler gesinterter glatter
-      const rgh = jointPx[p] ? 0.95 : (0.54+0.26*lb[p]);
+      // G: Roughness — Mörtel stumpf, Stein je nach Sinterhaut etwas glatter.
+      // Bewusst schwacher Helligkeitsbezug: sonst kippt der Mix optisch auseinander.
+      const rgh = jf[p]>0.5 ? 0.95 : (0.60+0.14*lb[p]);
       od[i+1]=Math.round(255*rgh);
       // B: Höhe für die Parallax-Verschiebung
       od[i+2]=Math.round(255*Math.min(1,Math.max(0,hb[p])));
