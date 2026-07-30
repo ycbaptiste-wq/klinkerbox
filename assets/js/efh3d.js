@@ -443,12 +443,17 @@ function buildScene(){
       hold.setMatrixAt(i,M4); }
     hold.instanceMatrix.needsUpdate=true; scene.add(hold);
     // Fallrohre mit Bogen zurück zur Wand — vorher endeten sie im Nichts
+    // Der Bogen wird zwischen Rinnenauslauf und Rohroberkante GESPANNT. Vorher lag
+    // er auf einem festen Winkel und zeigte frei in die Luft.
+    const gy=eaveY-0.055-gr, gz=OV+0.03;          // Auslauf unten an der Rinne
+    const py=eaveY-0.62, pz=0.10;                 // Oberkante des Fallrohrs
+    const dy=gy-py, dz=gz-pz, EL=Math.hypot(dy,dz);
     [-HW/2+0.16,HW/2-0.16].forEach(x=>{
-      const dp=new THREE.Mesh(new THREE.CylinderGeometry(0.042,0.042,eaveY-0.62,12),zinc);
-      dp.position.set(x,(eaveY-0.62)/2,0.10); dp.castShadow=true; scene.add(dp);
-      const el=new THREE.Mesh(new THREE.CylinderGeometry(0.042,0.042,0.52,12),zinc);
-      el.rotation.x=-Math.atan2(OV-0.07,0.34);
-      el.position.set(x,eaveY-0.42,0.28); el.castShadow=true; scene.add(el);
+      const dp=new THREE.Mesh(new THREE.CylinderGeometry(0.042,0.042,py,12),zinc);
+      dp.position.set(x,py/2,pz); dp.castShadow=true; scene.add(dp);
+      const el=new THREE.Mesh(new THREE.CylinderGeometry(0.042,0.042,EL+0.08,12),zinc);
+      el.rotation.x=Math.atan2(dz,dy);
+      el.position.set(x,(gy+py)/2,(gz+pz)/2); el.castShadow=true; scene.add(el);
       [1.1,2.6,4.0].forEach(hy=>{ if(hy>eaveY-0.7) return;    // Rohrschellen
         const sc2=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.022,0.030),zinc);
         sc2.position.set(x,hy,0.055); scene.add(sc2); });
@@ -722,7 +727,7 @@ function canvasLuma(cv){
 }
 function applyTex(m,cv,fallback,rough,ns,pom){
   applySurface(m,cv,{fallback,rough,normalScale:ns!=null?ns:0.9,aniso:maxAniso,
-    env:cv?0.20:0.3, pom:pom||0});
+    env:cv?0.11:0.3, pom:pom||0});   // Klinker spiegelt die Umgebung kaum
 }
 window.Efh3D={
   available(){ return !failed; },

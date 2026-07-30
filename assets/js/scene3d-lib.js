@@ -406,7 +406,9 @@ export function surfaceMaps(cv,maxW){
       od[i  ]=Math.round(255*Math.min(1,Math.max(0.50,ao)));
       // G: Roughness — Mörtel stumpf, Stein je nach Sinterhaut etwas glatter.
       // Bewusst schwacher Helligkeitsbezug: sonst kippt der Mix optisch auseinander.
-      const rgh = jf[p]>0.5 ? 0.95 : (0.60+0.14*lb[p]);
+      // Klinker ist matt. Nur gesinterte, dunkle Steine haben eine leichte
+      // Sinterhaut — und auch die glaenzt nicht, sie ist nur weniger stumpf.
+      const rgh = jf[p]>0.5 ? 0.96 : (0.74+0.12*lb[p]);
       od[i+1]=Math.round(255*rgh);
       // B: Höhe für die Parallax-Verschiebung
       od[i+2]=Math.round(255*Math.min(1,Math.max(0,hb[p])));
