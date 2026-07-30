@@ -36,7 +36,7 @@ function skyCanvas(){
   const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
   const c=cv.getContext('2d',{willReadFrequently:true});
   const g=c.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#4f81b2'); g.addColorStop(0.30,'#7ea6c9');
+  g.addColorStop(0,'#6f9ac6'); g.addColorStop(0.30,'#7ea6c9');
   g.addColorStop(0.62,'#b6cadb'); g.addColorStop(0.86,'#dfe6e7'); g.addColorStop(1,'#f0ebdf');
   c.fillStyle=g; c.fillRect(0,0,W,H);
   const SX=W*SUN_UV[0], SY=H*SUN_UV[1];

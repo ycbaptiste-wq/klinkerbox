@@ -14,23 +14,37 @@ let rafId=0, failed=false;
 
 // Startblick: Dreiviertel-Ansicht auf Augenhöhe wie in Architektur-Renderings —
 // frontal-symmetrisch wirkt jedes Gebäude flach. Orbit und Zoom bleiben unverändert.
-const TARGET=new THREE.Vector3(0,3.0,1.0);
-let az=0.52, po=1.492, rad=21.0;    // Dreiviertel-Ansicht braucht mehr Abstand als frontal
+const TARGET=new THREE.Vector3(0,4.1,1.0);
+let az=0.52, po=1.487, rad=24.0;    // Dreiviertel-Ansicht braucht mehr Abstand als frontal
 let azT=az, poT=po, radT=rad;
 const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.30, PO_MAX=1.565, R_MIN=11, R_MAX=26;
 
-const HW=9.6, HE=6.1, HR=8.5, HD=8.0;           // Breite, Traufe, First, Tiefe
+// First von 8.50 auf 10.10: das Dach machte vorher nur 28 % der Gesamthoehe aus,
+// bei der Referenz sind es rund zwei Drittel. Die Neigung wird jetzt ueber die
+// WANDFLUCHT gerechnet (45 statt 27.6 Grad) — dadurch sitzt das Dach nicht mehr
+// wie ein Deckel obenauf, sondern ueberschneidet die Wand.
+const HW=9.6, HE=6.1, HR=10.1, HD=8.0;          // Breite, Traufe, First, Tiefe
 const SOC=0.32;                                 // Sockelhöhe (Schwelle der Haustür)
 
 function mat(c,rough,metal){ return new THREE.MeshStandardMaterial({color:c,roughness:rough!=null?rough:0.9,metalness:metal||0}); }
-function noiseTex(base,vari,w,h){
+function noiseTex(base,vari,w,h,stripes){
   const cv=document.createElement('canvas'); cv.width=w||256; cv.height=h||256;
   const c=cv.getContext('2d'); c.fillStyle=base; c.fillRect(0,0,cv.width,cv.height);
   const id=c.getImageData(0,0,cv.width,cv.height);
   for(let i=0;i<id.data.length;i+=4){ const v=(Math.random()-0.5)*vari;
     id.data[i]+=v; id.data[i+1]+=v; id.data[i+2]+=v; }
   c.putImageData(id,0,0);
+  if(stripes){                                   // Maehstreifen: aus gruener Farbe wird Rasen
+    const c2=cv.getContext('2d');
+    for(let i=0;i<12;i++){
+      c2.fillStyle='rgba(255,255,255,'+(i%2?0.032:0)+')';
+      c2.fillRect(0,i*cv.height/12,cv.width,cv.height/12);
+      c2.fillStyle='rgba(0,0,0,'+(i%2?0:0.032)+')';
+      c2.fillRect(0,i*cv.height/12,cv.width,cv.height/12);
+    }
+  }
   const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.colorSpace=THREE.SRGBColorSpace;
+  t.anisotropy=maxAniso;                         // fehlte — daher kroch das Rauschen beim Drehen
   return t;
 }
 // Ziegel-Struktur fürs Dach: Pfannen mit Wellenprofil quer zur Fallrichtung —
@@ -170,31 +184,37 @@ function makeWindow(parent,x,y,w,h,glassM,withBox,corner){
 function buildScene(){
   scene=new THREE.Scene();
   scene.environment=buildEnv(renderer);
-  scene.fog=new THREE.Fog(0xe9ebe9,55,110);
+  // Nebelfarbe muss den Horizontdunst des Himmel-Canvas treffen, sonst bekommt die
+  // Kulisse einen blaugrauen Halo genau an ihrer Silhouette.
+  scene.fog=new THREE.Fog(0xf1eee6,38,150);
 
   { const sky=new THREE.Mesh(new THREE.SphereGeometry(85,48,28),
-      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.12,1.12,1.12),side:THREE.BackSide,fog:false}));
+      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.45,1.45,1.45),side:THREE.BackSide,fog:false}));
     scene.add(sky); }
 
-  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x7d8a70,0.30));   // Himmel oben, Rasengrün unten
-  // Tiefer Sonnenstand (~29°): das Licht streift die Fassade, statt sie frontal
-  // platt zu leuchten — erst dadurch wirft das Fugenrelief überhaupt Schatten.
-  // Wenig Füll-Licht, damit die Schatten stehen bleiben und nicht zugeleuchtet werden.
-  const sun=new THREE.DirectionalLight(0xfff1d8,4.4);
-  sun.position.set(19,13.5,11);
+  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x6d7663,0.26));   // Himmel oben, Rasengrün unten
+  // Sonnenstand 33°: streifend genug, dass das Fugenrelief Schatten wirft, aber
+  // hoch genug für einen Kontrastumfang wie in der Referenz. Wenig Füll-Licht,
+  // damit die Schatten stehen bleiben und nicht zugeleuchtet werden.
+  const sun=new THREE.DirectionalLight(0xfff6ea,3.9);
+  sun.position.set(18.9,15.7,10.9);
   sun.target.position.set(0,1.5,0);
   sun.castShadow=true;
-  sun.shadow.mapSize.set(MOBILE?1024:4096,MOBILE?1024:4096);
-  sun.shadow.camera.left=-15; sun.shadow.camera.right=15;
-  sun.shadow.camera.top=16;   sun.shadow.camera.bottom=-10;
+  sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
+  // Enger gefasst: kleineres Frustum = kleinere Texel = schärfere Kanten an
+  // Traufe und Sohlbank. First und Kaminkopf liegen nachgerechnet noch drin.
+  sun.shadow.camera.left=-13; sun.shadow.camera.right=13;
+  sun.shadow.camera.top=13;   sun.shadow.camera.bottom=-9.5;
   sun.shadow.camera.near=1; sun.shadow.camera.far=60;
   sun.shadow.camera.updateProjectionMatrix();
-  sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.035;
-  sun.shadow.radius=MOBILE?1:5;                   // PCF-Kernel → weiche Schattenkante wie echtes Sonnenlicht
+  sun.shadow.bias=-0.00015; sun.shadow.normalBias=0.012;
+  sun.shadow.radius=MOBILE?2:2.5;                 // PCF-Kernel → weiche Schattenkante
   scene.add(sun); scene.add(sun.target);
 
   // ---- Gelände: Rasen + Vorplatz (Boden-Mix) + Kies + Beetstreifen ----
-  const lawnT=noiseTex('#7f8f60',26,512,512); lawnT.repeat.set(12,12);
+  // #7f8f60 hatte Rot und Gruen praktisch gleich — ein gelbliches Grau. Und eine
+  // Kachel deckte 9.2 m ab, viel zu grob fuer Rasen.
+  const lawnT=noiseTex('#5f7442',40,512,512,true); lawnT.repeat.set(40,40);
   const lawn=new THREE.Mesh(new THREE.PlaneGeometry(110,110),
     new THREE.MeshStandardMaterial({map:lawnT,roughness:1}));
   lawn.rotation.x=-Math.PI/2; lawn.position.set(0,-0.01,10); lawn.receiveShadow=true; scene.add(lawn);
@@ -233,16 +253,16 @@ function buildScene(){
   back.rotation.y=Math.PI; back.position.set(0,HE/2,-HD); back.castShadow=true; scene.add(back);
   // Innenschale: dunkle Kiste hinter den Öffnungen, damit man durch die Laibung
   // nicht ins Freie sieht, wenn ein Fenster mal keinen Innenraum-Shader trägt
-  { const shell=new THREE.Mesh(new THREE.BoxGeometry(HW-0.3,HE-0.2,HD-0.4),mat(0x2a2723,1));
-    shell.material.side=THREE.BackSide; shell.position.set(0,HE/2,-HD/2); scene.add(shell); }
+  // Reicht bis zum First, sonst sieht man mit dem steileren Dach durch den
+  // Giebeldreieck-Bereich hindurch ins Freie.
+  { const shell=new THREE.Mesh(new THREE.BoxGeometry(HW-0.3,HR-0.3,HD-0.4),mat(0x2a2723,1));
+    shell.material.side=THREE.BackSide; shell.position.set(0,(HR-0.3)/2+0.15,-HD/2); scene.add(shell); }
   // Sockel: das Haus steht sonst mit einer Rasierklingenkante auf dem Rasen
   { const soc=new THREE.Mesh(new THREE.BoxGeometry(HW+0.16,SOC,HD+0.16),mat(0xb9b5ad,0.9));
     soc.position.set(0,SOC/2,-HD/2); soc.castShadow=true; soc.receiveShadow=true; scene.add(soc); }
 
   // ---- Satteldach: Pfannen mit Wellenprofil, Traufwulst, First + Rinne ----
-  // Der Dachüberstand ist bewusst grösser (0.60 statt 0.45): erst dadurch legt
-  // sich unter der Traufe ein sichtbares Schattenband auf die Fassade.
-  const OV=0.60;
+  const OV=0.45;                                  // Dachüberstand
   const roofCv=roofCanvas();
   const rT=new THREE.CanvasTexture(roofCv);
   rT.wrapS=rT.wrapT=THREE.RepeatWrapping; rT.colorSpace=THREE.SRGBColorSpace; rT.repeat.set(7,3);
@@ -250,19 +270,24 @@ function buildScene(){
   const roofM=new THREE.MeshStandardMaterial({map:rT,roughness:0.72,envMapIntensity:0.5});
   if(roofNm){ roofNm.normal.wrapS=roofNm.normal.wrapT=THREE.RepeatWrapping; roofNm.normal.repeat.set(7,3);
     roofM.normalMap=roofNm.normal; roofM.normalScale=new THREE.Vector2(1.1,1.1); }
-  const run=HD/2+OV, rise=HR-HE, pitch=Math.atan2(rise,run), slopeLen=Math.hypot(run,rise);
-  const frontSlope=new THREE.Mesh(new THREE.BoxGeometry(HW+1.2,0.14,slopeLen),roofM);
+  // Neigung ueber die WANDFLUCHT: an der Wandkante (z=0) liegt das Dach genau auf
+  // HE, der Ueberstand haengt darunter. Frueher wurde ueber HD/2+OV gerechnet —
+  // dann sass die Traufkante exakt auf der Wandkrone und das Dach lag wie ein
+  // Deckel obenauf, ohne die dunkle Traufkante der Referenz.
+  const pitch=Math.atan2(HR-HE,HD/2);             // 45 Grad
+  const eaveY=HE-OV*Math.tan(pitch);              // Traufkante haengt unter der Wandkrone
+  const run=HD/2+OV, slopeLen=Math.hypot(run,HR-eaveY);
+  const frontSlope=new THREE.Mesh(new THREE.BoxGeometry(HW+2*OV,0.14,slopeLen),roofM);
   frontSlope.rotation.x=pitch;
-  frontSlope.position.set(0,(HE+HR)/2,(OV-HD/2)/2);
+  frontSlope.position.set(0,(HR+eaveY)/2,(OV-HD/2)/2);
   frontSlope.castShadow=true; frontSlope.receiveShadow=true; scene.add(frontSlope);
-  const backSlope=new THREE.Mesh(new THREE.BoxGeometry(HW+1.2,0.14,slopeLen),roofM);
+  const backSlope=new THREE.Mesh(new THREE.BoxGeometry(HW+2*OV,0.14,slopeLen),roofM);
   backSlope.rotation.x=-pitch;
-  backSlope.position.z=(-HD-OV+(-HD/2))/2;
-  backSlope.position.set(0,(HE+HR)/2,(-HD-OV+(-HD/2))/2);
+  backSlope.position.set(0,(HR+eaveY)/2,(-HD-OV+(-HD/2))/2);
   backSlope.castShadow=true; scene.add(backSlope);
   // Traufwulst: eine Reihe Pfannenrundungen. Die schnurgerade Dachkante ist das,
   // was ein Dach am deutlichsten als Attrappe verrät.
-  { const tileM=mat(0x3a3d42,0.72), tw=0.205, n=Math.round((HW+1.2)/tw);
+  { const tileM=mat(0x3a3d42,0.72), tw=0.205, n=Math.round((HW+2*OV)/tw);
     const tg=new THREE.CylinderGeometry(0.048,0.048,0.40,7);
     const tiles=new THREE.InstancedMesh(tg,tileM,n);
     tiles.castShadow=true;
@@ -270,20 +295,23 @@ function buildScene(){
     const v=new THREE.Vector3(), sc=new THREE.Vector3(1,1,1);
     q.setFromEuler(e);
     for(let i=0;i<n;i++){
-      v.set((i-(n-1)/2)*tw, HE+0.055-0.16*Math.sin(pitch), OV-0.16*Math.cos(pitch));
+      v.set((i-(n-1)/2)*tw, eaveY+0.055+0.16*Math.sin(pitch), OV-0.16*Math.cos(pitch));
       m4.compose(v,q,sc); tiles.setMatrixAt(i,m4);
     }
     tiles.instanceMatrix.needsUpdate=true; scene.add(tiles);
   }
   const ridge=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,HW+1.25,10),mat(0x33363a,0.7));
   ridge.rotation.z=Math.PI/2; ridge.position.set(0,HR+0.06,-HD/2); ridge.castShadow=true; scene.add(ridge);
-  const soffitF=new THREE.Mesh(new THREE.PlaneGeometry(HW+1.1,OV+0.05),mat(0xdedbd6,0.9));
-  soffitF.rotation.x=Math.PI/2; soffitF.position.set(0,HE-0.005,OV/2); soffitF.receiveShadow=true; scene.add(soffitF);
-  const gutter=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.075,HW+1.0,12),mat(0xc9c7c2,0.4,0.6));
-  gutter.rotation.z=Math.PI/2; gutter.position.set(0,HE-0.03,OV-0.02); gutter.castShadow=true; scene.add(gutter);
+  // Traufblende: das dunkle Band unter der Dachkante, das die Referenz zeigt.
+  // Ein waagrechter Sofit entfällt — das Dach überschneidet die Wand jetzt, es
+  // gibt keinen Zwickel mehr zuzudecken.
+  const fascia=new THREE.Mesh(new THREE.BoxGeometry(HW+2*OV,0.20,0.03),mat(0x2e3339,0.7));
+  fascia.position.set(0,eaveY-0.10,OV+0.015); scene.add(fascia);
+  const gutter=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.075,HW+2*OV-0.1,12),mat(0xc9c7c2,0.4,0.6));
+  gutter.rotation.z=Math.PI/2; gutter.position.set(0,eaveY-0.16,OV+0.03); gutter.castShadow=true; scene.add(gutter);
   [[-HW/2+0.10],[HW/2-0.10]].forEach(([x])=>{
-    const dp=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,HE-0.1,10),mat(0xc9c7c2,0.4,0.6));
-    dp.position.set(x,(HE-0.1)/2,0.10); dp.castShadow=true; scene.add(dp);
+    const dp=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,eaveY-0.2,10),mat(0xc9c7c2,0.4,0.6));
+    dp.position.set(x,(eaveY-0.2)/2,0.10); dp.castShadow=true; scene.add(dp);
   });
   // Kamin (weiss, Metallkappe) + kleines Lüftungsrohr
   const chim=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.6,0.55),mat(0xe9e7e3,0.8));
@@ -415,7 +443,9 @@ function ensureRenderer(){
     renderer.shadowMap.type=MOBILE?THREE.BasicShadowMap:THREE.PCFShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure=0.86;
+    // 0.86 deckelte das Bild bei Helligkeit 222 — es konnte systembedingt keine
+    // Lichter bekommen. Die Referenz hat 12 % ihrer Flaeche ueber Helligkeit 240.
+    renderer.toneMappingExposure=1.05;
     maxAniso=renderer.capabilities.getMaxAnisotropy()||8;
     buildScene();
     const el=renderer.domElement;

@@ -1366,8 +1366,10 @@
           sideCv=zoneTexFull(zoneKey('exterior','facade'),1800,600,sD,map);
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1230,flD,map);
         } else {                                                                   // EFH
+          // Giebelwand ist 8.0 m breit und reicht bis zum First (10.1 m) - das
+          // Seitenverhaeltnis der Textur muss dem folgen, sonst steht der Stein schief.
           facadeCv=zoneTexFull(zoneKey('exterior','facade'),2000,1270,fD,map);
-          sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,1700,sD,map);
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,2020,sD,map);
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,flD,map);
         }
         if(EXT3D.mount(host)) EXT3D.setTextures(facadeCv,sideCv,floorCv,gableCv);
