@@ -5,7 +5,7 @@
 // Orbit + Zoom wie beim Bungalow/Innenraum.
 import * as THREE from './three.module.min.js';
 import { buildEnv, glassMaterial, skyDomeTexture, applySurface, surfaceMaps, disposeScene,
-         addVignette, interiorRoom, grassTuft, bushClump, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=44';
+         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=45';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -77,6 +77,7 @@ function pier(x,z,h,parent){
 // Geschnittene Hecke als Kulisse — schliesst das Grundstück wie in echten Visualisierungen
 function hedge(x,z,len,rotY,parent){
   const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=rotY||0;
+  groundContact(0,0,len,1.5,g);                 // unter der Hecke steht kein Sonnenlicht
   const body=new THREE.Mesh(new THREE.BoxGeometry(len,1.55,0.78),mat(0x44553a,1));
   body.position.y=0.775; body.castShadow=true; body.receiveShadow=true; g.add(body);
   const n=Math.round(len/0.19);                       // aufgeraute Oberkante

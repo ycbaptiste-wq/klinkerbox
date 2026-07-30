@@ -193,6 +193,15 @@ export function interiorMaterial(kind){
 const _mapCache=new Map();
 const MOBILE_LIB=LOWQ;
 
+// Wertrauschen für Kantenunregelmässigkeiten (bilinear, glatt interpoliert)
+function nhash(a,b){ let n=(a|0)*374761393+(b|0)*668265263;
+  n=Math.imul(n^(n>>>13),1274126177); return ((n^(n>>>16))>>>0)/4294967295; }
+function vnz(x,y){
+  const xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi;
+  const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf);
+  const a=nhash(xi,yi), b=nhash(xi+1,yi), c=nhash(xi,yi+1), e=nhash(xi+1,yi+1);
+  return a+(b-a)*u+(c-a)*v+(a-b-c+e)*u*v;
+}
 // separierbarer Box-Blur über ein Float-Feld (Radius in Pixel)
 function boxBlur(src,W,H,R){
   if(R<1) return src;
@@ -208,19 +217,60 @@ function boxBlur(src,W,H,R){
   return out;
 }
 
+// ---------- Mipmap-Kette von Hand ----------
+// Zwei Gründe, das nicht gl.generateMipmap zu überlassen:
+// 1) Fuer diese Canvas-Datentexturen liefert die erzeugte Kette hier Schwarz — die
+//    Fassade sauft beim Herauszoomen komplett ab.
+// 2) Eine Normal-Map darf nicht einfach gemittelt werden. Beim Verkleinern
+//    verkuerzt sich der gemittelte Vektor; ohne erneutes Normalisieren kippt die
+//    Beleuchtung. Deshalb wird jede Stufe neu auf Laenge 1 gebracht.
+// Ohne Mipmaps wiederum greift die Minifikation einen einzelnen Texel: aus dem
+// feinen Fugenraster werden dann wandernde Farbstriche.
+function mipChain(cv,renormalize){
+  const out=[cv];
+  let w=cv.width, h=cv.height, prev=cv;
+  while(w>1||h>1){
+    w=Math.max(1,w>>1); h=Math.max(1,h>>1);
+    const c=document.createElement('canvas'); c.width=w; c.height=h;
+    const cx=c.getContext('2d');
+    cx.imageSmoothingEnabled=true; cx.imageSmoothingQuality='high';
+    cx.drawImage(prev,0,0,w,h);
+    if(renormalize){
+      const id=cx.getImageData(0,0,w,h), d=id.data;
+      for(let i=0;i<d.length;i+=4){
+        const x=d[i]/127.5-1, y=d[i+1]/127.5-1, z=d[i+2]/127.5-1;
+        const l=Math.sqrt(x*x+y*y+z*z)||1;
+        d[i  ]=Math.round((x/l*0.5+0.5)*255);
+        d[i+1]=Math.round((y/l*0.5+0.5)*255);
+        d[i+2]=Math.round((z/l*0.5+0.5)*255);
+      }
+      cx.putImageData(id,0,0);
+    }
+    out.push(c); prev=c;
+  }
+  return out;
+}
 // Gecacht werden die CANVAS-Ergebnisse (die Pixelrechnerei ist teuer), nicht die
 // Texturen — jedes Material bekommt eigene, damit dispose() keine fremde reisst.
 function texPair(cvs){
-  const n=new THREE.CanvasTexture(cvs.normalCv);
-  const o=new THREE.CanvasTexture(cvs.ormCv);
-  o.colorSpace=THREE.NoColorSpace;                    // ORM ist Daten, keine Farbe
-  return {normal:n, orm:o};
+  const mk=(chain,cs)=>{
+    const t=new THREE.Texture(chain[0]);
+    t.mipmaps=chain; t.generateMipmaps=false;
+    t.minFilter=THREE.LinearMipmapLinearFilter; t.magFilter=THREE.LinearFilter;
+    t.wrapS=t.wrapT=THREE.ClampToEdgeWrapping;
+    t.colorSpace=cs; t.needsUpdate=true;
+    return t;
+  };
+  return { normal:mk(cvs.normalMips,THREE.NoColorSpace),
+           orm:mk(cvs.ormMips,THREE.NoColorSpace) };   // ORM ist Daten, keine Farbe
 }
 export function surfaceMaps(cv,maxW){
   if(!cv) return null;
   const key=cv.__klbKey;
   if(key && _mapCache.has(key)) return texPair(_mapCache.get(key));
-  const cap=maxW||(MOBILE_LIB?512:1024);
+  // Auflösung: 1024 auf 9.6 m Wandbreite sind rund 1 cm pro Pixel — zu grob, sobald
+  // der Nutzer in die Nahansicht geht. 1400 halbiert die Fuge auf gut einen Pixel.
+  const cap=maxW||(MOBILE_LIB?512:1400);
   const W=Math.max(2,Math.min(cap,cv.width));
   const H=Math.max(2,Math.round(cv.height*W/cv.width));
   const sc=document.createElement('canvas'); sc.width=W; sc.height=H;
@@ -248,19 +298,21 @@ export function surfaceMaps(cv,maxW){
     jr=(((bestK>>8)&15)<<4)+8; jg=(((bestK>>4)&15)<<4)+8; jb=((bestK&15)<<4)+8;
     isJoint=bestN>N*0.06;
   }
-  // ---- Fugenmaske, weich ----
-  // Bei rund 1 cm pro Pixel ist eine 12-mm-Fuge nur ein bis zwei Pixel breit. Ein
-  // harter Schwellwert verliert sie stellenweise ganz, deshalb ein weicher Rand:
-  // voll bis Abstand 22, ausgeblendet bis 48 (euklidisch im RGB).
+  // ---- Fugenmaske ----
+  // Enge Toleranz, weil die Mörtelfarbe exakt bekannt ist: sonst schluckt eine
+  // WEISSE Fuge die hellen Steine des Mixes und die halbe Wand versinkt.
+  // Der Rand wird mit Rauschen aufgeraut — echte Klinker haben keine geraden
+  // Kanten, sie sind gebrochen und abgeplatzt (siehe die Produktfotos).
   const lum=new Float32Array(N), jf=new Float32Array(N), jbin=new Uint8Array(N);
-  for(let p=0,i=0;p<N;p++,i+=4){
-    const r=d[i],g=d[i+1],b=d[i+2];
+  for(let y=0,p=0;y<H;y++) for(let x=0;x<W;x++,p++){
+    const i=p*4, r=d[i],g=d[i+1],b=d[i+2];
     lum[p]=(r*0.299+g*0.587+b*0.114)/255;
     if(!isJoint) continue;
     const dr=r-jr, dg=g-jg, db=b-jb;
-    const dist=Math.sqrt(dr*dr+dg*dg+db*db);
-    if(dist>=48) continue;
-    const f=dist<=22?1:(48-dist)/26;
+    let dist=Math.sqrt(dr*dr+dg*dg+db*db);
+    dist+=(vnz(x*0.85,y*0.85)-0.5)*9 + (vnz(x*2.7+31,y*2.7+17)-0.5)*4;   // gebrochene Kante
+    if(dist>=32) continue;
+    const f=dist<=12?1:(32-dist)/20;
     jf[p]=f; if(f>0.55) jbin[p]=1;
   }
   // ---- Steine als Zusammenhangsflächen ----
@@ -268,7 +320,7 @@ export function surfaceMaps(cv,maxW){
   // leichte Schiefstellung. Ohne das hat JEDER Stein exakt dasselbe Profil und die
   // Wand liest sich als Wabenmuster statt als Mauerwerk.
   const lbl=new Int32Array(N).fill(-1), stk=new Int32Array(N);
-  const bOff=[], bTx=[], bTy=[], bCx=[], bCy=[], bHw=[], bHh=[];
+  const bOff=[], bTx=[], bTy=[], bCx=[], bCy=[], bHw=[], bHh=[], bWear=[];
   const hsh=n=>{ n=Math.imul(n^(n>>>15),2246822519); n=Math.imul(n^(n>>>13),3266489917);
                  return ((n^(n>>>16))>>>0)/4294967295; };
   let nb=0;
@@ -289,6 +341,7 @@ export function surfaceMaps(cv,maxW){
     bOff.push(merged?0:(hsh(id*7919+13)-0.5)*0.10);
     bTx.push(merged?0:(hsh(id*104729+7)-0.5)*0.055);
     bTy.push(merged?0:(hsh(id*15485863+3)-0.5)*0.055);
+    bWear.push(merged?0:0.35+hsh(id*2654435761+29)*1.15);   // wie stark dieser Stein gezeichnet ist
     bCx.push((minx+maxx)*0.5); bCy.push((miny+maxy)*0.5);
     bHw.push(Math.max(1,(maxx-minx)*0.5)); bHh.push(Math.max(1,(maxy-miny)*0.5));
   }
@@ -298,12 +351,26 @@ export function surfaceMaps(cv,maxW){
   // die Feinstruktur — hochpassgefiltert, damit der Mittelwert je Stein herausfällt
   // und dunkle Steine nicht als Vertiefung gelesen werden.
   const lumLo=boxBlur(lum,W,H,Math.max(2,Math.round(Math.min(W,H)/90)));
+  // Kantenband: wie nah liegt ein Pixel an der Fuge. Bewusst nur Radius 1 und
+  // schwach dosiert: ein Klinker ist in dieser Textur keine 8 Pixel hoch, eine
+  // gebrochene Arris misst real 3-5 mm und damit unter einem halben Pixel. Wer sie
+  // trotzdem als Höhe modelliert, legt Schrägen über die halbe Steinfläche — und
+  // bei streifendem Sonnenlicht kippt dann die ganze Wand ins Schwarze.
+  // Die Unregelmässigkeit der Kante steckt deshalb im Fugen-UMRISS (Rauschen oben),
+  // nicht in der Höhe.
+  const edge=boxBlur(jf,W,H,1);
   const h=new Float32Array(N);
   for(let y=0;y<H;y++) for(let x=0;x<W;x++){
     const p=y*W+x, id=lbl[p];
-    let face=0.94;
-    if(id>=0) face+=bOff[id]+bTx[id]*(x-bCx[id])/bHw[id]+bTy[id]*(y-bCy[id])/bHh[id];
+    let face=0.94, wear=0.8;
+    if(id>=0){
+      face+=bOff[id]+bTx[id]*(x-bCx[id])/bHw[id]+bTy[id]*(y-bCy[id])/bHh[id];
+      wear=bWear[id];
+    }
     face+=(lum[p]-lumLo[p])*0.26;              // Poren, Brandspuren, Sinterhaut
+    // leichter Kantenabfall, je Stein unterschiedlich stark
+    const chip=0.02+0.10*vnz(x*0.42+7,y*0.42+53);
+    face-=edge[p]*chip*wear;
     const f=jf[p];
     h[p]=(1-f)*face+f*0.14;                    // Fuge liegt tief
   }
@@ -343,8 +410,9 @@ export function surfaceMaps(cv,maxW){
     }
   }
   c.putImageData(nOut,0,0); oc.putImageData(oOut,0,0);
-  const cvs={ normalCv:sc, ormCv:oCv };
-  if(key){ if(_mapCache.size>24) _mapCache.clear(); _mapCache.set(key,cvs); }
+  const cvs={ normalMips:mipChain(sc,true), ormMips:mipChain(oCv,false) };
+  // Klein halten: ein Eintrag sind zwei volle Mipmap-Ketten (~13 MB bei 1400 px)
+  if(key){ if(_mapCache.size>6) _mapCache.clear(); _mapCache.set(key,cvs); }
   return texPair(cvs);
 }
 // Kompatibilität: alter Name — liefert nur noch die Normal-Map
@@ -590,8 +658,9 @@ export function applySurface(m,cv,opts){
   m.map=t; m.color.set(0xffffff);
   const maps=surfaceMaps(cv,opts.maxW);
   if(maps){
-    maps.normal.anisotropy=aniso; maps.normal.generateMipmaps=false; maps.normal.minFilter=THREE.LinearFilter;
-    maps.orm.anisotropy=aniso;    maps.orm.generateMipmaps=false;    maps.orm.minFilter=THREE.LinearFilter;
+    // Filter und Mipmap-Kette setzt texPair(); hier nur noch die Anisotropie.
+    maps.normal.anisotropy=aniso;
+    maps.orm.anisotropy=aniso;
     m.normalMap=maps.normal;
     const ns=opts.normalScale!=null?opts.normalScale:0.9;
     m.normalScale=new THREE.Vector2(ns,ns);
@@ -632,6 +701,7 @@ export function resetRnd(){ _rs=20260730; }
 // Ein Grasbüschel als EIN InstancedMesh. pale: trockenes Ziergras statt Rasen.
 export function grassTuft(x,z,scale,parent,pale){
   const s=scale||1, per=LOWQ?18:30, R=0.34*s;
+  groundContact(x,z,R*2.6,R*2.6,parent);
   const m=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,side:THREE.DoubleSide});
   const im=new THREE.InstancedMesh(bladeGeo(),m,per);
   im.castShadow=true; im.receiveShadow=true;
@@ -651,9 +721,32 @@ export function grassTuft(x,z,scale,parent,pale){
   parent.add(im);
   return im;
 }
+// Bodenkontakt: der Schattenwurf allein trifft die Fläche unter einer Pflanze nicht
+// zuverlässig — die Shadow-Map ist dafür zu grob und der normalBias hebt den
+// Empfänger heraus. Unter Gebüsch kommt aber sicher keine Sonne durch, also legen
+// wir dort eine weiche dunkle Scheibe auf den Boden.
+let _contactTex=null;
+function contactTex(){
+  if(_contactTex) return _contactTex;
+  const cv=document.createElement('canvas'); cv.width=cv.height=128;
+  const c=cv.getContext('2d');
+  const g=c.createRadialGradient(64,64,4,64,64,62);
+  g.addColorStop(0,'rgba(0,0,0,0.62)'); g.addColorStop(0.45,'rgba(0,0,0,0.34)');
+  g.addColorStop(0.78,'rgba(0,0,0,0.10)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  c.fillStyle=g; c.fillRect(0,0,128,128);
+  _contactTex=new THREE.CanvasTexture(cv); return _contactTex;
+}
+export function groundContact(x,z,w,d,parent,y){
+  const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),
+    new THREE.MeshBasicMaterial({map:contactTex(),transparent:true,depthWrite:false,
+      opacity:1,blending:THREE.NormalBlending}));
+  m.rotation.x=-Math.PI/2; m.position.set(x,(y!=null?y:0)+0.012,z); m.renderOrder=1;
+  parent.add(m); return m;
+}
 // Strauch: mehrere versetzte Kugeln statt einer → unregelmässige Silhouette
 export function bushClump(x,z,r,c,parent){
   const base=new THREE.Color(c||0x5c6e4a);
+  groundContact(x,z,r*3.1,r*2.7,parent);
   for(let i=0;i<4;i++){
     const rr=r*(0.62+rnd()*0.45);
     const b=new THREE.Mesh(new THREE.IcosahedronGeometry(rr,1),
