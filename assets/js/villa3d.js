@@ -4,7 +4,7 @@
 // Portikus mit Freitreppe und Geländer, Buchs-Vorgarten mit Metallzaun.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, LOWQ } from './scene3d-lib.js?v=45';
+import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, LOWQ } from './scene3d-lib.js?v=46';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;

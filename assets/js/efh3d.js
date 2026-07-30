@@ -5,7 +5,7 @@
 // Orbit + Zoom wie beim Bungalow/Innenraum.
 import * as THREE from './three.module.min.js';
 import { buildEnv, glassMaterial, skyDomeTexture, applySurface, surfaceMaps, disposeScene,
-         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=45';
+         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=46';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -147,38 +147,56 @@ function wallGeo(w,h,ridge,holes){
   return g;
 }
 const REVEAL=0.19;                     // Laibungstiefe der Fenster (m)
+// EIN Fenstertyp, ueberall wiederholt - daraus zieht die Referenz ihre Ruhe.
+// Vorher sassen auf drei symmetrischen Achsen drei verschiedene Groessen, es gab
+// fuenf Sturzhoehen, und die ECKPFEILER waren mit 1.05 m die schmalsten
+// Mauerstuecke der Fassade. Ein Mauerwerksbau, dessen Ecken duenner sind als
+// seine Mitte, sieht ausgehoehlt aus.
+const WIN_W=1.30, WIN_H=1.35;          // Eckpfeiler jetzt 1.45 m, breitestes Vollstueck
+const Y_OG=4.775, Y_EG=1.875;          // gemeinsame Sturz- und Bruestungslinie
+const AX=2.70, AX_S=1.90;              // Achsen Front / Giebelseite
+// Materialien einmal anlegen statt pro Fenster - vorher entstanden 13x je neun
+// MeshStandardMaterials, die three alle einzeln kompiliert.
+let frameMat=null, revealMat=null, soldierMat=null;
+function ensureWinMats(){
+  if(frameMat) return;
+  frameMat=mat(0xdad7d0,0.85);
+  revealMat=new THREE.MeshStandardMaterial({color:0xe3e0da,roughness:0.9});
+  soldierMat=new THREE.MeshStandardMaterial({color:0xdad6d1,roughness:0.95});
+}
 // Fenster: zurückgesetzt in der Laibung, mit Sohlbank, Sturz und Rollladen-Kasten.
 // z=0 ist die Wandaussenkante; alles Weitere liegt DAHINTER.
-function makeWindow(parent,x,y,w,h,glassM,withBox,corner){
+function makeWindow(parent,x,y,w,h,glassM,withBox,corner,room){
   const D=REVEAL;
-  const revM=mat(0xe3e0da,0.85);                             // heller Putz in der Laibung
-  const side=(sx,sy,sw,sh)=>{ const m2=new THREE.Mesh(new THREE.BoxGeometry(sw,sh,D),revM);
+  ensureWinMats();
+  const side=(sx,sy,sw,sh)=>{ const m2=new THREE.Mesh(new THREE.BoxGeometry(sw,sh,D),revealMat);
     m2.position.set(sx,sy,-D/2); m2.castShadow=true; m2.receiveShadow=true; parent.add(m2); };
   side(x,y+h/2+0.015,w+0.06,0.03);                           // Sturz-Untersicht
   side(x,y-h/2-0.015,w+0.06,0.03);                           // Brüstung
   side(x-w/2-0.015,y,0.03,h);                                // linke Laibung
   side(x+w/2+0.015,y,0.03,h);                                // rechte Laibung
-  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),interiorRoom(w-0.02,h-0.02,1.7,x*3.7+y*1.3,'home',corner||0));
+  // Rollschicht ueber der Oeffnung: stehende Steine, 0.24 m hoch. Das kanonische
+  // Klinkerdetail ueber jeder Oeffnung - und in einem Klinker-Konfigurator die
+  // Stelle, an der das Produkt zeigt, was es kann.
+  const roll=new THREE.Mesh(new THREE.BoxGeometry(w+0.23,0.24,0.115),soldierMat);
+  roll.position.set(x,y+h/2+0.16,0.006); roll.castShadow=true; roll.receiveShadow=true; parent.add(roll);
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),
+    interiorRoom(w-0.02,h-0.02,3.0,x*3.7+y*1.3,'home',corner||0,room));
   inter.position.set(x,y,-D-0.02); parent.add(inter);        // 3D-Innenraum (Interior-Mapping)
   // Blendrahmen als RING aus vier Hölzern — ein Vollkörper würde den Innenraum zumauern
-  const fw=0.085, frM=mat(0xf2f1ee,0.55), fz=-D+0.025;
+  const fw=0.085, frM=frameMat, fz=-D+0.025;
   const bar=(bx,by,bw,bh)=>{ const m2=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,0.055),frM);
-    m2.position.set(bx,by,fz); m2.castShadow=true; parent.add(m2); };
+    m2.position.set(bx,by,fz); parent.add(m2); };
   bar(x,y+h/2-fw/2,w,fw); bar(x,y-h/2+fw/2,w,fw);
   bar(x-w/2+fw/2,y,fw,h-fw*2); bar(x+w/2-fw/2,y,fw,h-fw*2);
   const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-fw*2,h-fw*2),glassM);
   glass.position.set(x,y,-D+0.04); parent.add(glass);        // reflektierendes Glas
   const post=new THREE.Mesh(new THREE.BoxGeometry(0.055,h-fw*2,0.05),frM);
   post.position.set(x,y,fz); parent.add(post);               // Mittelpfosten
-  // Sohlbank: steht vor der Wand und wirft die charakteristische Schattenkante
-  const sill=new THREE.Mesh(new THREE.BoxGeometry(w+0.24,0.07,D+0.10),mat(0xdedbd5,0.75));
-  sill.position.set(x,y-h/2-0.035,-D/2+0.05); sill.castShadow=true; sill.receiveShadow=true; parent.add(sill);
-  const drip=new THREE.Mesh(new THREE.BoxGeometry(w+0.24,0.035,0.03),mat(0xc9c6bf,0.8));
-  drip.position.set(x,y-h/2-0.085,0.035); drip.castShadow=true; parent.add(drip);
-  if(withBox){
-    const box=new THREE.Mesh(new THREE.BoxGeometry(w-0.02,0.30,0.11),mat(0x33373c,0.6));
-    box.position.set(x,y+h/2-0.15,-D+0.09); parent.add(box);  // Kasten sitzt IN der Laibung
-  }
+  // Sohlbank aus Klinker (Rollschicht liegend): steht vor der Wand und wirft die
+  // charakteristische Schattenkante. Ersetzt die frueheren zwei Betonprofile.
+  const sill=new THREE.Mesh(new THREE.BoxGeometry(w+0.23,0.10,D+0.12),soldierMat);
+  sill.position.set(x,y-h/2-0.05,-D/2+0.06); sill.castShadow=true; sill.receiveShadow=true; parent.add(sill);
 }
 
 function buildScene(){
@@ -233,11 +251,13 @@ function buildScene(){
 
   // ---- Hauskörper: Fassade vorne + Giebelseiten (Produkt-Textur) ----
   // Öffnungen: exakt dieselben Masse, die makeWindow/Portal weiter unten benutzen
-  const FRONT_WIN=[{x:-2.9,y:4.45,w:1.70,h:1.30},{x:0,y:4.50,w:0.95,h:1.15},{x:2.9,y:4.45,w:1.40,h:1.30},
-                   {x:-2.9,y:1.95,w:1.70,h:2.30},{x:2.9,y:2.30,w:1.40,h:1.50}];
-  const DOOR={x:0,y:SOC+1.30,w:1.84,h:2.60};
-  const SIDE_WIN=[{x:-1.9,y:4.45,w:1.40,h:1.30},{x:1.9,y:4.45,w:1.40,h:1.30},
-                  {x:-1.9,y:2.30,w:1.40,h:1.50},{x:1.9,y:2.30,w:1.40,h:1.50}];
+  const W1={w:WIN_W,h:WIN_H};
+  const FRONT_WIN=[{x:-AX,y:Y_OG,...W1},{x:0,y:Y_OG,...W1},{x:AX,y:Y_OG,...W1},
+                   {x:-AX,y:Y_EG,...W1},{x:AX,y:Y_EG,...W1}];
+  const DOOR={x:0,y:1.435,w:1.60,h:2.23};                 // Schwelle auf dem Sockel, Sturz auf Fensterlinie
+  const SIDE_WIN=[{x:-AX_S,y:Y_OG,...W1},{x:AX_S,y:Y_OG,...W1},
+                  {x:-AX_S,y:Y_EG,...W1},{x:AX_S,y:Y_EG,...W1},
+                  {x:0,y:7.10,w:0.90,h:1.30}];            // Giebelfenster, erst durch das 45°-Dach möglich
   facadeMat=new THREE.MeshStandardMaterial({color:0xdad6d1,roughness:0.95});
   const front=new THREE.Mesh(wallGeo(HW,HE,0,FRONT_WIN.concat([DOOR])),facadeMat);
   front.position.set(0,0,0); front.receiveShadow=true; front.castShadow=true; scene.add(front);
@@ -253,10 +273,11 @@ function buildScene(){
   back.rotation.y=Math.PI; back.position.set(0,HE/2,-HD); back.castShadow=true; scene.add(back);
   // Innenschale: dunkle Kiste hinter den Öffnungen, damit man durch die Laibung
   // nicht ins Freie sieht, wenn ein Fenster mal keinen Innenraum-Shader trägt
-  // Reicht bis zum First, sonst sieht man mit dem steileren Dach durch den
-  // Giebeldreieck-Bereich hindurch ins Freie.
-  { const shell=new THREE.Mesh(new THREE.BoxGeometry(HW-0.3,HR-0.3,HD-0.4),mat(0x2a2723,1));
-    shell.material.side=THREE.BackSide; shell.position.set(0,(HR-0.3)/2+0.15,-HD/2); scene.add(shell); }
+  // NUR bis zur Traufe. Der Dachraum darüber ist bereits geschlossen — von den
+  // zwei Giebelwänden und den zwei Dachflächen. Eine Kiste bis zum First würde
+  // durch die Dachflächen stossen und als dunkler Keil im Bild stehen.
+  { const shell=new THREE.Mesh(new THREE.BoxGeometry(HW-0.3,HE-0.2,HD-0.4),mat(0x2a2723,1));
+    shell.material.side=THREE.BackSide; shell.position.set(0,HE/2,-HD/2); scene.add(shell); }
   // Sockel: das Haus steht sonst mit einer Rasierklingenkante auf dem Rasen
   { const soc=new THREE.Mesh(new THREE.BoxGeometry(HW+0.16,SOC,HD+0.16),mat(0xb9b5ad,0.9));
     soc.position.set(0,SOC/2,-HD/2); soc.castShadow=true; soc.receiveShadow=true; scene.add(soc); }
@@ -321,54 +342,87 @@ function buildScene(){
   const vent=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.5,10),mat(0x4a4d52,0.5,0.5));
   vent.position.set(1.6,HR-0.6,-HD/2-1.4); scene.add(vent);
 
-  // ---- Fenster (weisse Rahmen, dunkle Rollladen-Kästen) ----
-  // Etwas dichteres Glas als früher: an einem echten Haus sind Fenster von aussen
-  // dunkle Löcher mit Spiegelung, keine hellen Flächen.
-  const glassM=glassMaterial({opacity:0.52,color:0x232b33,env:1.9});
+  // ---- Fenster ----
+  // Die Scheibe ist ein Spiegel, kein Schaufenster: in der Referenz ist in keinem
+  // Fenster ein Möbel erkennbar, nur Himmel und Baumsilhouette.
+  const glassM=glassMaterial({opacity:0.58,color:0x1f2731,env:1.0,roughness:0.04,clearcoat:0});
+  // Raumzuordnung: mehrere Fenster desselben Zimmers zeigen DENSELBEN Raum.
+  // EG: Wohnen links, Küche rechts, Diele hinter der Tür.
+  // OG: Schlafen links, Bad in der Mitte, Kinderzimmer rechts.
   const grp=new THREE.Group(); scene.add(grp);
-  makeWindow(grp,-2.9,4.45,1.70,1.30,glassM,true,-1);   // OG links → Seitenfenster links
-  makeWindow(grp, 0.0,4.50,0.95,1.15,glassM,true, 0);   // OG mitte klein
-  makeWindow(grp, 2.9,4.45,1.40,1.30,glassM,true, 1);   // OG rechts → Seitenfenster rechts
-  makeWindow(grp,-2.9,1.95,1.70,2.30,glassM,true,-1);   // EG links (bodentief)
-  makeWindow(grp, 2.9,2.30,1.40,1.50,glassM,true, 1);   // EG rechts
-  // Seitenfenster (Giebelwände links/rechts): je zwei Achsen, OG + EG
+  makeWindow(grp,-AX,Y_OG,WIN_W,WIN_H,glassM,false,-1,'schlafen');
+  makeWindow(grp, 0.0,Y_OG,WIN_W,WIN_H,glassM,false, 0,'bad');
+  makeWindow(grp, AX,Y_OG,WIN_W,WIN_H,glassM,false, 1,'kind');
+  makeWindow(grp,-AX,Y_EG,WIN_W,WIN_H,glassM,false,-1,'wohnen');
+  makeWindow(grp, AX,Y_EG,WIN_W,WIN_H,glassM,false, 1,'kueche');
+  // Seitenfenster (Giebelwände links/rechts): je zwei Achsen, OG + EG + Giebelspitze
   [-1,1].forEach(s=>{
     const sg=new THREE.Group(); sg.rotation.y=s*Math.PI/2; sg.position.set(s*HW/2,0,-HD/2); scene.add(sg);
-    makeWindow(sg,-1.9,4.45,1.40,1.30,glassM,true);
-    makeWindow(sg, 1.9,4.45,1.40,1.30,glassM,true);
-    makeWindow(sg,-1.9,2.30,1.40,1.50,glassM,true);
-    makeWindow(sg, 1.9,2.30,1.40,1.50,glassM,true);
+    const eg=s<0?'wohnen':'kueche', og=s<0?'schlafen':'kind';
+    makeWindow(sg,-AX_S,Y_OG,WIN_W,WIN_H,glassM,false,0,og);
+    makeWindow(sg, AX_S,Y_OG,WIN_W,WIN_H,glassM,false,0,og);
+    makeWindow(sg,-AX_S,Y_EG,WIN_W,WIN_H,glassM,false,0,eg);
+    makeWindow(sg, AX_S,Y_EG,WIN_W,WIN_H,glassM,false,0,eg);
+    makeWindow(sg, 0,7.10,0.90,1.30,glassM,false,0,'estrich');
   });
 
   // ---- Eingang: echte Nische in der Wand, Holztür + Seitenteil + Stufen ----
   // Die Türöffnung sitzt auf dem Sockel auf (Schwelle bei SOC) — deshalb führen
   // zwei Stufen hinauf, wie an einem gebauten Haus auch.
-  { const D=0.24, w=1.84, h=2.60, y0=SOC, yc=y0+h/2;
-    const revM=mat(0xe0ddd7,0.85);
-    const rv=(sx,sy,sw,sh)=>{ const m2=new THREE.Mesh(new THREE.BoxGeometry(sw,sh,D),revM);
+  { ensureWinMats();
+    const D=0.24, w=1.60, h=2.23, y0=SOC, yc=y0+h/2;
+    const rv=(sx,sy,sw,sh)=>{ const m2=new THREE.Mesh(new THREE.BoxGeometry(sw,sh,D),revealMat);
       m2.position.set(sx,sy,-D/2); m2.castShadow=true; m2.receiveShadow=true; scene.add(m2); };
     rv(0,y0+h+0.02,w+0.08,0.04);                       // Sturz
     rv(-w/2-0.02,yc,0.04,h);                           // linke Laibung
     rv( w/2+0.02,yc,0.04,h);                           // rechte Laibung
-    const thr=new THREE.Mesh(new THREE.BoxGeometry(w+0.10,0.05,D+0.06),mat(0xb4b0a9,0.8));
-    thr.position.set(0,y0-0.02,-D/2+0.03); thr.receiveShadow=true; scene.add(thr);   // Schwelle
-    const back2=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat(0x413b34,0.95));
+    // Rollschicht auch ueber der Tuer
+    const roll=new THREE.Mesh(new THREE.BoxGeometry(w+0.23,0.24,0.115),soldierMat);
+    roll.position.set(0,y0+h+0.16,0.006); roll.castShadow=true; roll.receiveShadow=true; scene.add(roll);
+    const thr=new THREE.Mesh(new THREE.BoxGeometry(w+0.10,0.02,0.17),mat(0xa8acae,0.42,0.55));
+    thr.position.set(0,y0-0.01,-D/2+0.05); thr.receiveShadow=true; scene.add(thr);   // Schwellenprofil
+    // Zarge: Blatt 1.05 + Setzholz 0.06 + Seitenteil 0.43 + 2x0.03 Rahmen = 1.60,
+    // vorher blieben 0.36 m der Oeffnung schlicht offen (schwarzer Spalt).
+    const zM=mat(0x33383c,0.55);
+    [[-w/2+0.015,yc,0.03,h],[w/2-0.015,yc,0.03,h],[0,y0+h-0.015,w,0.03],
+     [0.245,yc,0.06,h-0.03]].forEach(([bx,by,bw,bh])=>{
+      const z=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,0.086),zM);
+      z.position.set(bx,by,-D+0.043); scene.add(z); });
+    const back2=new THREE.Mesh(new THREE.PlaneGeometry(w,h),mat(0x2b2723,0.95));
     back2.position.set(0,yc,-D-0.01); scene.add(back2);
-    const door=new THREE.Mesh(new THREE.BoxGeometry(1.02,h-0.08,0.07),mat(0x5a3d29,0.5));
-    door.position.set(-0.30,yc-0.02,-D+0.05); door.castShadow=true; scene.add(door);
-    const panelM=mat(0x49301f,0.55);
-    [0.68,0.0,-0.68].forEach(dy=>{ const pn=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.56,0.015),panelM);
-      pn.position.set(-0.30,yc-0.02+dy,-D+0.09); scene.add(pn); });
-    const dBar=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,1.4,10),mat(0xc6c9cb,0.3,0.85));
-    dBar.position.set(0.04,yc-0.02,-D+0.11); scene.add(dBar);
-    const dSideInt=new THREE.Mesh(new THREE.PlaneGeometry(0.46,h-0.10),interiorRoom(0.46,h-0.10,1.7,7.3,'home'));
-    dSideInt.position.set(0.52,yc,-D+0.02); scene.add(dSideInt);
-    const doorGlass=new THREE.Mesh(new THREE.PlaneGeometry(0.46,h-0.10),glassM);
-    doorGlass.position.set(0.52,yc,-D+0.05); scene.add(doorGlass);
-    const step1=new THREE.Mesh(new THREE.BoxGeometry(2.3,SOC*0.6,1.0),mat(0xc9c6c0,0.85));
-    step1.position.set(0,SOC*0.3,0.62); step1.castShadow=true; step1.receiveShadow=true; scene.add(step1);
-    const step2=new THREE.Mesh(new THREE.BoxGeometry(2.6,SOC*0.3,1.4),mat(0xc4c1bb,0.85));
-    step2.position.set(0,SOC*0.15,0.86); step2.castShadow=true; step2.receiveShadow=true; scene.add(step2);
+    // Tuerblatt: 1.05 x 2.10, Verhaeltnis 1:2.0 statt der frueheren 1:2.47 -
+    // ab 2.40 m Blatthoehe haengt ein einfluegeliges Blatt durch.
+    const door=new THREE.Mesh(new THREE.BoxGeometry(1.05,h-0.06,0.082),mat(0x2b2f33,0.38));
+    door.position.set(-0.24,yc,-D+0.055); door.castShadow=true; scene.add(door);
+    const panelM=mat(0x24282c,0.42);
+    [0.62,-0.28].forEach(dy=>{ const pn=new THREE.Mesh(new THREE.BoxGeometry(0.72,0.62,0.012),panelM);
+      pn.position.set(-0.24,yc+dy,-D+0.10); scene.add(pn); });
+    // Stossgriff MIT Stuetzen - vorher schwebte er 7 mm vor dem Blatt
+    const gM=mat(0xb8bcbe,0.32,1.0);
+    const dBar=new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.015,1.20,10),gM);
+    dBar.position.set(0.20,yc-0.05,-D+0.155); scene.add(dBar);
+    [-0.50,0.50].forEach(dy=>{ const st=new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.015,0.062,8),gM);
+      st.rotation.x=Math.PI/2; st.position.set(0.20,yc-0.05+dy,-D+0.126); scene.add(st); });
+    const dSideInt=new THREE.Mesh(new THREE.PlaneGeometry(0.43,h-0.06),
+      interiorRoom(0.43,h-0.06,3.2,7.3,'home',0,'diele'));
+    dSideInt.position.set(0.545,yc,-D+0.01); scene.add(dSideInt);
+    const doorGlass=new THREE.Mesh(new THREE.PlaneGeometry(0.43,h-0.06),glassM);
+    doorGlass.position.set(0.545,yc,-D+0.04); scene.add(doorGlass);
+    // Zwei GLEICHE Steigungen a 0.16 - vorher 9.6 / 9.6 / 12.8 cm, ein Baufehler,
+    // den das Auge sofort sieht.
+    const step1=new THREE.Mesh(new THREE.BoxGeometry(2.20,SOC/2,1.10),mat(0x55585b,0.8));
+    step1.position.set(0,SOC*0.75,0.55); step1.castShadow=true; step1.receiveShadow=true; scene.add(step1);
+    const step2=new THREE.Mesh(new THREE.BoxGeometry(2.60,SOC/2,1.40),mat(0x55585b,0.8));
+    step2.position.set(0,SOC*0.25,0.90); step2.castShadow=true; step2.receiveShadow=true; scene.add(step2);
+    // Wandleuchten flankierend. Bewusst KEINE echte Lichtquelle: jede zusaetzliche
+    // zwingt three, alle Standardmaterialien neu zu kompilieren - tagsueber fuer nichts.
+    [-1.15,1.15].forEach(lx=>{
+      const lp=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.30,0.11),mat(0x2b2d30,0.5));
+      lp.position.set(lx,2.05,0.06); lp.castShadow=true; scene.add(lp);
+      const gl=new THREE.Mesh(new THREE.BoxGeometry(0.085,0.02,0.085),
+        new THREE.MeshBasicMaterial({color:0xd8d2c4}));
+      gl.position.set(lx,1.895,0.06); scene.add(gl);
+    });
   }
 
   // ---- Bepflanzung vor der Fassade ----
@@ -485,6 +539,17 @@ function startLoops(){
 // Fugentiefe in UV-Einheiten: ~14 mm echte Tiefe auf die Breite, die die Textur
 // abdeckt (Front 9.6 m, Giebelseite 8.0 m) → so bleibt der Effekt massstäblich.
 const POM_FRONT=0.014/HW, POM_SIDE=0.014/HD;
+// Mittlere Helligkeit der Produkttextur — entscheidet die Schreinerfarbe
+function canvasLuma(cv){
+  if(!cv) return 0.5;
+  try{
+    const s=document.createElement('canvas'); s.width=64; s.height=40;
+    const c=s.getContext('2d',{willReadFrequently:true}); c.drawImage(cv,0,0,64,40);
+    const d=c.getImageData(0,0,64,40).data; let L=0;
+    for(let i=0;i<d.length;i+=4) L+=(d[i]*0.299+d[i+1]*0.587+d[i+2]*0.114)/255;
+    return L/(64*40);
+  }catch(e){ return 0.5; }
+}
 function applyTex(m,cv,fallback,rough,ns,pom){
   applySurface(m,cv,{fallback,rough,normalScale:ns!=null?ns:0.9,aniso:maxAniso,
     env:cv?0.20:0.3, pom:pom||0});
@@ -519,6 +584,25 @@ window.Efh3D={
     applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce,1.0,0.9,POM_SIDE);
     applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce,1.0,0.9,POM_SIDE);
     applyTex(floorMat,floorCv,0xd0cdc8,0.85,0.6);
+    if(revealMat){
+      // Laibung und Rollschicht tragen DAS PRODUKT statt hellem Putz. Das war die
+      // groesste helle Nicht-Produktflaeche der Fassade, direkt neben dem Produkt.
+      // Die Laibung ist eine Schnittflaeche → leicht abgedunkelt.
+      applySurface(revealMat,facadeCv,{fallback:0xe3e0da,tint:0xb0aca6,rough:1.0,
+        normalScale:0.45,aniso:maxAniso,env:0.20});
+      // Rollschicht = stehende Steine → dieselbe Karte um 90 Grad gedreht
+      applySurface(soldierMat,facadeCv,{fallback:0xdad6d1,rough:1.0,rotate:Math.PI/2,
+        normalScale:0.7,aniso:maxAniso,env:0.20});
+    }
+    // Rahmenfarbe folgt dem Produkt: heller Klinker bekommt helle Rahmen, dunkler
+    // anthrazite. Sonst ist der Rahmen bei rotem Klinker das hellste Objekt der
+    // ganzen Fassade — die Referenz macht genau umgekehrt.
+    if(frameMat){
+      const dark=canvasLuma(facadeCv)<0.45;
+      frameMat.color.set(dark?0x30353a:0xdad7d0);
+      frameMat.roughness=dark?0.55:0.85;
+      frameMat.needsUpdate=true;
+    }
   },
   snapshot(w,h){
     if(!renderer) return null;

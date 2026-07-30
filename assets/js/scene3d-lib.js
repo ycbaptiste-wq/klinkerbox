@@ -127,14 +127,18 @@ export function buildEnv(renderer){
 // leicht durchscheinen (opacity). Fresnel/Clearcoat → Kanten spiegeln stärker.
 export function glassMaterial(opts){
   opts=opts||{};
+  // clearcoat standardmässig AUS: zusammen mit der Fresnel-Reflexion bei ior 1.5
+  // wird die Oberflächenspiegelung sonst doppelt gezählt — und ein kompletter
+  // BRDF-Zweig gerechnet, den man nicht sieht.
+  const cc=opts.clearcoat!=null?opts.clearcoat:0;
   return new THREE.MeshPhysicalMaterial({
-    color: opts.color!=null?opts.color:0x2b343e,
+    color: opts.color!=null?opts.color:0x1f2731,
     metalness:0,
-    roughness: opts.roughness!=null?opts.roughness:0.06,
+    roughness: opts.roughness!=null?opts.roughness:0.04,
     transparent:true,
-    opacity: opts.opacity!=null?opts.opacity:0.32,   // durchsichtiger → der 3D-Innenraum bleibt erkennbar
-    envMapIntensity: opts.env!=null?opts.env:1.6,    // HDR-Sonne liefert das Glanzlicht (Env ist gedimmt)
-    clearcoat:1, clearcoatRoughness:0.06,
+    opacity: opts.opacity!=null?opts.opacity:0.58,   // die Scheibe ist ein Spiegel, kein Schaufenster
+    envMapIntensity: opts.env!=null?opts.env:1.0,
+    clearcoat:cc, clearcoatRoughness:0.06,
     ior:1.5, reflectivity:0.7,
     side:THREE.FrontSide, depthWrite:false
   });
@@ -430,16 +434,24 @@ void main(){
   gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
 }`;
 const INT_FRAG=`precision highp float;
-uniform float uW,uH,uD,uSeed,uKind,uCorner;
+uniform float uW,uH,uD,uSeed,uKind,uCorner,uFrost;
+uniform vec3 uWall; uniform vec2 uFurn,uLamp;
 varying vec3 vP;varying vec3 vC;
 float hash(float n){ return fract(sin(n)*43758.5453123); }
 void main(){
+  // Bad: satinierte Scheibe. Man sieht Helligkeit und eine Ahnung von Bewegung,
+  // aber keinen Raum - genau wie an einem echten Badezimmerfenster.
+  if(uFrost>0.5){
+    float g=0.62+0.10*sin(vP.y*46.0)+0.04*hash(floor(vP.x*30.0)+floor(vP.y*30.0)*7.0);
+    vec3 fc=vec3(0.66,0.69,0.70)*g;
+    gl_FragColor=vec4(pow(fc,vec3(0.4545)),1.0); return;
+  }
   vec3 rd=normalize(vP-vC);
   if(rd.z>-0.02) rd.z=-0.02;
   vec3 ro=vec3(vP.x,vP.y,0.0);
   float w2=uW*0.5, h2=uH*0.5;
   bool office=uKind>0.5;
-  float lampOn=0.5+0.7*hash(uSeed*7.31+1.7);
+  float lampOn=uLamp.y*(0.6+0.5*hash(uSeed*7.31+1.7));
   // Grundhelligkeit variiert je Fenster — Büros streuen stärker (leere dunkle Räume)
   float lit=office? (0.45+0.95*hash(uSeed*4.71+0.9)) : (0.7+0.6*hash(uSeed*4.71+0.9));
   // ---- seitliche Vorhänge direkt hinter dem Glas (nur Wohnen, nicht überall) ----
@@ -473,12 +485,14 @@ void main(){
   float dz=clamp(-hit.z/uD,0.0,1.0);
   float dm=clamp(-hit.z/4.5,0.0,1.0);   // Distanz-Abdunklung in METERN — grosse Räume bleiben hinten hell
   // Wandton variiert je Fenster: greige / warmweiss / terracotta / salbei
-  float hue=hash(uSeed*3.9+2.2);
-  vec3 wallA = hue<0.25? vec3(0.20,0.17,0.14) : hue<0.5? vec3(0.215,0.195,0.17) : hue<0.75? vec3(0.225,0.16,0.125) : vec3(0.175,0.19,0.155);
+  vec3 wallA = uWall;                              // Wandton kommt jetzt vom RAUMTYP
   if(office) wallA=vec3(0.28,0.29,0.315);          // Büro: helle, kühle Wände
   vec3 wallB=wallA*1.45;
   vec2 lp=vec2((hash(uSeed)*0.6-0.3)*uW, -h2+uH*(office?0.45:0.58));
-  vec3 lc=office? vec3(0.55,0.68,0.9):vec3(1.0,0.72,0.38);
+  // Lichtfarbe: uLamp.x mischt zwischen kühlem Neutralweiss (Küche, Bad) und
+  // warmem Wohnlicht — der Unterschied, an dem man Küche und Wohnzimmer erkennt.
+  vec3 lc=office? vec3(0.55,0.68,0.9)
+                : mix(vec3(0.78,0.82,0.88), vec3(1.0,0.72,0.38), clamp(uLamp.x,0.0,1.0));
   vec3 col;
   if(tz<=tx && tz<=ty){
     // Rueckwand: Verlauf + Lampe (Schein + heller Kern) + Moebel + Bild/Monitore + Pflanze
@@ -517,8 +531,11 @@ void main(){
       float px=bwx+(hash(uSeed*6.1)>0.5?1.0:-1.0)*uW*0.34;
       if(!inBW && abs(hit.x-px)<uW*0.075 && abs(hit.y-uH*0.14)<uH*0.12) col=mix(col,vec3(0.42,0.37,0.29),0.9);
     }
-    // Vordergrund unten: Sofa/Schreibtisch-Silhouette + Monitore/Pflanze — VOR dem Fenster
-    if(hit.y<-h2+uH*(office?0.26:0.34) && abs(hit.x-fx)<uW*fw*0.5) col*=office?0.5:0.4;
+    // Möbelsilhouette: Höhe und Dunkelheit kommen vom Raumtyp — ein Sofa steht
+    // tiefer als eine Küchenzeile, ein Bett anders als ein Schreibtisch.
+    if(hit.y<-h2+uH*(office?0.26:uFurn.x) && abs(hit.x-fx)<uW*fw*0.5) col*=office?0.5:(1.0-uFurn.y);
+    // Küche: Oberschränke als dunkles Band im oberen Drittel
+    if(!office && uFurn.x>0.5 && hit.y>-h2+uH*0.62 && hit.y<-h2+uH*0.88) col*=0.55;
     if(office){
       float my=-h2+uH*0.30;
       if(abs(hit.y-my)<uH*0.055 && (abs(hit.x-fx-uW*0.10)<uW*0.05||abs(hit.x-fx+uW*0.02)<uW*0.05||abs(hit.x-fx+uW*0.14)<uW*0.05))
@@ -572,11 +589,33 @@ void main(){
   col*=(1.0-0.3*dz)*lit*0.62;
   gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(0.4545)),1.0);
 }`;
+// ---------- Raumtypen ----------
+// Vorher bekam JEDES Fenster einen Zufallsraum aus seinem Seed: benachbarte
+// Fenster desselben Zimmers zeigten verschiedene Räume, und ein Bad sah aus wie
+// ein Wohnzimmer. Jetzt bestimmt der Raumtyp Wandton, Möbelhöhe, Lichtstimmung
+// und ob die Scheibe satiniert ist. Mehrere Fenster eines Zimmers bekommen
+// denselben Typ und zeigen damit dasselbe.
+// [wandR,wandG,wandB, moebelHoehe, moebelDunkel, lampWarm, lampAn, milchglas]
+const ROOMS={
+  wohnen:   [0.215,0.195,0.170, 0.34, 0.42, 1.0, 0.9, 0],   // Sofa, Stehleuchte, warm
+  kueche:   [0.235,0.230,0.215, 0.55, 0.34, 0.5, 0.7, 0],   // Zeile + Oberschränke, kühler
+  essen:    [0.225,0.205,0.180, 0.26, 0.40, 1.0, 1.0, 0],   // Pendelleuchte über dem Tisch
+  diele:    [0.200,0.190,0.175, 0.16, 0.50, 0.8, 0.5, 0],   // fast leer, Blick in die Tiefe
+  schlafen: [0.205,0.200,0.195, 0.30, 0.55, 0.9, 0.2, 0],   // Bett, meist unbeleuchtet
+  kind:     [0.215,0.210,0.185, 0.36, 0.48, 0.9, 0.4, 0],
+  bad:      [0.260,0.265,0.270, 0.30, 0.60, 0.6, 0.3, 1],   // Milchglas — man sieht nichts
+  estrich:  [0.120,0.115,0.110, 0.10, 0.70, 0.5, 0.0, 0],   // Dachraum, dunkel
+};
 // corner: -1 = Fenster nahe der linken Gebäudeecke, +1 = rechte Ecke (→ Seitenfenster im Raum), 0 = keins
-export function interiorRoom(w,h,depth,seed,kind,corner){
+export function interiorRoom(w,h,depth,seed,kind,corner,room){
+  const r=ROOMS[room]||ROOMS.wohnen;
   return new THREE.ShaderMaterial({
     uniforms:{uW:{value:w},uH:{value:h},uD:{value:depth||1.7},uSeed:{value:seed!=null?seed:1},
-      uKind:{value:kind==='office'?1:0},uCorner:{value:corner||0}},
+      uKind:{value:kind==='office'?1:0},uCorner:{value:corner||0},
+      uWall:{value:new THREE.Vector3(r[0],r[1],r[2])},
+      uFurn:{value:new THREE.Vector2(r[3],r[4])},
+      uLamp:{value:new THREE.Vector2(r[5],r[6])},
+      uFrost:{value:r[7]}},
     vertexShader:INT_VERT, fragmentShader:INT_FRAG
   });
 }
@@ -655,12 +694,18 @@ export function applySurface(m,cv,opts){
   }
   const t=new THREE.CanvasTexture(cv);
   t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=aniso;
-  m.map=t; m.color.set(0xffffff);
+  if(opts.rotate){ t.center.set(0.5,0.5); t.rotation=opts.rotate; }
+  m.map=t;
+  // tint dunkelt dieselbe Produktkarte ab — fuer Laibungen (Schnittflaeche) und
+  // Sockel. Billiger als ein zweiter surfaceMaps-Lauf mit eigener Textur.
+  m.color.set(opts.tint!=null?opts.tint:0xffffff);
   const maps=surfaceMaps(cv,opts.maxW);
   if(maps){
-    // Filter und Mipmap-Kette setzt texPair(); hier nur noch die Anisotropie.
+    // Filter und Mipmap-Kette setzt texPair(); hier nur noch Anisotropie und Drehung.
     maps.normal.anisotropy=aniso;
     maps.orm.anisotropy=aniso;
+    if(opts.rotate){ maps.normal.center.set(0.5,0.5); maps.normal.rotation=opts.rotate;
+                     maps.orm.center.set(0.5,0.5);    maps.orm.rotation=opts.rotate; }
     m.normalMap=maps.normal;
     const ns=opts.normalScale!=null?opts.normalScale:0.9;
     m.normalScale=new THREE.Vector2(ns,ns);
