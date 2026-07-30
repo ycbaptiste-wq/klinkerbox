@@ -695,6 +695,9 @@ export function applySurface(m,cv,opts){
   const t=new THREE.CanvasTexture(cv);
   t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=aniso;
   if(opts.rotate){ t.center.set(0.5,0.5); t.rotation=opts.rotate; }
+  // repeat wird gebraucht, wenn die Geometrie UVs in METERN liefert (ShapeGeometry).
+  // Muss zwingend auch auf Normal und ORM — sonst liegt das Relief daneben.
+  if(opts.repeat){ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(opts.repeat,opts.repeat); }
   m.map=t;
   // tint dunkelt dieselbe Produktkarte ab — fuer Laibungen (Schnittflaeche) und
   // Sockel. Billiger als ein zweiter surfaceMaps-Lauf mit eigener Textur.
@@ -706,6 +709,8 @@ export function applySurface(m,cv,opts){
     maps.orm.anisotropy=aniso;
     if(opts.rotate){ maps.normal.center.set(0.5,0.5); maps.normal.rotation=opts.rotate;
                      maps.orm.center.set(0.5,0.5);    maps.orm.rotation=opts.rotate; }
+    if(opts.repeat){ [maps.normal,maps.orm].forEach(t2=>{
+      t2.wrapS=t2.wrapT=THREE.RepeatWrapping; t2.repeat.set(opts.repeat,opts.repeat); }); }
     m.normalMap=maps.normal;
     const ns=opts.normalScale!=null?opts.normalScale:0.9;
     m.normalScale=new THREE.Vector2(ns,ns);

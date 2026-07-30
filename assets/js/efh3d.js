@@ -5,7 +5,7 @@
 // Orbit + Zoom wie beim Bungalow/Innenraum.
 import * as THREE from './three.module.min.js';
 import { buildEnv, glassMaterial, skyDomeTexture, applySurface, surfaceMaps, disposeScene,
-         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=46';
+         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=47';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -75,8 +75,11 @@ function fenceRun(x0,x1,z,parent){
   [1.32,0.52].forEach(y=>{ const r=new THREE.Mesh(new THREE.BoxGeometry(len,0.045,0.032),railM);
     r.position.set(cx,y,z); r.castShadow=true; parent.add(r); });
   const n=Math.max(2,Math.round(len/0.125));
-  const bars=new THREE.InstancedMesh(new THREE.BoxGeometry(0.020,0.90,0.020),railM,n);
-  bars.castShadow=true;
+  // Staebe werfen KEINEN Schatten: bei 20 mm Dicke und ~6 mm Texelgroesse wird der
+  // Stabschatten zu grauem Rauschen - das sieht schlechter aus als gar keiner.
+  // Dafuer etwas dicker gegen das Kantenflimmern im Hauptdurchgang.
+  const bars=new THREE.InstancedMesh(new THREE.BoxGeometry(0.035,0.90,0.035),railM,n);
+  bars.castShadow=false;
   const M=new THREE.Matrix4();
   for(let i=0;i<n;i++){ M.makeTranslation(x0+0.06+i*(len-0.12)/(n-1),0.92,z); bars.setMatrixAt(i,M); }
   bars.instanceMatrix.needsUpdate=true; parent.add(bars);
@@ -92,7 +95,7 @@ function pier(x,z,h,parent){
 function hedge(x,z,len,rotY,parent){
   const g=new THREE.Group(); g.position.set(x,0,z); g.rotation.y=rotY||0;
   groundContact(0,0,len,1.5,g);                 // unter der Hecke steht kein Sonnenlicht
-  const body=new THREE.Mesh(new THREE.BoxGeometry(len,1.55,0.78),mat(0x44553a,1));
+  const body=new THREE.Mesh(new THREE.BoxGeometry(len,1.55,0.78),mat(0x506732,1));
   body.position.y=0.775; body.castShadow=true; body.receiveShadow=true; g.add(body);
   const n=Math.round(len/0.19);                       // aufgeraute Oberkante
   const tufts=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.115,0),
@@ -104,7 +107,7 @@ function hedge(x,z,len,rotY,parent){
     q.setFromEuler(new THREE.Euler(rnd(),rnd(),rnd()));
     s.set(0.8+rnd()*0.6,0.6+rnd()*0.4,0.8+rnd()*0.6);
     M.compose(v,q,s); tufts.setMatrixAt(i,M);
-    col.setHSL(0.26+rnd()*0.05,0.24+rnd()*0.14,0.16+rnd()*0.12); tufts.setColorAt(i,col);
+    col.setHSL(0.24+rnd()*0.05,0.30+rnd()*0.14,0.20+rnd()*0.14); tufts.setColorAt(i,col);
   }
   tufts.instanceMatrix.needsUpdate=true; if(tufts.instanceColor) tufts.instanceColor.needsUpdate=true;
   tufts.castShadow=true; g.add(tufts);
@@ -253,18 +256,56 @@ function buildScene(){
   const lawn=new THREE.Mesh(new THREE.PlaneGeometry(110,110),
     new THREE.MeshStandardMaterial({map:lawnT,roughness:1}));
   lawn.rotation.x=-Math.PI/2; lawn.position.set(0,-0.01,10); lawn.receiveShadow=true; scene.add(lawn);
-  floorMat=new THREE.MeshStandardMaterial({color:0xd0cdc8,roughness:0.8,envMapIntensity:0.4});
-  const drive=new THREE.Mesh(new THREE.PlaneGeometry(12,7),floorMat);
-  drive.rotation.x=-Math.PI/2; drive.position.set(0,0.005,4.7);
-  drive.receiveShadow=true; scene.add(drive);
-  const gravelT=noiseTex('#b6b1a8',30,256,256); gravelT.repeat.set(10,2);
-  const gravel=new THREE.Mesh(new THREE.PlaneGeometry(26,3.2),
-    new THREE.MeshStandardMaterial({map:gravelT,roughness:1}));
-  gravel.rotation.x=-Math.PI/2; gravel.position.set(0,0.003,9.6); gravel.receiveShadow=true; scene.add(gravel);
-  const bedT=noiseTex('#8d857a',26,256,256); bedT.repeat.set(10,1);
-  const bed=new THREE.Mesh(new THREE.PlaneGeometry(13,1.3),
-    new THREE.MeshStandardMaterial({map:bedT,roughness:1}));
-  bed.rotation.x=-Math.PI/2; bed.position.set(0,0.004,0.65); bed.receiveShadow=true; scene.add(bed);
+
+  // ---- Belag: EINE Fläche aus mehreren Feldern statt einer grauen Platte ----
+  // Vorher lag ein 12x7-Rechteck vor dem Haus, ohne Zonierung und ohne Kante.
+  // Jetzt Zufahrt, Gehweg zur Tür, Türpodest und eine Nebenfläche — zusammen als
+  // ein ShapeGeometry, also EIN Draw-Call. ShapeGeometry liefert die UVs in
+  // Shape-Koordinaten, also in METERN: repeat = 1/Breite, die die Textur abdeckt.
+  floorMat=new THREE.MeshStandardMaterial({color:0xdedcd8,roughness:0.8,envMapIntensity:0.4});
+  // rotation.x=-PI/2 bildet Shape-y auf -z ab, deshalb hier negierte z-Werte
+  const fld=(x0,x1,z0,z1)=>{ const s=new THREE.Shape();
+    s.moveTo(x0,-z0); s.lineTo(x1,-z0); s.lineTo(x1,-z1); s.lineTo(x0,-z1); s.closePath(); return s; };
+  // Der Vorplatz liegt hinter der Toreinfahrt (Tor bei x ±3.30) und führt direkt
+  // zur Haustür — vorher lag die Zufahrt seitlich daneben, ohne Bezug zum Tor.
+  const PAVE=[fld(-3.10,3.10,1.90,8.75),    // Vorplatz hinter dem Tor
+              fld(-1.70,1.70,0.12,1.90),    // Zuweg und Türpodest
+              fld(-8.60,-5.10,0.80,3.80),   // Nebenfläche links
+              fld(3.10,6.40,3.20,7.20)];    // Abstellfläche rechts
+  const pave=new THREE.Mesh(new THREE.ShapeGeometry(PAVE),floorMat);
+  pave.rotation.x=-Math.PI/2; pave.position.y=0.020;
+  pave.receiveShadow=true; scene.add(pave);
+  // Randeinfassung: Läuferreihe hochkant. Das ist am Bodenprodukt der teuerste
+  // fehlende Posten — ohne Kante liest sich der Belag als Farbwechsel im Rasen.
+  const kerbMat=new THREE.MeshStandardMaterial({color:0xc9c5bf,roughness:0.85});
+  const kerb=(x0,x1,z0,z1)=>{
+    [[x0-0.06,z0,0.12,z1-z0],[x1+0.06,z0,0.12,z1-z0]].forEach(([cx,cz,cw,cd])=>{
+      const m2=new THREE.Mesh(new THREE.BoxGeometry(cw,0.11,cd),kerbMat);
+      m2.position.set(cx,0.015,cz+cd/2); m2.castShadow=true; m2.receiveShadow=true; scene.add(m2); });
+    const f=new THREE.Mesh(new THREE.BoxGeometry(x1-x0+0.24,0.11,0.12),kerbMat);
+    f.position.set((x0+x1)/2,0.015,z1+0.06); f.castShadow=true; f.receiveShadow=true; scene.add(f);
+  };
+  kerb(-8.60,-5.10,0.80,3.80); kerb(3.10,6.40,3.20,7.20);
+  // Vorplatz nur seitlich einfassen — vorne trifft er auf die Sockelmauer des Zauns
+  [[-3.16,1.90,8.75],[3.16,1.90,8.75]].forEach(([cx,z0,z1])=>{
+    const m2=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.11,z1-z0),kerbMat);
+    m2.position.set(cx,0.015,(z0+z1)/2); m2.castShadow=true; m2.receiveShadow=true; scene.add(m2); });
+
+  // ---- Traufstreifen (Kies) statt des 13 m breiten Beetstreifens ----
+  // Der ragte beidseits 1.70 m frei in den Rasen. Ein Spritzschutzstreifen läuft
+  // am Sockel entlang, nicht quer über das Grundstück.
+  const gravelT=noiseTex('#b9b2a4',34,256,256); gravelT.repeat.set(14,2);
+  const gravelM=new THREE.MeshStandardMaterial({map:gravelT,roughness:1});
+  const strip=(x,z,w,d)=>{ const g=new THREE.Mesh(new THREE.PlaneGeometry(w,d),gravelM);
+    g.rotation.x=-Math.PI/2; g.position.set(x,-0.005,z); g.receiveShadow=true; scene.add(g); };
+  strip(-3.15,0.305,3.50,0.45); strip(3.15,0.305,3.50,0.45);        // vorne, Aussparung an der Tür
+  strip(-5.105,-4.0,0.45,8.4); strip(5.105,-4.0,0.45,8.4);          // an beiden Giebeln
+  // Staudenbeet nur noch in zwei Feldern
+  const bedT=noiseTex('#7d746a',26,256,128); bedT.repeat.set(6,1);
+  const bedM=new THREE.MeshStandardMaterial({map:bedT,roughness:1});
+  [[-3.15,0.90,3.50,0.72],[3.15,0.90,3.50,0.72]].forEach(([x,z,w,d])=>{
+    const b=new THREE.Mesh(new THREE.PlaneGeometry(w,d),bedM);
+    b.rotation.x=-Math.PI/2; b.position.set(x,-0.004,z); b.receiveShadow=true; scene.add(b); });
 
   // ---- Hauskörper: Fassade vorne + Giebelseiten (Produkt-Textur) ----
   // Öffnungen: exakt dieselben Masse, die makeWindow/Portal weiter unten benutzen
@@ -484,13 +525,24 @@ function buildScene(){
   [[-4.2,0.62,1.2],[-1.6,0.70,1.05],[1.7,0.62,1.1],[4.3,0.70,1.2],
    [-5.6,1.00,1.3],[5.6,1.00,1.3],[-2.4,0.55,0.9],[2.6,0.58,0.95]]
     .forEach(([x,z,s])=>grassTuft(x,z,s,beds));
-  bushClump(-3.4,0.62,0.36,0x5f6d4a,beds); bushClump(-1.2,0.56,0.30,0x71785f,beds);
-  bushClump(1.3,0.62,0.32,0x536444,beds);  bushClump(3.6,0.56,0.36,0x71785f,beds);
-  bushClump(-5.2,0.82,0.40,0x4c5c40,beds); bushClump(5.2,0.82,0.38,0x5f6d4a,beds);
-  // Hecken schliessen das Grundstück seitlich und hinten ab
-  // Länge und Lage so, dass die Seitenhecken bis an die Zaunpfeiler bei z=8.8 reichen
-  hedge(-10.6,0.4,17,Math.PI/2,scene);
-  hedge( 10.6,0.4,17,Math.PI/2,scene);
+  // Nur zwei Grüntöne statt vier — vier lesen sich als Zufall, zwei als Pflanzung
+  bushClump(-3.4,0.90,0.34,0x4c5c40,beds); bushClump(-1.9,0.86,0.28,0x5f6d4a,beds);
+  bushClump(1.9,0.90,0.30,0x4c5c40,beds);  bushClump(3.4,0.86,0.34,0x5f6d4a,beds);
+  bushClump(-4.5,0.88,0.30,0x5f6d4a,beds); bushClump(4.5,0.88,0.30,0x4c5c40,beds);
+  // Kübel am Eingang: der einzige Massstabsvergleich, den der Belag bekommt
+  [[-1.15,0.95,0x3a3d40],[1.15,0.95,0x3a3d40],[6.60,2.40,0xb6b2ab],[6.60,3.80,0xb6b2ab]]
+    .forEach(([px,pz,pc])=>{
+      const pot=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.55,0.42),mat(pc,0.8));
+      pot.position.set(px,0.275,pz); pot.castShadow=true; pot.receiveShadow=true; scene.add(pot);
+      const ball=new THREE.Mesh(new THREE.IcosahedronGeometry(0.25,1),mat(0x4c5c40,1));
+      ball.position.set(px,0.80,pz); ball.castShadow=true; scene.add(ball);
+      groundContact(px,pz,0.95,0.95,scene,0.021);
+    });
+  // Hecken schliessen das Grundstück seitlich und hinten ab.
+  // Farbe war ein entsaettigtes Graugruen, das nur den Schattenwert der Referenz
+  // traf und deren Sonnenwert nie erreichte.
+  hedge(-10.6,-1.6,20.1,Math.PI/2,scene);
+  hedge( 10.6,-1.6,20.1,Math.PI/2,scene);
   hedge(  0.0,-13.5,22,0,scene);
 
   // ---- Grundstücksgrenze zur Strasse: Pfeiler, Sockelmauer, Stabgitter ----
@@ -504,13 +556,48 @@ function buildScene(){
   fenceRun(-10.14,-GATE+0.21,FZ,scene);
   fenceRun(GATE-0.21,10.14,FZ,scene);
 
-  // ---- Kulisse: Hügel + Bäume + ferne Häuser ----
-  [[-20,-18,9,0x8d9c80],[18,-20,11,0x879579],[0,-26,15,0x96a389]].forEach(([x,z,r,c])=>{
-    const h=new THREE.Mesh(new THREE.SphereGeometry(r,20,14),mat(c,1));
-    h.scale.set(1.7,0.30,1); h.position.set(x,0,z); scene.add(h);
-  });
+  // ---- Kontaktschatten am Bauwerksfuss ----
+  // Der Schlagschatten des Hauses faellt korrekt nach hinten aus dem Bild. Was
+  // fehlt, ist die ansichtsunabhaengige Verdunkelung dort, wo Wand auf Boden
+  // trifft — ohne sie liegt das Haus auf der Flaeche, statt darauf zu stehen.
+  { const S=512, cv=document.createElement('canvas'); cv.width=cv.height=S;
+    const c=cv.getContext('2d');
+    c.fillStyle='#ffffff'; c.fillRect(0,0,S,S);
+    const px=S/24, cxp=S/2, czp=S/2-(-2.0)*px;               // Ebene 24x20 bei z=-2
+    c.filter='blur(7px)';
+    c.fillStyle='rgb(140,140,140)';
+    c.fillRect(cxp-(HW/2+0.40)*px, czp+(-4.0-HD/2-0.40)*px, (HW+0.80)*px, (HD+0.80)*px);
+    c.filter='none';
+    const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace;
+    const dec=new THREE.Mesh(new THREE.PlaneGeometry(24,20),
+      new THREE.MeshBasicMaterial({map:t,blending:THREE.MultiplyBlending,
+        depthWrite:false,transparent:true,fog:false}));   // fog:false, sonst mischt der Nebel es weg
+    dec.rotation.x=-Math.PI/2; dec.position.set(0,0.026,-2.0); dec.renderOrder=2; scene.add(dec);
+  }
+
+  // ---- Kulisse: Baumwand statt Hügel ----
+  // Die drei geplaetteten Kugeln massen Helligkeit 182 gegen einen Himmel von 185 —
+  // praktisch keine Silhouette. Eine Baumwand traegt die Trennung, die ein
+  // Aussenbild braucht.
+  { const n=34;
+    const trees=new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1,1),
+      new THREE.MeshStandardMaterial({color:0xffffff,roughness:1}),n);
+    trees.castShadow=false;                       // sonst blaeht sich das Schattenfrustum auf
+    const M4=new THREE.Matrix4(), q=new THREE.Quaternion(), v=new THREE.Vector3(),
+          s=new THREE.Vector3(), col=new THREE.Color();
+    for(let i=0;i<n;i++){
+      const r=2.0+rnd()*1.4, hgt=6.5+rnd()*3.5;
+      v.set(-52+i*(104/(n-1))+(rnd()-0.5)*4, hgt-r*0.5, -56-rnd()*10);
+      q.setFromEuler(new THREE.Euler(rnd(),rnd(),rnd()));
+      s.set(r,r*(0.95+rnd()*0.45),r);
+      M4.compose(v,q,s); trees.setMatrixAt(i,M4);
+      col.setHex(0x44532f).lerp(new THREE.Color(0x53613c),rnd()); trees.setColorAt(i,col);
+    }
+    trees.instanceMatrix.needsUpdate=true; if(trees.instanceColor) trees.instanceColor.needsUpdate=true;
+    scene.add(trees);
+  }
   // Bäume: mehrteilige Krone statt einer Kugel — die Silhouette macht den Unterschied
-  [[-14,-8,1.0],[15,-6,0.85],[17,-11,1.15],[-17,-12,0.95],[-9,-16,1.1],[9,-17,0.9]].forEach(([x,z,sc])=>{
+  [[-15,-14,1.0],[17,-13,0.85],[19,-19,1.15],[-19,-19,0.95],[-11,-22,1.1],[12,-23,0.9]].forEach(([x,z,sc])=>{
     const tr=new THREE.Mesh(new THREE.CylinderGeometry(0.12*sc,0.20*sc,2.2*sc,8),mat(0x574434,1));
     tr.position.set(x,1.1*sc,z); tr.castShadow=true; scene.add(tr);
     for(let i=0;i<5;i++){
@@ -636,7 +723,11 @@ window.Efh3D={
     applyTex(facadeMat,facadeCv,0xdad6d1,1.0,0.9,POM_FRONT);
     applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce,1.0,0.9,POM_SIDE);
     applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce,1.0,0.9,POM_SIDE);
-    applyTex(floorMat,floorCv,0xd0cdc8,0.85,0.6);
+    // Der Belag hat UVs in Metern (ShapeGeometry) — die Bodentextur deckt 12 m ab.
+    // KEIN POM auf dem Boden: bei flachem Blickwinkel liegt die Abbruchschwelle des
+    // Parallax-Shaders als scharfe Kante quer durchs Bild.
+    applySurface(floorMat,floorCv,{fallback:0xdedcd8,rough:0.85,normalScale:0.6,
+      aniso:maxAniso,env:0.35,repeat:1/12});
     if(revealMat){
       // Laibung und Rollschicht tragen DAS PRODUKT statt hellem Putz. Das war die
       // groesste helle Nicht-Produktflaeche der Fassade, direkt neben dem Produkt.
