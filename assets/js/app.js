@@ -1297,7 +1297,12 @@
       if(o.length>4) cx.restore();
     }); }
   }
+  // Regler und Farbfelder feuern bei jedem Pixel — ohne Debounce baut das die
+  // komplette Wandtextur samt PBR-Karten neu und die UI friert beim Ziehen ein.
+  let _rwT=0;
+  function refreshWallSoon(){ clearTimeout(_rwT); _rwT=setTimeout(refreshWall,130); }
   function refreshWall(){
+    clearTimeout(_rwT);
     const host=$('#mixPreview'); if(!host) return;
     const sceneView=(mixView==='exterior'||mixView==='interior');
     if(!mix.length && !sceneView){ host.innerHTML=''; return; }
@@ -1413,7 +1418,7 @@
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=75', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=76', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -1433,6 +1438,19 @@
     }
     return tex;
   }
+  // Signatur einer fertigen Wandtextur — die 3D-Seite haengt daran ihren Cache fuer
+  // die PBR-Karten auf (Normal/AO/Roughness/Hoehe), damit die teure Pixelrechnerei
+  // beim blossen Neu-Mounten nicht jedes Mal von vorne laeuft.
+  function klbTexKey(name,w,h,div,z){
+    const lay=z.layout||[], step=Math.max(1,Math.ceil(lay.length/96));
+    const smp=[]; for(let i=0;i<lay.length;i+=step) smp.push(lay[i]);
+    const s=name+'|'+w+'x'+h+'|'+(+div).toFixed(3)+'|'+z.cat+z.shape+z.bond+z.bed+z.head+z.joint+z.order
+      +'|'+z.mix.map(m=>m.p.id+':'+m.weight).join(',')
+      +'|'+(z.seq||[]).join('.')+'|'+(z.wild||[]).join('.')+'|'+lay.length+':'+smp.join('.');
+    let hh=2166136261;
+    for(let i=0;i<s.length;i++){ hh^=s.charCodeAt(i); hh=Math.imul(hh,16777619); }
+    return (hh>>>0).toString(36);
+  }
   // full-size wall texture (no tiling → no visible repeat): div = brick-size divisor
   function zoneTexFull(name,w,h,div,map){
     const z=zoneData[name]; if(!z.mix.length) return null;
@@ -1448,6 +1466,7 @@
       texJointMul=1; texDiv=1;
       [mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff]=B;
     }
+    if(tex) tex.__klbKey=klbTexKey(name,tex.width,tex.height,div,z);
     return tex;
   }
   function switchView(v){
@@ -1532,9 +1551,12 @@
     if(lastFocusMix && lastFocusMix.focus) lastFocusMix.focus({preventScroll:true});
     lastFocusMix=null; }
   // 3D-Render-Loops stoppen (alle ausser dem aktiven Modul) — Akku/GPU-Last, iOS-Kontextlimit
+  // Inaktive Module bekommen dispose() statt stop(): sonst bleibt pro angeschautem
+  // Gebaeude ein WebGL-Kontext liegen und der Browser haengt sich nach ein paar Wechseln auf.
   function stopAll3D(except){
     ['Room3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
-      const m=window[n]; if(m && m.stop && n!==except) m.stop();
+      const m=window[n]; if(!m || n===except) return;
+      if(m.dispose) m.dispose(); else if(m.stop) m.stop();
     });
   }
   // Steinliste + Anteile beider Zonen (für Anfrage und Export-Legende)
@@ -1724,17 +1746,17 @@
     list.innerHTML=zonesHtml+ratio+bond+jcol+profi;
     bindZones();
     // handlers
-    list.querySelectorAll('.mixratio__sl').forEach(sl=>sl.oninput=()=>{ mix[+sl.dataset.i].weight=+sl.value; genLayout(); updatePcts(); refreshWall(); });
+    list.querySelectorAll('.mixratio__sl').forEach(sl=>sl.oninput=()=>{ mix[+sl.dataset.i].weight=+sl.value; genLayout(); updatePcts(); refreshWallSoon(); });
     list.querySelectorAll('.mixchip__x').forEach(b=>b.onclick=()=>{ const p=P.find(x=>x.id===b.dataset.id); if(p) removeFromMixer(p); });
     list.querySelectorAll('.mixseg').forEach(s=>s.querySelectorAll('.mixseg__b').forEach(b=>b.onclick=()=>{
       const v=b.dataset.v, name=s.dataset.seg;
       if(name==='bond') mixBond=v; else if(name==='bed') mixBed=v; else if(name==='head') mixHead=v;
       else if(name==='order') mixOrder=(v==='rnd')?0:(v==='mid')?0.5:1;
       s.querySelectorAll('.mixseg__b').forEach(x=>{ x.classList.remove('is-active'); x.setAttribute('aria-pressed','false'); });
-      b.classList.add('is-active'); b.setAttribute('aria-pressed','true'); refreshWall();
+      b.classList.add('is-active'); b.setAttribute('aria-pressed','true'); refreshWallSoon();
     }));
     list.querySelectorAll('.mixmortar').forEach(b=>b.onclick=()=>{ mixJoint=b.dataset.hex;
-      list.querySelectorAll('.mixmortar').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWall(); });
+      list.querySelectorAll('.mixmortar').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWallSoon(); });
     { const mm=list.querySelector('#mortMore'); if(mm) mm.onclick=()=>{ mortarsAll=!mortarsAll; renderMixer(); }; }
   }
   // form per stone — pre-fill the contact form with the selected product

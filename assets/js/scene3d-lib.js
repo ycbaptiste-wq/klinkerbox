@@ -5,41 +5,91 @@
 // (Fugen liegen tief, Steine tragen ihr Foto-Relief) und eine dezente Vignette.
 import * as THREE from './three.module.min.js';
 
-// ---------- Himmel: teilsonnig-hell, weiche Quellwolken, warmer Horizont ----------
+// ---------- Qualitätsstufe ----------
+// '(pointer:coarse)' allein taugt nicht als Mobil-Erkennung: Notebooks mit
+// Touchscreen und eingebettete Browser melden das ebenfalls und bekämen dann
+// grundlos die Sparversion (harte Schatten, kleine Shadow-Map, kein AA).
+// Mit ?q=high / ?q=low lässt sich die Stufe zum Prüfen erzwingen.
+export const LOWQ=(()=>{
+  try{
+    const q=new URLSearchParams(location.search).get('q');
+    if(q==='low') return true;
+    if(q==='high') return false;
+    if(/Android|iPhone|iPod|iPad|Mobile/i.test(navigator.userAgent||'')) return true;
+    if((navigator.hardwareConcurrency||8)<=4) return true;
+    if((navigator.deviceMemory||8)<=4) return true;
+    return matchMedia('(pointer:coarse)').matches && Math.min(innerWidth,innerHeight)<820;
+  }catch(e){ return false; }
+})();
+
+// ---------- Himmel: teilsonnig, echte Quellwolken aus fBm-Rauschen ----------
+// Der frühere gemalte Verlauf mit ein paar Radialgradienten las sich im Bild als
+// leere Fläche. Hier entstehen die Wolken aus geschichtetem Wertrauschen: Dichte
+// aus fBm, Ballung zum Horizont hin gestaucht (Perspektive), und die Helligkeit
+// aus dem Dichtegefälle Richtung Sonne — dadurch bekommen die Ballen oben eine
+// helle Kante und unten eine graue Basis, statt gleichmässig weiss zu sein.
 let _skyCv=null;
+const SUN_UV=[0.30,0.20];                            // Sonnenposition in Himmelskoordinaten
 function skyCanvas(){
   if(_skyCv) return _skyCv;
-  const cv=document.createElement('canvas'); cv.width=1024; cv.height=512;
-  const c=cv.getContext('2d');
-  const g=c.createLinearGradient(0,0,0,512);
-  g.addColorStop(0,'#7290ad'); g.addColorStop(0.34,'#a4bacb');
-  g.addColorStop(0.60,'#d3dcdf'); g.addColorStop(0.84,'#efeee7'); g.addColorStop(1,'#f6f2e9');
-  c.fillStyle=g; c.fillRect(0,0,1024,512);
-  // warmes Sonnen-Glühen (breit und weich, kein hartes Zentrum)
-  const sg=c.createRadialGradient(300,120,10,300,120,340);
-  sg.addColorStop(0,'rgba(255,244,220,0.55)'); sg.addColorStop(0.45,'rgba(255,240,214,0.20)');
-  sg.addColorStop(1,'rgba(255,240,214,0)');
-  c.fillStyle=sg; c.fillRect(0,0,1024,512);
-  // Quellwolken: mehrere überlappende weiche Ballen, oben heller, Basis leicht grau
-  const puff=(x,y,r,a)=>{ const gg=c.createRadialGradient(x,y-r*0.15,r*0.1,x,y,r);
-    gg.addColorStop(0,'rgba(255,255,255,'+a+')'); gg.addColorStop(0.7,'rgba(252,253,254,'+(a*0.45)+')');
-    gg.addColorStop(1,'rgba(252,253,254,0)');
-    c.fillStyle=gg; c.beginPath(); c.ellipse(x,y,r*1.5,r*0.62,0,0,Math.PI*2); c.fill(); };
-  const base=(x,y,r,a)=>{ const gg=c.createRadialGradient(x,y,r*0.1,x,y,r);
-    gg.addColorStop(0,'rgba(155,168,178,'+a+')'); gg.addColorStop(1,'rgba(155,168,178,0)');
-    c.fillStyle=gg; c.beginPath(); c.ellipse(x,y,r*1.6,r*0.34,0,0,Math.PI*2); c.fill(); };
-  const clouds=[[140,150,58],[240,120,74],[360,170,54],[520,110,66],[660,160,72],
-                [820,120,60],[930,180,50],[80,230,44],[440,235,42],[760,240,52],[590,205,38]];
-  clouds.forEach(([x,y,r],i)=>{
-    const a=0.30+((i*37)%23)/100*0.5;
-    base(x,y+r*0.34,r,0.14);
-    puff(x-r*0.55,y+r*0.12,r*0.62,a*0.8); puff(x+r*0.5,y+r*0.10,r*0.68,a*0.8);
-    puff(x,y,r,a); puff(x-r*0.2,y-r*0.28,r*0.5,a*0.9);
-  });
-  // Dunst-Schleier über dem Horizont
-  const hz=c.createLinearGradient(0,300,0,512);
-  hz.addColorStop(0,'rgba(240,238,230,0)'); hz.addColorStop(1,'rgba(244,240,231,0.75)');
-  c.fillStyle=hz; c.fillRect(0,300,1024,212);
+  const W=MOBILE_LIB?1024:2048, H=W>>1;
+  const cv=document.createElement('canvas'); cv.width=W; cv.height=H;
+  const c=cv.getContext('2d',{willReadFrequently:true});
+  const g=c.createLinearGradient(0,0,0,H);
+  g.addColorStop(0,'#4f81b2'); g.addColorStop(0.30,'#7ea6c9');
+  g.addColorStop(0.62,'#b6cadb'); g.addColorStop(0.86,'#dfe6e7'); g.addColorStop(1,'#f0ebdf');
+  c.fillStyle=g; c.fillRect(0,0,W,H);
+  const SX=W*SUN_UV[0], SY=H*SUN_UV[1];
+  const sg=c.createRadialGradient(SX,SY,10,SX,SY,H*0.9);
+  sg.addColorStop(0,'rgba(255,247,226,0.55)'); sg.addColorStop(0.34,'rgba(255,243,218,0.17)');
+  sg.addColorStop(1,'rgba(255,241,215,0)');
+  c.fillStyle=sg; c.fillRect(0,0,W,H);
+
+  const hash=(x,y)=>{ let n=(x|0)*374761393+(y|0)*668265263;
+    n=Math.imul(n^(n>>>13),1274126177); return ((n^(n>>>16))>>>0)/4294967295; };
+  const vnoise=(x,y)=>{ const xi=Math.floor(x), yi=Math.floor(y), xf=x-xi, yf=y-yi;
+    const u=xf*xf*(3-2*xf), v=yf*yf*(3-2*yf);
+    const a=hash(xi,yi), b=hash(xi+1,yi), e=hash(xi,yi+1), f=hash(xi+1,yi+1);
+    return a+(b-a)*u+(e-a)*v+(a-b-e+f)*u*v; };
+  const fbm=(x,y)=>{ let s=0,am=0.5,fr=1;
+    for(let o=0;o<5;o++){ s+=am*vnoise(x*fr,y*fr); fr*=2.07; am*=0.5; } return s; };
+
+  const id=c.getImageData(0,0,W,H), d=id.data;
+  // Das Rauschen wird auf eine WOLKENEBENE in fester Höhe projiziert, nicht direkt
+  // auf die Textur: Blickrichtung → Schnittpunkt mit der Ebene. Nur so stimmt die
+  // Perspektive (Ballen werden zum Horizont hin flach und klein), statt zu scheren.
+  const sunTh=SUN_UV[0]*Math.PI*2, sunPhi=(0.5-SUN_UV[1])*Math.PI;
+  const sunD=1/Math.max(0.2,Math.sin(sunPhi));
+  const sunX=Math.cos(sunTh)*sunD, sunY=Math.sin(sunTh)*sunD;
+  for(let y=0;y<H;y++){
+    const phi=(0.5-y/H)*Math.PI;
+    if(phi<=0.03) continue;                           // Horizont und darunter
+    const dist=1/Math.sin(phi);
+    const fade=Math.min(1,Math.max(0,(24-dist)/16));  // ganz flach → im Dunst verschwunden
+    if(fade<=0.01) continue;
+    for(let x=0;x<W;x++){
+      const th=x/W*Math.PI*2;
+      const px=Math.cos(th)*dist, py=Math.sin(th)*dist;
+      const n=fbm(px*0.82+11.3,py*0.82+4.7);
+      let cov=(n-0.505)/0.135; if(cov<=0) continue; if(cov>1) cov=1;
+      cov*=fade;
+      // Schattierung aus dem Dichtegefälle Richtung Sonne: helle Sonnenkante, graue Basis
+      const lx=(sunX-px), ly=(sunY-py), ll=Math.hypot(lx,ly)||1;
+      const ns=fbm((px+lx/ll*0.55)*0.82+11.3,(py+ly/ll*0.55)*0.82+4.7);
+      const lit=Math.min(1,Math.max(0,0.5+(ns-n)*3.0));
+      const r=168+87*lit, gc=177+78*lit, b=188+67*lit;
+      const i=(y*W+x)*4, a=cov*0.95;
+      d[i  ]=d[i  ]*(1-a)+r*a;
+      d[i+1]=d[i+1]*(1-a)+gc*a;
+      d[i+2]=d[i+2]*(1-a)+b*a;
+    }
+  }
+  c.putImageData(id,0,0);
+  // Dunst-Schleier über dem Horizont (legt sich auch über die Wolken)
+  const hz=c.createLinearGradient(0,H*0.40,0,H*0.52);
+  hz.addColorStop(0,'rgba(238,238,232,0)'); hz.addColorStop(1,'rgba(243,240,232,0.90)');
+  c.fillStyle=hz; c.fillRect(0,H*0.40,W,H*0.12);
+  c.fillStyle='rgba(243,240,232,0.90)'; c.fillRect(0,H*0.52,W,H*0.48);
   _skyCv=cv; return cv;
 }
 // Textur für die sichtbare Himmelskuppel der Aussen-Szenen
@@ -58,11 +108,11 @@ export function buildEnv(renderer){
   // Himmel gedimmt (0.62): das IBL-Umgebungslicht darf die Sonnenschatten
   // nicht überstrahlen — Glanz auf Glas liefert die HDR-Sonne darunter
   const sky=new THREE.Mesh(new THREE.SphereGeometry(60,32,20),
-    new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:0x6f6f6f,side:THREE.BackSide}));
+    new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:0x8e8e8e,side:THREE.BackSide}));
   es.add(sky);
   const sun=new THREE.Mesh(new THREE.SphereGeometry(3.2,16,12),
     new THREE.MeshBasicMaterial({color:new THREE.Color(11,9.5,7.5)}));
-  sun.position.set(24,30,24);                       // gleiche Richtung wie das Sonnenlicht der Szenen
+  sun.position.set(30,21,17);                       // gleiche Richtung wie das Sonnenlicht der Szenen
   es.add(sun);
   const ground=new THREE.Mesh(new THREE.PlaneGeometry(200,200),
     new THREE.MeshBasicMaterial({color:0x8f9289}));
@@ -130,13 +180,48 @@ export function interiorMaterial(kind){
   return m;
 }
 
-// ---------- Normal-Map aus der Klinker-Textur ----------
+// ---------- Klinker-Oberfläche: alle PBR-Karten aus EINEM Durchlauf ----------
 // Die Fugenfarbe ist die dominante, uniforme Farbe der Textur → diese Pixel
 // liegen tief (Fuge zurückversetzt), die Steine tragen ihr Foto-Relief
-// (Luminanz als Höhe). Sobel über ein geglättetes Höhenfeld → Tangentspace-Normal.
-export function normalFromCanvas(cv,maxW){
+// (Luminanz als Höhe). Daraus entstehen in einem Rutsch:
+//   normal  – Tangentspace-Normale (Sobel über das geglättete Höhenfeld)
+//   orm     – R = Ambient Occlusion (Fugen und Steinkanten verschattet)
+//             G = Roughness (Mörtel matt, gesinterter Stein glatter)
+//             B = Höhenfeld für die Parallax-Verschiebung
+// EINE Karte für drei Aufgaben: aoMap und roughnessMap teilen sie sich, die
+// Parallax-Erweiterung liest denselben Blau-Kanal. metalnessMap bleibt frei.
+const _mapCache=new Map();
+const MOBILE_LIB=LOWQ;
+
+// separierbarer Box-Blur über ein Float-Feld (Radius in Pixel)
+function boxBlur(src,W,H,R){
+  if(R<1) return src;
+  const tmp=new Float32Array(W*H), out=new Float32Array(W*H), D=R*2+1;
+  for(let y=0;y<H;y++){ const row=y*W; let s=0;
+    for(let k=-R;k<=R;k++) s+=src[row+Math.min(W-1,Math.max(0,k))];
+    for(let x=0;x<W;x++){ tmp[row+x]=s/D;
+      s+=src[row+Math.min(W-1,x+R+1)]-src[row+Math.max(0,x-R)]; } }
+  for(let x=0;x<W;x++){ let s=0;
+    for(let k=-R;k<=R;k++) s+=tmp[Math.min(H-1,Math.max(0,k))*W+x];
+    for(let y=0;y<H;y++){ out[y*W+x]=s/D;
+      s+=tmp[Math.min(H-1,y+R+1)*W+x]-tmp[Math.max(0,y-R)*W+x]; } }
+  return out;
+}
+
+// Gecacht werden die CANVAS-Ergebnisse (die Pixelrechnerei ist teuer), nicht die
+// Texturen — jedes Material bekommt eigene, damit dispose() keine fremde reisst.
+function texPair(cvs){
+  const n=new THREE.CanvasTexture(cvs.normalCv);
+  const o=new THREE.CanvasTexture(cvs.ormCv);
+  o.colorSpace=THREE.NoColorSpace;                    // ORM ist Daten, keine Farbe
+  return {normal:n, orm:o};
+}
+export function surfaceMaps(cv,maxW){
   if(!cv) return null;
-  const W=Math.max(2,Math.min(maxW||1024,cv.width));
+  const key=cv.__klbKey;
+  if(key && _mapCache.has(key)) return texPair(_mapCache.get(key));
+  const cap=maxW||(MOBILE_LIB?512:1024);
+  const W=Math.max(2,Math.min(cap,cv.width));
   const H=Math.max(2,Math.round(cv.height*W/cv.width));
   const sc=document.createElement('canvas'); sc.width=W; sc.height=H;
   const c=sc.getContext('2d',{willReadFrequently:true});
@@ -158,38 +243,53 @@ export function normalFromCanvas(cv,maxW){
     const r=d[i],g=d[i+1],b=d[i+2];
     const L=(r*0.299+g*0.587+b*0.114)/255;
     lum[p]=L;
-    let v=0.30+0.70*L;
-    if(isJoint && Math.abs(r-jr)<26 && Math.abs(g-jg)<26 && Math.abs(b-jb)<26){ v=0.08; jointPx[p]=1; }
+    let v=0.42+0.58*L;
+    if(isJoint && Math.abs(r-jr)<26 && Math.abs(g-jg)<26 && Math.abs(b-jb)<26){ v=0.26; jointPx[p]=1; }
     h[p]=v;
   }
-  // 3×3-Blur von Höhe UND Helligkeit (gegen Pixelrauschen)
-  const hb=new Float32Array(N), lb=new Float32Array(N);
-  for(let y=0;y<H;y++) for(let x=0;x<W;x++){
-    let s=0,sl=0,n=0;
-    for(let dy=-1;dy<=1;dy++){ const yy=y+dy; if(yy<0||yy>=H) continue;
-      for(let dx=-1;dx<=1;dx++){ const xx=x+dx; if(xx<0||xx>=W) continue; const q=yy*W+xx; s+=h[q]; sl+=lum[q]; n++; } }
-    hb[y*W+x]=s/n; lb[y*W+x]=sl/n;
-  }
+  const hb=boxBlur(h,W,H,1), lb=boxBlur(lum,W,H,1);
+  // Kavitätsfeld: Höhe gegen weit geglättete Höhe → negativ genau dort, wo die
+  // Fläche zurückspringt (Fugen, Steinkanten). Das ist die Ambient Occlusion.
+  const R=Math.max(2,Math.round(Math.min(W,H)/110));
+  const hWide=boxBlur(hb,W,H,R);
   // Sobel → Normal. Relief pro Pixel nach Helligkeit skaliert: DUNKLE Steine flacher
   // (stehen weniger weit hervor), helle Steine kräftiger; Fugen(kanten) bleiben tief.
-  const out=c.createImageData(W,H), od=out.data, K=2.6;
+  const nOut=c.createImageData(W,H), nd=nOut.data, K=2.6;
+  const oCv=document.createElement('canvas'); oCv.width=W; oCv.height=H;
+  const oc=oCv.getContext('2d',{willReadFrequently:true});
+  const oOut=oc.createImageData(W,H), od=oOut.data;
   for(let y=0;y<H;y++){ const y0=Math.max(0,y-1)*W, y1=Math.min(H-1,y+1)*W, row=y*W;
     for(let x=0;x<W;x++){
-      const x0=Math.max(0,x-1), x1=Math.min(W-1,x+1);
+      const x0=Math.max(0,x-1), x1=Math.min(W-1,x+1), p=row+x, i=p*4;
       let gx=(hb[row+x1]-hb[row+x0])*K, gy=(hb[y1+x]-hb[y0+x])*K;
-      const nearJoint = jointPx[row+x]||jointPx[row+x0]||jointPx[row+x1]||jointPx[y0+x]||jointPx[y1+x];
-      const rf = nearJoint ? 1.0 : (0.28 + 0.9*lb[row+x]);   // dunkler Stein → weniger Relief
+      const nearJoint = jointPx[p]||jointPx[row+x0]||jointPx[row+x1]||jointPx[y0+x]||jointPx[y1+x];
+      const rf = nearJoint ? 1.0 : (0.28 + 0.9*lb[p]);   // dunkler Stein → weniger Relief
       gx*=rf; gy*=rf;
-      const inv=1/Math.sqrt(gx*gx+gy*gy+1), i=(row+x)*4;
-      od[i  ]=Math.round((-gx*inv*0.5+0.5)*255);
-      od[i+1]=Math.round(( gy*inv*0.5+0.5)*255);
-      od[i+2]=Math.round(( inv*0.5+0.5)*255);
+      const inv=1/Math.sqrt(gx*gx+gy*gy+1);
+      nd[i  ]=Math.round((-gx*inv*0.5+0.5)*255);
+      nd[i+1]=Math.round(( gy*inv*0.5+0.5)*255);
+      nd[i+2]=Math.round(( inv*0.5+0.5)*255);
+      nd[i+3]=255;
+      // R: AO — Kavität verschattet, echte Fugenpixel zusätzlich. Zurückhaltend
+      // dosiert: die Fuge liegt im Schatten, sie ist kein schwarzes Loch.
+      let ao=0.80+(hb[p]-hWide[p])*1.7;
+      if(jointPx[p]) ao-=0.15;
+      od[i  ]=Math.round(255*Math.min(1,Math.max(0.50,ao)));
+      // G: Roughness — Mörtel stumpf, heller Stein kreidiger, dunkler gesinterter glatter
+      const rgh = jointPx[p] ? 0.95 : (0.54+0.26*lb[p]);
+      od[i+1]=Math.round(255*rgh);
+      // B: Höhe für die Parallax-Verschiebung
+      od[i+2]=Math.round(255*Math.min(1,Math.max(0,hb[p])));
       od[i+3]=255;
     }
   }
-  c.putImageData(out,0,0);
-  return new THREE.CanvasTexture(sc);
+  c.putImageData(nOut,0,0); oc.putImageData(oOut,0,0);
+  const cvs={ normalCv:sc, ormCv:oCv };
+  if(key){ if(_mapCache.size>24) _mapCache.clear(); _mapCache.set(key,cvs); }
+  return texPair(cvs);
 }
+// Kompatibilität: alter Name — liefert nur noch die Normal-Map
+export function normalFromCanvas(cv,maxW){ const m=surfaceMaps(cv,maxW); return m?m.normal:null; }
 
 // ---------- Interior-Mapping: echter 3D-Raum hinter jeder Fensterscheibe ----------
 // Shader schneidet den Blickstrahl mit einem virtuellen Raumquader hinter der
@@ -340,7 +440,9 @@ void main(){
       else col*=0.9;                                  // Rasterschienen dunkler
     }
   }
-  col*=(1.0-0.3*dz)*lit;
+  // Gesamtpegel bewusst tief: von aussen ist ein Zimmer deutlich dunkler als die
+  // besonnte Fassade — helle Scheiben lassen das Haus sofort nach Attrappe aussehen.
+  col*=(1.0-0.3*dz)*lit*0.62;
   gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(0.4545)),1.0);
 }`;
 // corner: -1 = Fenster nahe der linken Gebäudeecke, +1 = rechte Ecke (→ Seitenfenster im Raum), 0 = keins
@@ -350,6 +452,184 @@ export function interiorRoom(w,h,depth,seed,kind,corner){
       uKind:{value:kind==='office'?1:0},uCorner:{value:corner||0}},
     vertexShader:INT_VERT, fragmentShader:INT_FRAG
   });
+}
+
+// ---------- Parallax-Occlusion: die Fugen bekommen echte Tiefe ----------
+// Der Blickstrahl wandert im Tangentenraum durch das Höhenfeld (Blau-Kanal der
+// ORM-Karte), bis er die Oberfläche schneidet. Im streifenden Blick verdecken
+// die Steine dadurch die Fuge — genau wie an einer echten Wand. Ohne das bleibt
+// jede Klinkerfassade ein Aufkleber, egal wie gut die Normal-Map ist.
+const POM_HEAD=`
+uniform float uPomDepth;
+vec3 klbTangent(vec3 eye, vec3 nrm, vec2 uv){
+  vec3 q0=dFdx(eye), q1=dFdy(eye);
+  vec2 s0=dFdx(uv), s1=dFdy(uv);
+  vec3 q1p=cross(q1,nrm), q0p=cross(nrm,q0);
+  vec3 T=s0.x*q1p+s1.x*q0p, B=s0.y*q1p+s1.y*q0p;
+  float det=max(dot(T,T),dot(B,B));
+  float sc=(det==0.0)?0.0:inversesqrt(det);
+  return normalize(T*sc);
+}
+vec2 klbParallax(vec2 uv){
+  if(uPomDepth<=0.0) return uv;
+  vec3 N=normalize(vNormal);
+  vec3 V=normalize(vViewPosition);
+  vec3 T=klbTangent(-vViewPosition,N,uv);
+  vec3 B=normalize(cross(N,T));
+  vec3 vt=vec3(dot(V,T),dot(V,B),dot(V,N));
+  if(vt.z<0.10) return uv;                       // fast tangential → Verschiebung explodiert
+  float layers=mix(26.0,8.0,clamp(vt.z,0.0,1.0));
+  float ld=1.0/layers;
+  vec2 dUv=(vt.xy/vt.z)*uPomDepth*ld;
+  float cur=0.0; vec2 uvc=uv;
+  float dep=1.0-texture2D(roughnessMap,uvc).b;
+  for(int i=0;i<26;i++){
+    if(cur>=dep) break;
+    uvc-=dUv; cur+=ld;
+    dep=1.0-texture2D(roughnessMap,uvc).b;
+  }
+  vec2 prev=uvc+dUv;
+  float a=dep-cur;
+  float b=(1.0-texture2D(roughnessMap,prev).b)-cur+ld;
+  float w=a/max(1e-5,a-b);
+  return mix(uvc,prev,clamp(w,0.0,1.0));
+}
+`;
+function patchParallax(m,depth){
+  m.userData.klbPomDepth=depth;
+  m.onBeforeCompile=sh=>{
+    const marker='void main() {';
+    const i=sh.fragmentShader.indexOf(marker);
+    if(i<0) return;                                // three-Version passt nicht → still ohne POM
+    sh.uniforms.uPomDepth={value:m.userData.klbPomDepth||0};
+    const head=sh.fragmentShader.slice(0,i);
+    // Nur im Rumpf ersetzen — die varying-Deklarationen im Kopf müssen ihre Namen behalten
+    const body=sh.fragmentShader.slice(i+marker.length)
+      .replace(/\bvMapUv\b|\bvNormalMapUv\b|\bvAoMapUv\b|\bvRoughnessMapUv\b/g,'klbUv');
+    sh.fragmentShader=head+POM_HEAD+marker+'\n\tvec2 klbUv=klbParallax(vMapUv);\n'+body;
+    m.userData.klbShader=sh;
+  };
+  m.customProgramCacheKey=()=>'klbPom'+((m.userData.klbPomDepth||0)>0?'1':'0');
+}
+
+// ---------- Produkt-Textur auf ein Material legen (eine Stelle für alle Szenen) ----------
+// opts: {fallback, rough, normalScale, env, ao, pom} — pom = Fugentiefe in UV-Einheiten
+export function applySurface(m,cv,opts){
+  opts=opts||{};
+  const aniso=opts.aniso||8;
+  if(m.map) m.map.dispose();
+  if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
+  if(m.aoMap){ m.aoMap.dispose(); m.aoMap=null; m.roughnessMap=null; }
+  if(!cv){
+    m.map=null;
+    if(opts.fallback!=null) m.color.set(opts.fallback);
+    m.roughness=0.95; m.envMapIntensity=opts.env!=null?opts.env:0.3;
+    m.userData.klbPomDepth=0; m.needsUpdate=true; return;
+  }
+  const t=new THREE.CanvasTexture(cv);
+  t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=aniso;
+  m.map=t; m.color.set(0xffffff);
+  const maps=surfaceMaps(cv,opts.maxW);
+  if(maps){
+    maps.normal.anisotropy=aniso; maps.normal.generateMipmaps=false; maps.normal.minFilter=THREE.LinearFilter;
+    maps.orm.anisotropy=aniso;    maps.orm.generateMipmaps=false;    maps.orm.minFilter=THREE.LinearFilter;
+    m.normalMap=maps.normal;
+    const ns=opts.normalScale!=null?opts.normalScale:0.9;
+    m.normalScale=new THREE.Vector2(ns,ns);
+    m.aoMap=maps.orm; m.roughnessMap=maps.orm;
+    m.aoMapIntensity=opts.ao!=null?opts.ao:1.0;
+  }
+  // Roughness-Skalar multipliziert die Karte → 1.0 lässt die gemessenen Werte stehen
+  m.roughness=opts.rough!=null?opts.rough:1.0;
+  m.metalness=0;
+  m.envMapIntensity=opts.env!=null?opts.env:0.35;
+  const pom=opts.pom!=null?opts.pom:0;
+  if(pom>0 && maps){ if(!m.userData.klbShader) patchParallax(m,pom); else { m.userData.klbPomDepth=pom;
+      if(m.userData.klbShader.uniforms.uPomDepth) m.userData.klbShader.uniforms.uPomDepth.value=pom; } }
+  else m.userData.klbPomDepth=0;
+  m.needsUpdate=true;
+}
+
+// ---------- Bepflanzung ----------
+// Ein Grashalm: schmales, sich nach oben verjüngendes Band mit leichter Biegung.
+// Die alte Lösung baute pro Büschel neun TubeGeometry-Meshes — das sah nach Draht
+// aus und kostete Dutzende Draw-Calls. Jetzt: eine Geometrie, alles instanziert.
+let _bladeGeo=null;
+function bladeGeo(){
+  if(_bladeGeo) return _bladeGeo;
+  const SEG=4, pos=[], idx=[];
+  for(let i=0;i<=SEG;i++){ const t=i/SEG, wd=0.016*(1-t*0.9), bend=0.16*t*t;
+    pos.push(-wd,t,bend, wd,t,bend); }
+  for(let i=0;i<SEG;i++){ const a=i*2; idx.push(a,a+1,a+2, a+1,a+3,a+2); }
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  g.setIndex(idx); g.computeVertexNormals();
+  _bladeGeo=g; return g;
+}
+// Deterministischer Zufall — sonst sieht die Bepflanzung bei jedem Mount anders aus
+let _rs=20260730;
+export const rnd=()=>{ _rs=(_rs*1664525+1013904223)&0x7fffffff; return _rs/0x7fffffff; };
+export function resetRnd(){ _rs=20260730; }
+// Ein Grasbüschel als EIN InstancedMesh. pale: trockenes Ziergras statt Rasen.
+export function grassTuft(x,z,scale,parent,pale){
+  const s=scale||1, per=LOWQ?18:30, R=0.34*s;
+  const m=new THREE.MeshStandardMaterial({color:0xffffff,roughness:1,side:THREE.DoubleSide});
+  const im=new THREE.InstancedMesh(bladeGeo(),m,per);
+  im.castShadow=true; im.receiveShadow=true;
+  const M=new THREE.Matrix4(), q=new THREE.Quaternion(), e=new THREE.Euler(),
+        v=new THREE.Vector3(), sc=new THREE.Vector3(), col=new THREE.Color();
+  for(let i=0;i<per;i++){
+    const a=rnd()*Math.PI*2, d=Math.sqrt(rnd())*R;
+    v.set(x+Math.cos(a)*d, 0, z+Math.sin(a)*d);
+    e.set((rnd()-0.5)*0.35, rnd()*Math.PI*2, (rnd()-0.5)*0.35); q.setFromEuler(e);
+    sc.set(0.85+rnd()*0.5, (0.34+rnd()*0.42)*s, 0.85+rnd()*0.5);
+    M.compose(v,q,sc); im.setMatrixAt(i,M);
+    if(pale) col.setHSL(0.13+rnd()*0.05, 0.22+rnd()*0.14, 0.40+rnd()*0.18);
+    else     col.setHSL(0.22+rnd()*0.06, 0.28+rnd()*0.18, 0.20+rnd()*0.16);
+    im.setColorAt(i,col);
+  }
+  im.instanceMatrix.needsUpdate=true; if(im.instanceColor) im.instanceColor.needsUpdate=true;
+  parent.add(im);
+  return im;
+}
+// Strauch: mehrere versetzte Kugeln statt einer → unregelmässige Silhouette
+export function bushClump(x,z,r,c,parent){
+  const base=new THREE.Color(c||0x5c6e4a);
+  for(let i=0;i<4;i++){
+    const rr=r*(0.62+rnd()*0.45);
+    const b=new THREE.Mesh(new THREE.IcosahedronGeometry(rr,1),
+      new THREE.MeshStandardMaterial({color:base.clone().offsetHSL(0,(rnd()-0.5)*0.06,(rnd()-0.5)*0.09),roughness:1}));
+    b.position.set(x+(rnd()-0.5)*r*1.1, rr*0.72+rnd()*0.12*r, z+(rnd()-0.5)*r*0.9);
+    b.scale.set(1,0.78+rnd()*0.2,1);
+    b.castShadow=true; b.receiveShadow=true; parent.add(b);
+  }
+}
+
+// ---------- Ressourcen einer Szene vollständig freigeben ----------
+// Ohne das bleibt pro angeschautem Gebäude ein WebGL-Kontext liegen — nach ein
+// paar Wechseln friert der Browser ein (auf iOS schon nach zwei, drei).
+export function disposeScene(scene,renderer){
+  try{
+    if(scene){
+      scene.traverse(o=>{
+        if(o.geometry&&o.geometry.dispose) o.geometry.dispose();
+        const mm=o.material; if(!mm) return;
+        (Array.isArray(mm)?mm:[mm]).forEach(x=>{
+          if(!x) return;
+          for(const k in x){ const v=x[k]; if(v&&v.isTexture&&v.dispose) v.dispose(); }
+          if(x.dispose) x.dispose();
+        });
+      });
+      if(scene.environment&&scene.environment.dispose) scene.environment.dispose();
+      if(scene.background&&scene.background.dispose) scene.background.dispose();
+    }
+    if(renderer){
+      renderer.dispose();
+      if(renderer.forceContextLoss) renderer.forceContextLoss();
+      const el=renderer.domElement;
+      if(el&&el.parentNode) el.parentNode.removeChild(el);
+    }
+  }catch(e){}
 }
 
 // ---------- dezente Vignette über dem 3D-Canvas (Foto-Look) ----------

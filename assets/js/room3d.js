@@ -4,9 +4,9 @@
 // Stehleuchte, Deko. Per Maus/Touch drehbar (Orbit mit Grenzen), Zoom per
 // Rad. Environment-Lighting + Soft-Shadows für einen fotonahen Look.
 import * as THREE from './three.module.min.js';
-import { buildEnv, normalFromCanvas, addVignette } from './scene3d-lib.js?v=42';
+import { buildEnv, applySurface, disposeScene, addVignette, LOWQ } from './scene3d-lib.js?v=44';
 
-const MOBILE=matchMedia('(pointer:coarse)').matches;
+const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let wallMat=null, wallSideMat=null, floorMat=null, maxAniso=8;
 let rafId=0, failed=false;
@@ -151,6 +151,7 @@ function buildScene(){
   sun.shadow.camera.left=-7; sun.shadow.camera.right=7; sun.shadow.camera.top=5; sun.shadow.camera.bottom=-2;
   sun.shadow.camera.near=0.5; sun.shadow.camera.far=24; sun.shadow.camera.updateProjectionMatrix();
   sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.03;
+  sun.shadow.radius=MOBILE?1:4;                   // PCF-Kernel → weiche Schattenkante
   scene.add(sun); scene.add(sun.target);
   const fill=new THREE.DirectionalLight(0xe9edf4,0.3); fill.position.set(5,2.6,5); scene.add(fill);
   [[-0.9],[1.5]].forEach(([x])=>{                  // Wandfluter für die Klinkerwand
@@ -391,15 +392,17 @@ function applyCam(hard){
 function ensureRenderer(){
   if(renderer||failed) return !failed;
   try{
-    renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer=new THREE.WebGLRenderer({antialias:!MOBILE});
     renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    // PCF statt PCFSoft: nur PCF wertet shadow.radius aus → steuerbare Weichheit
+    renderer.shadowMap.type=MOBILE?THREE.BasicShadowMap:THREE.PCFShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure=1.06;
     maxAniso=renderer.capabilities.getMaxAnisotropy()||8;
     buildScene();
     const el=renderer.domElement;
+    el.addEventListener('webglcontextlost',e=>e.preventDefault());   // iOS: schwarzer Canvas vermeiden
     el.style.cssText='width:100%;height:100%;display:block;border-radius:inherit;cursor:grab;touch-action:none';
     // Orbit: ziehen = drehen · Rad = zoomen (mit Grenzen)
     let drag=false,lx=0,ly=0;
@@ -433,23 +436,9 @@ function startLoops(){
   if(!rafId) loop();
   if(!wdId) wdId=setInterval(()=>{ if(!document.hidden && performance.now()-lastRaf>200) step(); },120);
 }
-function texFromCanvas(cv){
-  if(!cv) return null;
-  const t=new THREE.CanvasTexture(cv);
-  t.colorSpace=THREE.SRGBColorSpace;
-  t.anisotropy=maxAniso;
-  return t;
-}
-function applyTex(m,cv,fallback,rough,ns){
-  if(m.map) m.map.dispose();
-  if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
-  m.map=texFromCanvas(cv);
-  m.color.set(cv?0xffffff:fallback);
-  if(rough!=null) m.roughness=cv?rough:0.9;
-  if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.75; m.normalScale=new THREE.Vector2(s,s); } }
-  m.envMapIntensity=cv?0.35:0.3;
-  m.needsUpdate=true;
+function applyTex(m,cv,fallback,rough,ns,pom){
+  applySurface(m,cv,{fallback,rough:rough!=null?rough:1.0,normalScale:ns!=null?ns:0.85,
+    aniso:maxAniso, env:cv?0.35:0.3, pom:pom||0});
 }
 window.Room3D={
   available(){ return !failed; },
@@ -467,6 +456,13 @@ window.Room3D={
   },
   // Render-Loop + Watchdog anhalten (Mixer zu / anderes Gebaeude aktiv)
   stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId=0; } if(wdId){ clearInterval(wdId); wdId=0; } },
+  // Kontext und Speicher wirklich freigeben — ensureRenderer() baut beim naechsten mount() neu auf
+  dispose(){
+    this.stop();
+    if(ro){ ro.disconnect(); ro=null; }
+    disposeScene(scene,renderer);
+    renderer=null; scene=null; camera=null; host=null; failed=false;
+  },
   // Wand hinten, Wand rechts, Boden — je ein Canvas (null → neutrale Fläche)
   setTextures(wallCv,wallSideCv,floorCv){
     if(!renderer) return;

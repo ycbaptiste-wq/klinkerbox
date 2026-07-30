@@ -4,9 +4,9 @@
 // beleuchteter Lobby, grosser Vorplatz, Gräser-Beete, Stadt-Kulisse.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=42';
+import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, grassTuft, LOWQ } from './scene3d-lib.js?v=44';
 
-const MOBILE=matchMedia('(pointer:coarse)').matches;
+const MOBILE=LOWQ;
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
@@ -30,19 +30,6 @@ function noiseTex(base,vari,w,h){
   c.putImageData(id,0,0);
   const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.colorSpace=THREE.SRGBColorSpace;
   return t;
-}
-function grassTuft(x,z,scale,parent){
-  const s=scale||1;
-  for(let i=0;i<9;i++){
-    const a=Math.random()*Math.PI*2, lean=(0.10+Math.random()*0.22)*s, hgt=(0.45+Math.random()*0.45)*s;
-    const p0=new THREE.Vector3(x,0,z);
-    const p1=new THREE.Vector3(x+Math.cos(a)*lean*0.4,hgt*0.6,z+Math.sin(a)*lean*0.4);
-    const p2=new THREE.Vector3(x+Math.cos(a)*lean,hgt,z+Math.sin(a)*lean);
-    const tube=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([p0,p1,p2]),6,0.006*s,5),mat(0xa8a06e,1));
-    parent.add(tube);
-    if(i%2===0){ const pl=new THREE.Mesh(new THREE.SphereGeometry(0.035*s,8,8),mat(0xcabf92,1));
-      pl.scale.set(1,2.6,1); pl.position.copy(p2); pl.position.y+=0.08*s; parent.add(pl); }
-  }
 }
 function bush(x,z,r,c,parent){
   const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),mat(c||0x5c6e4a,1));
@@ -86,13 +73,13 @@ function buildScene(){
   scene.fog=new THREE.Fog(0xe9ebe9,62,130);
 
   { const sky=new THREE.Mesh(new THREE.SphereGeometry(100,32,18),
-      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.5,1.5,1.5),side:THREE.BackSide,fog:false}));
+      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.12,1.12,1.12),side:THREE.BackSide,fog:false}));
     scene.add(sky); }
 
-  scene.add(new THREE.HemisphereLight(0xdbe7f2,0x8d9084,0.35));
-  scene.add(new THREE.AmbientLight(0xffffff,0.06));
-  const sun=new THREE.DirectionalLight(0xffeed2,2.6);
-  sun.position.set(19,23,12);                   // streifendes Nachmittagslicht → Relief + Schattenwurf
+  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x7d8a70,0.30));   // Himmel oben, Rasengrün unten
+  scene.add(new THREE.AmbientLight(0xffffff,0.05));
+  const sun=new THREE.DirectionalLight(0xfff1d8,4.4);
+  sun.position.set(23,16,13);                   // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,1);
   sun.castShadow=true;
   sun.shadow.mapSize.set(MOBILE?1024:4096,MOBILE?1024:4096);
@@ -100,7 +87,8 @@ function buildScene(){
   sun.shadow.camera.top=20;   sun.shadow.camera.bottom=-10;
   sun.shadow.camera.near=1; sun.shadow.camera.far=70;
   sun.shadow.camera.updateProjectionMatrix();
-  sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.05;
+  sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.035;
+  sun.shadow.radius=MOBILE?1:5;                   // PCF-Kernel → weiche Schattenkante
   scene.add(sun); scene.add(sun.target);
 
   // ---- Gelände: Rasen + grosser Vorplatz (Boden-Mix) + Beete ----
@@ -235,15 +223,17 @@ function applyCam(hard){
 function ensureRenderer(){
   if(renderer||failed) return !failed;
   try{
-    renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer=new THREE.WebGLRenderer({antialias:!MOBILE});
     renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    // PCF statt PCFSoft: nur PCF wertet shadow.radius aus → steuerbare Weichheit
+    renderer.shadowMap.type=MOBILE?THREE.BasicShadowMap:THREE.PCFShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure=0.72;
+    renderer.toneMappingExposure=0.86;
     maxAniso=renderer.capabilities.getMaxAnisotropy()||8;
     buildScene();
     const el=renderer.domElement;
+    el.addEventListener('webglcontextlost',e=>e.preventDefault());   // iOS: schwarzer Canvas vermeiden
     el.style.cssText='width:100%;height:100%;display:block;border-radius:inherit;cursor:grab;touch-action:none';
     let drag=false,lx=0,ly=0;
     el.addEventListener('pointerdown',e=>{ drag=true; lx=e.clientX; ly=e.clientY;
@@ -276,23 +266,10 @@ function startLoops(){
   if(!rafId) loop();
   if(!wdId) wdId=setInterval(()=>{ if(!document.hidden && performance.now()-lastRaf>200) step(); },120);
 }
-function texFromCanvas(cv){
-  if(!cv) return null;
-  const t=new THREE.CanvasTexture(cv);
-  t.colorSpace=THREE.SRGBColorSpace;
-  t.anisotropy=maxAniso;
-  return t;
-}
-function applyTex(m,cv,fallback,rough,ns){
-  if(m.map) m.map.dispose();
-  if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
-  m.map=texFromCanvas(cv);
-  m.color.set(cv?0xffffff:fallback);
-  m.roughness=cv?(rough!=null?rough:1.0):0.95;   // Klinker matt
-  if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.8; m.normalScale=new THREE.Vector2(s,s); } }
-  m.envMapIntensity=cv?0.18:0.3;                    // kaum Env-Reflexion
-  m.needsUpdate=true;
+// Fugentiefe in UV-Einheiten (~14 mm auf die von der Textur abgedeckte Breite)
+function applyTex(m,cv,fallback,rough,ns,pom){
+  applySurface(m,cv,{fallback,rough,normalScale:ns!=null?ns:0.9,aniso:maxAniso,
+    env:cv?0.20:0.3, pom:pom||0});
 }
 window.Office3D={
   available(){ return !failed; },
@@ -310,6 +287,13 @@ window.Office3D={
   },
   // Render-Loop + Watchdog anhalten (Mixer zu / anderes Gebaeude aktiv)
   stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId=0; } if(wdId){ clearInterval(wdId); wdId=0; } },
+  // Kontext und Speicher wirklich freigeben — ensureRenderer() baut beim naechsten mount() neu auf
+  dispose(){
+    this.stop();
+    if(ro){ ro.disconnect(); ro=null; }
+    disposeScene(scene,renderer);
+    renderer=null; scene=null; camera=null; host=null; failed=false;
+  },
   setTextures(facadeCv,sideCv,floorCv){
     if(!renderer) return;
     applyTex(facadeMat,facadeCv,0xdad6d1);
