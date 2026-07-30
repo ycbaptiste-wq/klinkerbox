@@ -253,9 +253,27 @@ function buildScene(){
   // #7f8f60 hatte Rot und Gruen praktisch gleich — ein gelbliches Grau. Und eine
   // Kachel deckte 9.2 m ab, viel zu grob fuer Rasen.
   const lawnT=noiseTex('#5f7442',40,512,512,true); lawnT.repeat.set(40,40);
-  const lawn=new THREE.Mesh(new THREE.PlaneGeometry(110,110),
+  // 200 m statt 110, und um das Haus zentriert: die alte Ebene endete bei z=-45,
+  // die Kulissenbäume standen dahinter — also über dem Nichts, und schwebten.
+  const lawn=new THREE.Mesh(new THREE.PlaneGeometry(200,200),
     new THREE.MeshStandardMaterial({map:lawnT,roughness:1}));
-  lawn.rotation.x=-Math.PI/2; lawn.position.set(0,-0.01,10); lawn.receiveShadow=true; scene.add(lawn);
+  lawn.rotation.x=-Math.PI/2; lawn.position.set(0,-0.01,-20); lawn.receiveShadow=true; scene.add(lawn);
+
+  // ---- Strasse vor dem Grundstück ----
+  // Vor Zaun und Vorgarten gehört Verkehrsfläche, kein Rasen. Sie grenzt das
+  // Grundstück nach vorne ab und gibt dem Vorplatz einen Bezugspunkt.
+  { const asph=noiseTex('#8d8d8a',16,256,256); asph.repeat.set(30,10);
+    const road=new THREE.Mesh(new THREE.PlaneGeometry(120,9.0),
+      new THREE.MeshStandardMaterial({map:asph,roughness:0.95}));
+    road.rotation.x=-Math.PI/2; road.position.set(0,0.000,15.4); road.receiveShadow=true; scene.add(road);
+    const walkT=noiseTex('#b4b1ab',14,256,256); walkT.repeat.set(40,2);
+    const walk=new THREE.Mesh(new THREE.PlaneGeometry(120,1.70),
+      new THREE.MeshStandardMaterial({map:walkT,roughness:0.9}));
+    walk.rotation.x=-Math.PI/2; walk.position.set(0,0.012,10.05); walk.receiveShadow=true; scene.add(walk);
+    // Randstein zwischen Gehsteig und Fahrbahn
+    const curb=new THREE.Mesh(new THREE.BoxGeometry(120,0.14,0.22),mat(0x9c9992,0.9));
+    curb.position.set(0,0.055,10.98); curb.receiveShadow=true; scene.add(curb);
+  }
 
   // ---- Belag: EINE Fläche aus mehreren Feldern statt einer grauen Platte ----
   // Vorher lag ein 12x7-Rechteck vor dem Haus, ohne Zonierung und ohne Kante.
@@ -268,10 +286,18 @@ function buildScene(){
     s.moveTo(x0,-z0); s.lineTo(x1,-z0); s.lineTo(x1,-z1); s.lineTo(x0,-z1); s.closePath(); return s; };
   // Der Vorplatz liegt hinter der Toreinfahrt (Tor bei x ±3.30) und führt direkt
   // zur Haustür — vorher lag die Zufahrt seitlich daneben, ohne Bezug zum Tor.
-  const PAVE=[fld(-3.10,3.10,1.90,8.75),    // Vorplatz hinter dem Tor
-              fld(-1.70,1.70,0.12,1.90),    // Zuweg und Türpodest
-              fld(-8.60,-5.10,0.80,3.80),   // Nebenfläche links
-              fld(3.10,6.40,3.20,7.20)];    // Abstellfläche rechts
+  // Die zwei freistehenden Nebenflächen sind raus — sie lagen ohne Funktion im
+  // Rasen. Stattdessen ein Hausumgang: ein durchgehender Weg am Sockel entlang,
+  // der vom Vorplatz um beide Giebel nach hinten führt. Ein Belag, der irgendwo
+  // im Rasen endet, ist schlechter als keiner.
+  const UO=5.88, UI=4.88, UZ0=-9.08, UZ1=1.08;   // Umgang: aussen/innen, hinten/vorne
+  const PAVE=[fld(-3.10,3.10,1.90,8.75),         // Vorplatz hinter dem Tor
+              fld(-1.70,1.70,0.12,1.90),         // Zuweg und Türpodest
+              fld(-UO,-UI,UZ0,UZ1),              // Umgang linker Giebel
+              fld( UI, UO,UZ0,UZ1),              // Umgang rechter Giebel
+              fld(-UO,-1.70,0.08,UZ1),           // Umgang vorne links
+              fld(1.70, UO,0.08,UZ1),            // Umgang vorne rechts
+              fld(-UO, UO,UZ0,-8.08)];           // Umgang hinten — schliesst den Ring
   const pave=new THREE.Mesh(new THREE.ShapeGeometry(PAVE),floorMat);
   pave.rotation.x=-Math.PI/2; pave.position.y=0.020;
   pave.receiveShadow=true; scene.add(pave);
@@ -285,25 +311,25 @@ function buildScene(){
     const f=new THREE.Mesh(new THREE.BoxGeometry(x1-x0+0.24,0.11,0.12),kerbMat);
     f.position.set((x0+x1)/2,0.015,z1+0.06); f.castShadow=true; f.receiveShadow=true; scene.add(f);
   };
-  kerb(-8.60,-5.10,0.80,3.80); kerb(3.10,6.40,3.20,7.20);
-  // Vorplatz nur seitlich einfassen — vorne trifft er auf die Sockelmauer des Zauns
-  [[-3.16,1.90,8.75],[3.16,1.90,8.75]].forEach(([cx,z0,z1])=>{
+  // Eingefasst wird nur gegen den Rasen — am Sockel braucht es keine Kante.
+  [[-3.16,1.90,8.75],[3.16,1.90,8.75],          // Vorplatz seitlich
+   [-UO-0.06,UZ0,UZ1],[UO+0.06,UZ0,UZ1]].forEach(([cx,z0,z1])=>{   // Umgang aussen
     const m2=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.11,z1-z0),kerbMat);
     m2.position.set(cx,0.015,(z0+z1)/2); m2.castShadow=true; m2.receiveShadow=true; scene.add(m2); });
+  [[UZ1+0.06,-UO-0.06,-1.70],[UZ1+0.06,1.70,UO+0.06],[UZ0-0.06,-UO-0.06,UO+0.06]]
+    .forEach(([cz,x0,x1])=>{                     // Umgang vorne und hinten
+      const m2=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,0.11,0.12),kerbMat);
+      m2.position.set((x0+x1)/2,0.015,cz); m2.castShadow=true; m2.receiveShadow=true; scene.add(m2); });
 
   // ---- Traufstreifen (Kies) statt des 13 m breiten Beetstreifens ----
   // Der ragte beidseits 1.70 m frei in den Rasen. Ein Spritzschutzstreifen läuft
   // am Sockel entlang, nicht quer über das Grundstück.
-  const gravelT=noiseTex('#b9b2a4',34,256,256); gravelT.repeat.set(14,2);
-  const gravelM=new THREE.MeshStandardMaterial({map:gravelT,roughness:1});
-  const strip=(x,z,w,d)=>{ const g=new THREE.Mesh(new THREE.PlaneGeometry(w,d),gravelM);
-    g.rotation.x=-Math.PI/2; g.position.set(x,-0.005,z); g.receiveShadow=true; scene.add(g); };
-  strip(-3.15,0.305,3.50,0.45); strip(3.15,0.305,3.50,0.45);        // vorne, Aussparung an der Tür
-  strip(-5.105,-4.0,0.45,8.4); strip(5.105,-4.0,0.45,8.4);          // an beiden Giebeln
-  // Staudenbeet nur noch in zwei Feldern
+  // Kies-Traufstreifen entfällt: entweder Kiesstreifen ODER gepflasterter Umgang,
+  // beides nebeneinander macht kein Gartenbauer. Der Umgang übernimmt Spritzschutz
+  // und Zugang. Die Staudenbeete rücken nach aussen, vor den Umgang.
   const bedT=noiseTex('#7d746a',26,256,128); bedT.repeat.set(6,1);
   const bedM=new THREE.MeshStandardMaterial({map:bedT,roughness:1});
-  [[-3.15,0.90,3.50,0.72],[3.15,0.90,3.50,0.72]].forEach(([x,z,w,d])=>{
+  [[-3.79,1.44,4.18,0.72],[3.79,1.44,4.18,0.72]].forEach(([x,z,w,d])=>{
     const b=new THREE.Mesh(new THREE.PlaneGeometry(w,d),bedM);
     b.rotation.x=-Math.PI/2; b.position.set(x,-0.004,z); b.receiveShadow=true; scene.add(b); });
 
@@ -522,15 +548,16 @@ function buildScene(){
   // ---- Bepflanzung vor der Fassade ----
   const beds=new THREE.Group(); scene.add(beds);
   resetRnd();                                   // gleiche Bepflanzung bei jedem Aufbau
-  [[-4.2,0.62,1.2],[-1.6,0.70,1.05],[1.7,0.62,1.1],[4.3,0.70,1.2],
-   [-5.6,1.00,1.3],[5.6,1.00,1.3],[-2.4,0.55,0.9],[2.6,0.58,0.95]]
+  // Alles ins Beet (z 1.08…1.80) — vorher stand die Bepflanzung auf dem Umgang
+  [[-4.30,1.50,1.2],[-2.55,1.40,1.05],[2.55,1.40,1.1],[4.30,1.50,1.2],
+   [-5.30,1.55,1.3],[5.30,1.55,1.3],[-3.40,1.62,0.9],[3.40,1.62,0.95]]
     .forEach(([x,z,s])=>grassTuft(x,z,s,beds));
   // Nur zwei Grüntöne statt vier — vier lesen sich als Zufall, zwei als Pflanzung
-  bushClump(-3.4,0.90,0.34,0x4c5c40,beds); bushClump(-1.9,0.86,0.28,0x5f6d4a,beds);
-  bushClump(1.9,0.90,0.30,0x4c5c40,beds);  bushClump(3.4,0.86,0.34,0x5f6d4a,beds);
-  bushClump(-4.5,0.88,0.30,0x5f6d4a,beds); bushClump(4.5,0.88,0.30,0x4c5c40,beds);
+  bushClump(-3.85,1.44,0.30,0x4c5c40,beds); bushClump(-2.05,1.44,0.26,0x5f6d4a,beds);
+  bushClump(2.05,1.44,0.26,0x4c5c40,beds);  bushClump(3.85,1.44,0.30,0x5f6d4a,beds);
+  bushClump(-4.95,1.44,0.28,0x5f6d4a,beds); bushClump(4.95,1.44,0.28,0x4c5c40,beds);
   // Kübel am Eingang: der einzige Massstabsvergleich, den der Belag bekommt
-  [[-1.15,0.95,0x3a3d40],[1.15,0.95,0x3a3d40],[6.60,2.40,0xb6b2ab],[6.60,3.80,0xb6b2ab]]
+  [[-1.15,0.60,0x3a3d40],[1.15,0.60,0x3a3d40],[-2.85,2.35,0xb6b2ab],[2.85,2.35,0xb6b2ab]]
     .forEach(([px,pz,pc])=>{
       const pot=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.55,0.42),mat(pc,0.8));
       pot.position.set(px,0.275,pz); pot.castShadow=true; pot.receiveShadow=true; scene.add(pot);
@@ -586,10 +613,13 @@ function buildScene(){
     const M4=new THREE.Matrix4(), q=new THREE.Quaternion(), v=new THREE.Vector3(),
           s=new THREE.Vector3(), col=new THREE.Color();
     for(let i=0;i<n;i++){
-      const r=2.0+rnd()*1.4, hgt=6.5+rnd()*3.5;
-      v.set(-52+i*(104/(n-1))+(rnd()-0.5)*4, hgt-r*0.5, -56-rnd()*10);
+      const r=2.4+rnd()*1.6, sy=r*(1.15+rnd()*0.55);
+      // Kronenmitte so tief, dass die Krone den Boden BERUEHRT. Vorher schwebte
+      // sie meterhoch — und stand ausserdem hinter der Rasenkante, also ueber
+      // gar keinem Boden. Eine Baumwand hat unten keine Luecke.
+      v.set(-52+i*(104/(n-1))+(rnd()-0.5)*4, sy*0.82, -42-rnd()*9);
       q.setFromEuler(new THREE.Euler(rnd(),rnd(),rnd()));
-      s.set(r,r*(0.95+rnd()*0.45),r);
+      s.set(r,sy,r);
       M4.compose(v,q,s); trees.setMatrixAt(i,M4);
       col.setHex(0x44532f).lerp(new THREE.Color(0x53613c),rnd()); trees.setColorAt(i,col);
     }
