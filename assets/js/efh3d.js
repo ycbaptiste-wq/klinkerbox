@@ -158,6 +158,22 @@ const AX=2.70, AX_S=1.90;              // Achsen Front / Giebelseite
 // Materialien einmal anlegen statt pro Fenster - vorher entstanden 13x je neun
 // MeshStandardMaterials, die three alle einzeln kompiliert.
 let frameMat=null, revealMat=null, soldierMat=null;
+// Rollschicht = STEHENDE Steine. Ein Quader bekommt von three UVs 0..1 je Seite —
+// damit wird die ganze Wandtextur (9.6 x 6.1 m) in ein 1.5 x 0.24 m Band gequetscht
+// und man sieht nur einen verschmierten Fleck. Deshalb eigene UVs: ein
+// massstabsgetreuer Ausschnitt der Produktkarte, um 90 Grad gedreht.
+// texW/texH = die Meter, die u bzw. v der Karte abdecken.
+function soldierGeo(w,h,d,texW,texH,sx,sy){
+  const g=new THREE.BoxGeometry(w,h,d);
+  const uv=g.attributes.uv, pos=g.attributes.position;
+  const uc=0.35+0.30*(((sx*0.37+sy*0.13)%1)+1)%1;   // je Band ein anderer Ausschnitt
+  const vc=0.5+0.07*Math.sin(sx*3.1+sy*1.7);
+  for(let i=0;i<uv.count;i++){
+    uv.setXY(i, uc+pos.getY(i)/texW, vc+pos.getX(i)/texH);   // x↔y vertauscht = 90 Grad
+  }
+  uv.needsUpdate=true;
+  return g;
+}
 function ensureWinMats(){
   if(frameMat) return;
   frameMat=mat(0xdad7d0,0.85);
@@ -178,8 +194,9 @@ function makeWindow(parent,x,y,w,h,glassM,withBox,corner,room){
   // Rollschicht ueber der Oeffnung: stehende Steine, 0.24 m hoch. Das kanonische
   // Klinkerdetail ueber jeder Oeffnung - und in einem Klinker-Konfigurator die
   // Stelle, an der das Produkt zeigt, was es kann.
-  const roll=new THREE.Mesh(new THREE.BoxGeometry(w+0.23,0.24,0.115),soldierMat);
-  roll.position.set(x,y+h/2+0.16,0.006); roll.castShadow=true; roll.receiveShadow=true; parent.add(roll);
+  // Vorsprung 12 mm — eine Rollschicht steht vor der Wand, aber nicht wie ein Sims
+  const roll=new THREE.Mesh(soldierGeo(w+0.23,0.24,0.115,HW,HE,x,y),soldierMat);
+  roll.position.set(x,y+h/2+0.16,-0.046); roll.castShadow=true; roll.receiveShadow=true; parent.add(roll);
   const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.02,h-0.02),
     interiorRoom(w-0.02,h-0.02,3.0,x*3.7+y*1.3,'home',corner||0,room));
   inter.position.set(x,y,-D-0.02); parent.add(inter);        // 3D-Innenraum (Interior-Mapping)
@@ -195,8 +212,8 @@ function makeWindow(parent,x,y,w,h,glassM,withBox,corner,room){
   post.position.set(x,y,fz); parent.add(post);               // Mittelpfosten
   // Sohlbank aus Klinker (Rollschicht liegend): steht vor der Wand und wirft die
   // charakteristische Schattenkante. Ersetzt die frueheren zwei Betonprofile.
-  const sill=new THREE.Mesh(new THREE.BoxGeometry(w+0.23,0.10,D+0.12),soldierMat);
-  sill.position.set(x,y-h/2-0.05,-D/2+0.06); sill.castShadow=true; sill.receiveShadow=true; parent.add(sill);
+  const sill=new THREE.Mesh(soldierGeo(w+0.23,0.10,D+0.11,HW,HE,x+1.7,y-0.9),soldierMat);
+  sill.position.set(x,y-h/2-0.05,-D/2+0.005); sill.castShadow=true; sill.receiveShadow=true; parent.add(sill);
 }
 
 function buildScene(){
@@ -328,12 +345,48 @@ function buildScene(){
   // gibt keinen Zwickel mehr zuzudecken.
   const fascia=new THREE.Mesh(new THREE.BoxGeometry(HW+2*OV,0.20,0.03),mat(0x2e3339,0.7));
   fascia.position.set(0,eaveY-0.10,OV+0.015); scene.add(fascia);
-  const gutter=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.075,HW+2*OV-0.1,12),mat(0xc9c7c2,0.4,0.6));
-  gutter.rotation.z=Math.PI/2; gutter.position.set(0,eaveY-0.16,OV+0.03); gutter.castShadow=true; scene.add(gutter);
-  [[-HW/2+0.10],[HW/2-0.10]].forEach(([x])=>{
-    const dp=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,eaveY-0.2,10),mat(0xc9c7c2,0.4,0.6));
-    dp.position.set(x,(eaveY-0.2)/2,0.10); dp.castShadow=true; scene.add(dp);
-  });
+  // ---- Dachrinne: halbrunde, nach oben OFFENE Rinne, kein Rohr ----
+  // Titanzink, nicht der frühere helle Kunststoffton. Die Rinne hängt so hoch,
+  // dass ihre hintere Oberkante an der Dachunterkante liegt, und das Traufblech
+  // schliesst den Rest — zwischen Dach und Rinne darf kein Licht durchkommen.
+  { const GL=HW+2*OV-0.06, gr=0.078;
+    const zinc=mat(0x9aa0a3,0.32,0.85);
+    // untere Hälfte des Zylindermantels → nach oben offene Rinne
+    const trough=new THREE.Mesh(
+      new THREE.CylinderGeometry(gr,gr,GL,18,1,true,Math.PI,Math.PI),zinc);
+    trough.material.side=THREE.DoubleSide;         // Innenseite der Rinne ist sichtbar
+    trough.rotation.z=Math.PI/2;
+    trough.position.set(0,eaveY-0.055,OV+0.03);
+    trough.castShadow=true; trough.receiveShadow=true; scene.add(trough);
+    // Wulst an der Vorderkante — das Profil, an dem man eine Rinne erkennt
+    const bead=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.014,GL,8),zinc);
+    bead.rotation.z=Math.PI/2; bead.position.set(0,eaveY-0.055,OV+0.03+gr);
+    bead.castShadow=true; scene.add(bead);
+    // Traufblech: schliesst die Fuge zwischen Dachunterkante und Rinnenrückwand
+    const drip=new THREE.Mesh(new THREE.BoxGeometry(GL,0.10,0.006),mat(0x8f9497,0.35,0.8));
+    drip.rotation.x=Math.PI/4;
+    drip.position.set(0,eaveY-0.055,OV-0.012);
+    drip.castShadow=true; scene.add(drip);
+    // Rinnenhalter alle ~0.85 m, unter der Rinne durchgeführt
+    const nh=Math.max(2,Math.round(GL/0.85));
+    const hold=new THREE.InstancedMesh(new THREE.BoxGeometry(0.028,0.022,0.20),zinc,nh);
+    hold.castShadow=true;
+    const M4=new THREE.Matrix4();
+    for(let i=0;i<nh;i++){ M4.makeTranslation(-GL/2+0.4+i*(GL-0.8)/(nh-1),eaveY-0.055-gr-0.008,OV+0.03);
+      hold.setMatrixAt(i,M4); }
+    hold.instanceMatrix.needsUpdate=true; scene.add(hold);
+    // Fallrohre mit Bogen zurück zur Wand — vorher endeten sie im Nichts
+    [-HW/2+0.16,HW/2-0.16].forEach(x=>{
+      const dp=new THREE.Mesh(new THREE.CylinderGeometry(0.042,0.042,eaveY-0.62,12),zinc);
+      dp.position.set(x,(eaveY-0.62)/2,0.10); dp.castShadow=true; scene.add(dp);
+      const el=new THREE.Mesh(new THREE.CylinderGeometry(0.042,0.042,0.52,12),zinc);
+      el.rotation.x=-Math.atan2(OV-0.07,0.34);
+      el.position.set(x,eaveY-0.42,0.28); el.castShadow=true; scene.add(el);
+      [1.1,2.6,4.0].forEach(hy=>{ if(hy>eaveY-0.7) return;    // Rohrschellen
+        const sc2=new THREE.Mesh(new THREE.BoxGeometry(0.10,0.022,0.030),zinc);
+        sc2.position.set(x,hy,0.055); scene.add(sc2); });
+    });
+  }
   // Kamin (weiss, Metallkappe) + kleines Lüftungsrohr
   const chim=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.6,0.55),mat(0xe9e7e3,0.8));
   chim.position.set(-0.9,HR+0.55,-HD/2-0.4); chim.castShadow=true; scene.add(chim);
@@ -377,8 +430,8 @@ function buildScene(){
     rv(-w/2-0.02,yc,0.04,h);                           // linke Laibung
     rv( w/2+0.02,yc,0.04,h);                           // rechte Laibung
     // Rollschicht auch ueber der Tuer
-    const roll=new THREE.Mesh(new THREE.BoxGeometry(w+0.23,0.24,0.115),soldierMat);
-    roll.position.set(0,y0+h+0.16,0.006); roll.castShadow=true; roll.receiveShadow=true; scene.add(roll);
+    const roll=new THREE.Mesh(soldierGeo(w+0.23,0.24,0.115,HW,HE,0.6,2.9),soldierMat);
+    roll.position.set(0,y0+h+0.16,-0.046); roll.castShadow=true; roll.receiveShadow=true; scene.add(roll);
     const thr=new THREE.Mesh(new THREE.BoxGeometry(w+0.10,0.02,0.17),mat(0xa8acae,0.42,0.55));
     thr.position.set(0,y0-0.01,-D/2+0.05); thr.receiveShadow=true; scene.add(thr);   // Schwellenprofil
     // Zarge: Blatt 1.05 + Setzholz 0.06 + Seitenteil 0.43 + 2x0.03 Rahmen = 1.60,
@@ -590,8 +643,9 @@ window.Efh3D={
       // Die Laibung ist eine Schnittflaeche → leicht abgedunkelt.
       applySurface(revealMat,facadeCv,{fallback:0xe3e0da,tint:0xb0aca6,rough:1.0,
         normalScale:0.45,aniso:maxAniso,env:0.20});
-      // Rollschicht = stehende Steine → dieselbe Karte um 90 Grad gedreht
-      applySurface(soldierMat,facadeCv,{fallback:0xdad6d1,rough:1.0,rotate:Math.PI/2,
+      // Die 90-Grad-Drehung steckt in den UVs der Bänder (soldierGeo), nicht in
+      // der Textur — sonst stimmt der Massstab nicht.
+      applySurface(soldierMat,facadeCv,{fallback:0xdad6d1,rough:1.0,
         normalScale:0.7,aniso:maxAniso,env:0.20});
     }
     // Rahmenfarbe folgt dem Produkt: heller Klinker bekommt helle Rahmen, dunkler
