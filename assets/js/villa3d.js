@@ -4,7 +4,7 @@
 // Portikus mit Freitreppe und Geländer, Buchs-Vorgarten mit Metallzaun.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, LOWQ } from './scene3d-lib.js?v=52';
+import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, LOWQ } from './scene3d-lib.js?v=53';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -173,26 +173,38 @@ function buildScene(){
   const roofM=new THREE.MeshStandardMaterial({map:rT,roughness:0.85,side:THREE.DoubleSide});
   const roof=new THREE.Mesh(hipRoofGeo(HW+0.9,HD+0.9,2.95,(HW-HD)/2+0.4),roofM);
   roof.position.set(0,HE+0.34,-HD/2); roof.castShadow=true; scene.add(roof);
-  const dormer=new THREE.Mesh(new THREE.BoxGeometry(3.3,1.6,1.9),mat(0xe9e7e3,0.85));
-  dormer.position.set(0,8.5,-1.9); dormer.castShadow=true; dormer.receiveShadow=true; scene.add(dormer);
-  const dRoof=new THREE.Mesh(new THREE.BoxGeometry(3.7,0.12,2.15),mat(0x3b3e43,0.7));
-  dRoof.position.set(0,9.36,-1.9); dRoof.castShadow=true; scene.add(dRoof);
-  const dFascia=new THREE.Mesh(new THREE.BoxGeometry(3.7,0.12,0.06),mat(0xeceae6,0.7));
-  dFascia.position.set(0,9.26,-0.84); scene.add(dFascia);
+  // Gaube: der Körper reicht bewusst TIEF unter die Dachfläche (Unterkante 7.25,
+  // Dachhaut an der Gaubenfront 7.91). Vorher endete er darüber, dadurch klaffte
+  // ein dunkler Spalt und die Gaube schien auf dem Dach zu schweben. Die Fenster
+  // sitzen jetzt in einer Laibung statt als Platten auf der Front zu kleben.
+  const dW=3.30, dFz=-0.60, dBz=-2.60, dTop=9.15;
+  const dormer=new THREE.Mesh(new THREE.BoxGeometry(dW,1.90,dBz-dFz),mat(0xe9e7e3,0.85));
+  dormer.position.set(0,dTop-0.95,(dFz+dBz)/2);
+  dormer.castShadow=true; dormer.receiveShadow=true; scene.add(dormer);
+  // Dach mit Überstand und Traufblende — ohne Überstand liest sich eine Gaube als Kiste
+  const dRoof=new THREE.Mesh(new THREE.BoxGeometry(dW+0.44,0.14,(dBz-dFz)+0.36),mat(0x3b3e43,0.7));
+  dRoof.position.set(0,dTop+0.07,(dFz+dBz)/2-0.10); dRoof.castShadow=true; scene.add(dRoof);
+  const dFascia=new THREE.Mesh(new THREE.BoxGeometry(dW+0.44,0.13,0.04),mat(0x2e3339,0.7));
+  dFascia.position.set(0,dTop-0.03,dFz+0.20); dFascia.castShadow=true; scene.add(dFascia);
   const glassM=glassMaterial();
-  // drei Gaubenfenster mit Attikaraum (Interior-Mapping) + weisser Fasche + Sprosse
-  const dFz=-0.95;   // Gaubenfront (Vorderseite, zur Kamera +z)
-  [[-0.98],[0],[0.98]].forEach(([x])=>{
-    const inter=new THREE.Mesh(new THREE.PlaneGeometry(0.72,1.02),interiorRoom(0.72,1.02,1.3,x*5.7+7.9,'home'));
-    inter.position.set(x,8.5,dFz+0.06); scene.add(inter);
-    const g=new THREE.Mesh(new THREE.PlaneGeometry(0.72,1.02),glassM);
-    g.position.set(x,8.5,dFz+0.085); scene.add(g);
-    [[0,0.55,0.84,0.05],[0,-0.55,0.84,0.05],[-0.40,0,0.05,1.12],[0.40,0,0.05,1.12]].forEach(([dx,dy,bw,bh])=>{
-      const b=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,0.04),mat(0xf4f3f0,0.6));
-      b.position.set(x+dx,8.5+dy,dFz+0.10); scene.add(b);
-    });
-    const mull=new THREE.Mesh(new THREE.BoxGeometry(0.03,1.0,0.02),mat(0xf4f3f0,0.6));
-    mull.position.set(x,8.5,dFz+0.095); scene.add(mull);
+  // drei Gaubenfenster, 0.09 m zurückgesetzt, mit Laibung und Rahmenring
+  const wy=8.55, wW=0.74, wH=0.90, REV=0.09;
+  [-1.02,0,1.02].forEach(x=>{
+    const rv=(sx,sy,sw,sh)=>{ const m2=new THREE.Mesh(new THREE.BoxGeometry(sw,sh,REV),mat(0xe2dfd9,0.85));
+      m2.position.set(sx,sy,dFz-REV/2); m2.castShadow=true; scene.add(m2); };
+    rv(x,wy+wH/2+0.015,wW+0.06,0.03); rv(x,wy-wH/2-0.015,wW+0.06,0.03);
+    rv(x-wW/2-0.015,wy,0.03,wH);      rv(x+wW/2+0.015,wy,0.03,wH);
+    const inter=new THREE.Mesh(new THREE.PlaneGeometry(wW,wH),
+      interiorRoom(wW,wH,2.2,x*5.7+7.9,'home',0,'estrich'));
+    inter.position.set(x,wy,dFz-REV-0.02); scene.add(inter);
+    const g=new THREE.Mesh(new THREE.PlaneGeometry(wW-0.10,wH-0.10),glassM);
+    g.position.set(x,wy,dFz-REV+0.04); scene.add(g);
+    const fw=0.07, frM=mat(0xf4f3f0,0.6);
+    [[0,wy+wH/2-fw/2,wW,fw],[0,wy-wH/2+fw/2,wW,fw],
+     [-wW/2+fw/2,wy,fw,wH-fw*2],[wW/2-fw/2,wy,fw,wH-fw*2],
+     [0,wy,0.035,wH-fw*2]].forEach(([dx,dy,bw,bh])=>{
+      const b=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,0.05),frM);
+      b.position.set(x+dx,dy,dFz-REV+0.025); scene.add(b); });
   });
 
   // ---- Fenster: OG fünf Achsen (mit Verdachung), EG vier Achsen ----
