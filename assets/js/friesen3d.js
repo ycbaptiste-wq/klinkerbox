@@ -9,7 +9,7 @@ import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, ad
 const MOBILE=LOWQ;
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
-let facadeMat=null, gableMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
+let facadeMat=null, gableMat=null, sideMatL=null, sideMatR=null, floorMat=null, revealMat=null, maxAniso=8;
 let rafId=0, failed=false;
 
 const TARGET=new THREE.Vector3(0,3.1,1.2);
@@ -21,6 +21,18 @@ const HW=13.0, HD=9.0;                           // Breite, Tiefe
 const HE=3.0;                                    // Trauf-/EG-Höhe
 const RIDGE=7.6;                                 // Firsthöhe
 const GW=3.6;                                    // Giebelbreite
+
+// ---- Haustür: Öffnung und Laibungstiefe, einmal zentral gerechnet ----
+// Der Zwerchgiebel ist ein Risalit: seine Klinkerfläche liegt bei z=0.14, die
+// EG-Fassade dahinter bei z=0.001. Nachgerechnet bleiben dazwischen 0.139 m —
+// das ist exakt eine halbe Klinkerbreite (0.115) plus Stossfuge, also eine
+// bautechnisch richtige Laibung. In dieses Mass muss die Tür hinein; die alte
+// Tür lag bei z=0.20 und klebte damit 60 mm VOR der Wand.
+// Die Werte stehen hier oben, weil der Giebel-Ausschnitt (Zeile ~200) und der
+// Türaufbau (Zeile ~310) dieselben Zahlen brauchen.
+const GBL_Z=0.14, FAC_Z=0.001;
+const REVEAL=GBL_Z-FAC_Z;                        // 0.139 m Laibungstiefe
+const DR_W=1.20, DR_Y0=0.05, DR_Y1=2.88;         // Rohbauöffnung 1.20 x 2.83 m
 
 function mat(c,rough,metal){ return new THREE.MeshStandardMaterial({color:c,roughness:rough!=null?rough:0.9,metalness:metal||0}); }
 function noiseTex(base,vari,w,h){
@@ -193,11 +205,18 @@ function buildScene(){
   const gShape=new THREE.Shape();
   gShape.moveTo(-GW/2,0); gShape.lineTo(GW/2,0); gShape.lineTo(GW/2,5.35);
   gShape.lineTo(0,7.45); gShape.lineTo(-GW/2,5.35); gShape.closePath();
+  // PROBLEM: Ohne Loch in dieser Fläche gibt es keine Laibung — jede Tür kann dann
+  // nur AUF dem Klinker liegen, nie darin. Deshalb hier die Rohbauöffnung als
+  // echtes Loch (ShapeGeometry trianguliert Löcher und dreht die Wicklung selbst).
+  const dHole=new THREE.Path();
+  dHole.moveTo(-DR_W/2,DR_Y0); dHole.lineTo(DR_W/2,DR_Y0);
+  dHole.lineTo(DR_W/2,DR_Y1); dHole.lineTo(-DR_W/2,DR_Y1); dHole.closePath();
+  gShape.holes.push(dHole);
   const gGeo=new THREE.ShapeGeometry(gShape);
   { const p=gGeo.attributes.position, uv=gGeo.attributes.uv;
     for(let i=0;i<p.count;i++){ uv.setXY(i,(p.getX(i)+GW/2)/GW, p.getY(i)/7.45); } }
   const gable=new THREE.Mesh(gGeo,gableMat);
-  gable.position.set(0,0,0.14); gable.castShadow=true; gable.receiveShadow=true; scene.add(gable);
+  gable.position.set(0,0,GBL_Z); gable.castShadow=true; gable.receiveShadow=true; scene.add(gable);
   // Giebel-Seitenwangen (schliessen den Vorsprung zur Fassade)
   [[-GW/2],[GW/2]].forEach(([x])=>{
     const cheek=new THREE.Mesh(new THREE.PlaneGeometry(0.14,5.35),mat(0xd2cec9,0.95));
@@ -220,11 +239,31 @@ function buildScene(){
   // Firstziegel deckt den Schnitt der beiden Dachflächen (sonst sichtbare Naht/Loch)
   const gCap=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.12,gDepth),mat(0x33363b,0.7));
   gCap.position.set(0,7.45,gZc); gCap.castShadow=true; scene.add(gCap);
-  // klassisches Giebel-Finial an der Vorderspitze
-  const finRod=new THREE.Mesh(new THREE.CylinderGeometry(0.026,0.026,0.44,8),mat(0x33363b,0.5,0.3));
-  finRod.position.set(0,7.64,gFrontZ); scene.add(finRod);
-  const finial=new THREE.Mesh(new THREE.SphereGeometry(0.13,16,14),mat(0x33363b,0.5,0.3));
-  finial.position.set(0,7.88,gFrontZ); finial.castShadow=true; scene.add(finial);
+  // ---- Giebelzeichen an der Zwerchgiebelspitze ----
+  // PROBLEM (nachgerechnet): Der Firstziegel gCap endet oben bei 7.45+0.06=7.51,
+  // die Dachfläche im Scheitel bei 5.35+2.10+0.05/cos(49.4°)=7.527. Die alte
+  // Stange lief von 7.42 bis 7.86, die Kugel sass bei 7.88 mit r=0.13, also ab
+  // 7.75. Zwischen Dachscheitel (7.53) und Kugelunterkante (7.75) standen damit
+  // 22 cm blanke Stange von 52 mm Durchmesser frei in der Luft — ein Spiess, kein
+  // Giebelknopf. Ein echtes Giebelzeichen hat einen Sockelklotz auf dem
+  // Ortgangstoss, darüber einen Fussteller, der die Fuge abdeckt, und erst dann
+  // den gedrechselten Schaft. Das Verhältnis stimmt so auch: Kugel Ø 230 mm auf
+  // 473 mm Gesamthöhe = knapp die Hälfte, statt vorher Ø 260 auf 46 cm Stange.
+  // LatheGeometry statt Zylinder+Kugel: ein Körper, eine durchgehende Silhouette.
+  const finZ=0.76;                                  // Ortgangvorderkante 0.865, Firstziegel bis 0.80
+  const finBase=new THREE.Mesh(new THREE.BoxGeometry(0.17,0.13,0.24),mat(0x3b3e43,0.55));
+  finBase.position.set(0,7.46,finZ-0.005);          // 7.395…7.525: steckt im Dachscheitel
+  finBase.castShadow=true; scene.add(finBase);
+  const finProf=[[0,0],[0.105,0],[0.105,0.032],[0.076,0.055],[0.044,0.074],
+                 [0.039,0.100],[0.036,0.196],[0.056,0.214],[0.056,0.232],[0.039,0.250]];
+  { const R=0.115, a0=Math.asin(0.039/R), cy=0.250+R*Math.cos(a0);   // Kugelmitte 0.358
+    for(let i=1;i<=6;i++){ const a=-a0+(Math.PI/2+a0)*i/6;
+      finProf.push([R*Math.cos(a), cy+R*Math.sin(a)]); } }
+  const finial=new THREE.Mesh(
+    new THREE.LatheGeometry(finProf.map(p=>new THREE.Vector2(p[0],p[1])),12),
+    mat(0x4a4f55,0.38,0.55));                       // Zinkblech: holt sein Licht aus der Himmelsspiegelung
+  finial.position.set(0,7.525,finZ);                // Oberkante 7.525+0.473=7.998
+  finial.castShadow=true; scene.add(finial);
   // weisses Gesims am Giebelfuss (wie im Original über dem EG)
   const gBand=new THREE.Mesh(new THREE.BoxGeometry(GW+0.3,0.16,0.10),mat(0xeceae6,0.7));
   gBand.position.set(0,3.32,0.19); scene.add(gBand);
@@ -295,28 +334,134 @@ function buildScene(){
     friesenWindow(sg, 2.2,1.62,1.2,1.55,glassM,0);
   });
 
-  // ---- Haustür: dunkle Paneel-Tür mit Oberlicht + Tritt ----
-  const dSur=new THREE.Mesh(new THREE.BoxGeometry(1.5,2.75,0.06),mat(0xeceae6,0.7));
-  dSur.position.set(0,1.375,0.17); scene.add(dSur);
-  const door=new THREE.Mesh(new THREE.BoxGeometry(1.16,2.15,0.08),mat(0x3f2d20,0.5));
-  door.position.set(0,1.075,0.20); scene.add(door);
-  [[-0.28,1.55],[0.28,1.55],[-0.28,0.62],[0.28,0.62]].forEach(([px,py])=>{
-    const pan=new THREE.Mesh(new THREE.BoxGeometry(0.40,0.72,0.02),mat(0x32231a,0.55));
-    pan.position.set(px,py,0.245); scene.add(pan);
-  });
-  // warm beleuchtetes Oberlicht (Fanlight) statt schwarzem Glas
-  const transomGlow=new THREE.Mesh(new THREE.PlaneGeometry(1.1,0.42),new THREE.MeshBasicMaterial({color:0xf3e2be}));
-  transomGlow.position.set(0,2.42,0.235); scene.add(transomGlow);
-  const transom=new THREE.Mesh(new THREE.PlaneGeometry(1.1,0.42),glassM);
-  transom.position.set(0,2.42,0.245); scene.add(transom);
-  [[-0.28],[0.0],[0.28]].forEach(([px])=>{
-    const m=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.40,0.02),mat(0xf6f5f2,0.55));
-    m.position.set(px,2.42,0.25); scene.add(m);
-  });
-  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.014,0.28,8),mat(0xb9bcbe,0.3,0.8));
-  handle.position.set(-0.42,1.05,0.26); handle.rotation.x=Math.PI/2; scene.add(handle);
-  const step=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.09,0.65),mat(0xc9c6c0,0.85));
-  step.position.set(0,0.045,0.42); step.castShadow=true; step.receiveShadow=true; scene.add(step);
+  // ======================= HAUSTÜR MIT OBERLICHT =======================
+  // PROBLEM 1 (Lage): Das alte Blatt lag als 0.08-Platte bei z=0.20. Die
+  //   Klinkerfläche des Zwerchgiebels liegt bei z=0.14 — die Tür klebte also
+  //   60 mm VOR der Wand und hatte keinerlei Laibung.
+  // PROBLEM 2 (Farbe): Blatt 0x3f2d20, Füllungen 0x32231a. Das sind 13 Anzeige-
+  //   werte im hellsten Kanal — bei diffusem Licht unsichtbar, die Füllungen
+  //   waren praktisch aufgemalt. Schlimmer noch die Grundhelligkeit: die lineare
+  //   Leuchtdichte von 0x3f2d20 ist 0.031, der Klinker liegt bei 0.139. Das sind
+  //   22 % — noch weniger als die 18 %, mit denen sich die EFH-Tür als schwarzes
+  //   Loch gemessen hat (dort funktionierten erst 44 %).
+  // LÖSUNG: echtes Loch im Giebel, ausgemauerte Laibung, Blatt hinter dem
+  //   Anschlag, und Rahmen gegen Füllung als MATERIALwechsel:
+  //   Rahmen 0x3d5046 = 0.075 linear (54 % vom Klinker, über der EFH-Schwelle),
+  //   Füllung 0xbfb6a2 = 0.466 linear. Faktor 6.2 — das trägt auch dann noch,
+  //   wenn die Laibung die Hälfte des Lichts wegnimmt.
+  // z-Kette (aussen = +z), Summe muss REVEAL = 0.139 m ergeben:
+  //   0.140 Klinker → 0.116 Anschlagfront   (24 mm sichtbare Laibung = Schattenfuge)
+  //   0.116 → 0.094 Anschlag                (lappt 22 mm über die Blattkante)
+  //   0.092 → 0.012 Türblatt                (80 mm dick, 2 mm Luft zum Anschlag)
+  //   0.012 → 0.001 Luft vor der Fassade    (11 mm, kein z-Fighting)
+  { const OW=DR_W, OY0=DR_Y0, OY1=DR_Y1;
+    const BW=1.06, BH=2.06, BT=0.080;            // Blattmass: 1.06 x 2.06 x 0.080 m
+    const zStop=0.116, zFtr=0.094, zBlt=0.092, zBck=0.006;
+    const aF=1.064/2, aA=1.016/2;                // Futter- bzw. Anschlagöffnung
+    const yThr=0.120, yB0=0.130, yB1=yB0+BH;     // Schwelle OK / Blatt 0.130…2.190
+    const yK1=yB1+0.080;                         // Kämpferriegel Oberkante 2.270
+    const yH0=OY1-0.068;                         // Sturzfutter Unterkante 2.812
+    const olH=yH0-yK1, olY=(yK1+yH0)/2;          // Oberlicht 0.542 m hoch, Mitte 2.541
+    // Boxen über Min/Max statt Mitte+Grösse: nur so lassen sich Anschlag, Futter
+    // und Laibung so aneinanderlegen, dass sich keine zwei Flächen decken.
+    const bx=(x0,x1,y0,y1,z0,z1,m,sh)=>{
+      const b=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,y1-y0,z1-z0),m);
+      b.position.set((x0+x1)/2,(y0+y1)/2,(z0+z1)/2);
+      if(sh){ b.castShadow=true; b.receiveShadow=true; }
+      scene.add(b); return b; };
+
+    // --- Laibung: die Klinker-Schnittfläche der 0.139 m tiefen Öffnung.
+    // Rückseite bei FAC_Z+0.003, damit sie nicht mit der Fassadenebene z-fightet.
+    // Die Vorderkante darf NICHT auf GBL_Z=0.14 liegen: die Laibungsklötze stehen
+    // hinter dem Giebelklinker, ihre Vorderflächen lägen dann exakt auf dessen
+    // Ebene und würden entlang der ganzen Türkante z-fighten. 4 mm davor statt
+    // dahinter, weil ein Rücksprung eine 4-mm-Lücke am Anschlagwinkel aufreisst;
+    // der Überstand verschwindet unter Fasche, Schwelle und Stufe.
+    revealMat=new THREE.MeshStandardMaterial({color:0xb8b4ae,roughness:0.95});
+    const rz0=FAC_Z+0.003, rz1=GBL_Z+0.004;
+    bx(-OW/2-0.06,-OW/2, OY0,OY1, rz0,rz1, revealMat,true);        // linke Laibung
+    bx( OW/2, OW/2+0.06, OY0,OY1, rz0,rz1, revealMat,true);        // rechte Laibung
+    bx(-OW/2-0.06,OW/2+0.06, OY1,OY1+0.06, rz0,rz1, revealMat,true);   // Sturz
+    bx(-OW/2-0.06,OW/2+0.06, OY0-0.06,OY0, rz0,rz1, revealMat,false);  // Sohle
+    { const bk=new THREE.Mesh(new THREE.PlaneGeometry(OW,OY1-OY0),mat(0x1e1b18,1));
+      bk.position.set(0,(OY0+OY1)/2,zBck); scene.add(bk); }        // dunkler Grund
+
+    // --- Zarge: Futter füllt die Laibung, davor der Anschlag mit kleinerer
+    // Öffnung. Das ist das Bauteil, das die Schattenfuge am Blattrand erzeugt.
+    const zM=mat(0xdfdad1,0.6);
+    bx(-OW/2,-aF, 0.10,OY1, zBck,zFtr, zM,true);
+    bx( aF, OW/2, 0.10,OY1, zBck,zFtr, zM,true);
+    bx(-aF,aF, yH0,OY1, zBck,zFtr, zM,true);          // Sturzfutter
+    bx(-aF,aF, yB1,yK1, zBck,zFtr, zM,true);          // Kämpferriegel
+    bx(-OW/2,-aA, yThr+0.002,OY1, zFtr,zStop, zM,true);
+    bx( aA, OW/2, yThr+0.002,OY1, zFtr,zStop, zM,true);
+    bx(-aA,aA, yH0-0.022,OY1, zFtr,zStop, zM,true);   // Anschlag am Sturz
+    bx(-aA,aA, yB1-0.022,yK1+0.022, zFtr,zStop, zM,true);  // Anschlag am Kämpfer
+
+    // --- Türblatt: ExtrudeGeometry mit vier Löchern. Die Füllungen sind damit
+    // echte Öffnungen im Blatt, nicht aufgeklebte Plättchen; die Füllungsplatten
+    // sitzen 12 mm dahinter und stopfen sie von hinten. Klassische Aufteilung:
+    // Seitenfriese 0.15, Mittelstiel 0.12, Querfriese unten 0.19 / mitte 0.20 /
+    // oben 0.15 — untere Füllungen 0.32x0.86, obere 0.32x0.66.
+    const fx=[-0.41,-0.09,0.09,0.41], fyL=[-0.84,0.02], fyU=[0.22,0.88];
+    const bShape=new THREE.Shape();
+    bShape.moveTo(-BW/2,-BH/2); bShape.lineTo(BW/2,-BH/2);
+    bShape.lineTo(BW/2,BH/2); bShape.lineTo(-BW/2,BH/2); bShape.closePath();
+    [[fx[0],fx[1],fyL],[fx[2],fx[3],fyL],[fx[0],fx[1],fyU],[fx[2],fx[3],fyU]]
+      .forEach(([x0,x1,fy])=>{ const p=new THREE.Path();
+        p.moveTo(x0,fy[0]); p.lineTo(x1,fy[0]); p.lineTo(x1,fy[1]); p.lineTo(x0,fy[1]);
+        p.closePath(); bShape.holes.push(p); });
+    const leafM=new THREE.MeshStandardMaterial({color:0x3d5046,roughness:0.42,envMapIntensity:1.0});
+    const leaf=new THREE.Mesh(new THREE.ExtrudeGeometry(bShape,{depth:BT,bevelEnabled:false}),leafM);
+    leaf.position.set(0,yB0+BH/2,zBlt-BT); leaf.castShadow=true; leaf.receiveShadow=true; scene.add(leaf);
+    const panM=mat(0xbfb6a2,0.55);
+    [[fx[0],fx[1],fyL],[fx[2],fx[3],fyL],[fx[0],fx[1],fyU],[fx[2],fx[3],fyU]]
+      .forEach(([x0,x1,fy])=>{
+        // 6 mm Übergriff ringsum, damit die Platte in der Nut sitzt statt im Loch
+        bx(x0-0.006,x1+0.006, yB0+BH/2+fy[0]-0.006, yB0+BH/2+fy[1]+0.006,
+           zBlt-0.038,zBlt-0.012, panM,false); });
+
+    // --- Beschlag in realer Grösse: Knauf Ø 76 mm auf Rosette Ø 116 mm, Mitte bei
+    // y=1.16, also 1.04 m über der Schwelle (Norm-Drückerhöhe), auf dem rechten
+    // Fries (x 0.41…0.53, Mitte 0.47). Messing, weil Metall sein Licht aus
+    // der Himmelsspiegelung
+    // holt — es funktioniert genau dort, wo in der Laibung die Farbstufe versagt.
+    const brs=mat(0xa8935e,0.28,0.9);
+    const ros=new THREE.Mesh(new THREE.CylinderGeometry(0.058,0.058,0.018,14),brs);
+    ros.rotation.x=Math.PI/2; ros.position.set(0.47,1.16,zBlt+0.009); scene.add(ros);
+    const knob=new THREE.Mesh(new THREE.SphereGeometry(0.038,12,8),brs);
+    knob.scale.z=0.8; knob.position.set(0.47,1.16,zBlt+0.044);   // ragt 74 mm vor
+    knob.castShadow=true; scene.add(knob);
+    const key=new THREE.Mesh(new THREE.CylinderGeometry(0.026,0.026,0.012,10),brs);
+    key.rotation.x=Math.PI/2; key.position.set(0.47,0.99,zBlt+0.006); scene.add(key);
+    bx(-0.13,0.13, 1.261,1.299, zBlt,zBlt+0.012, brs,false);      // Briefschlitz
+
+    // --- Oberlicht: warmer Grund (beleuchtete Diele) statt schwarzem Glas,
+    // darüber glassMaterial() und davor drei ECHTE Sprossen mit 20 mm Tiefe,
+    // die vier Scheiben à 0.254 x 0.542 teilen.
+    const olBg=new THREE.Mesh(new THREE.PlaneGeometry(2*aF,olH),
+      new THREE.MeshBasicMaterial({color:0xe8d9bb}));
+    olBg.position.set(0,olY,0.030); scene.add(olBg);
+    const olGl=new THREE.Mesh(new THREE.PlaneGeometry(2*aF,olH),glassM);
+    olGl.position.set(0,olY,0.080); scene.add(olGl);
+    const sprM=mat(0xf6f5f2,0.55);
+    [-0.254,0,0.254].forEach(px=> bx(px-0.014,px+0.014, yK1,yH0, 0.086,0.106, sprM,false));
+
+    // --- Schwelle: Naturstein, Oberkante 0.120, ragt 15 mm über die Klinker-
+    // fläche hinaus (0.155 gegen 0.140), damit Wasser abtropft statt in die Fuge
+    // zu laufen. Die Stufe davor endet bei z=0.030 und läuft unter der Schwelle
+    // durch — vorher klaffte zwischen Tritt und Türfuss eine Lücke.
+    bx(-0.65,0.65, 0.045,yThr, 0.005,0.155, mat(0xb0aca4,0.55,0.15), true);
+    bx(-0.90,0.90, 0.0,0.10, 0.030,0.770, mat(0xc9c6c0,0.85), true);
+
+    // --- weisse Fasche auf dem Klinker, wie bei den Fenstern (friesenWindow).
+    // Innenkante exakt auf der Öffnungskante: die 24 mm Laibung dahinter bleiben
+    // als Schattenlinie sichtbar. 3 mm vor der Klinkerebene → kein z-Fighting.
+    const fas=mat(0xeceae6,0.7);
+    bx(-0.70,-OW/2, yThr,OY1, GBL_Z+0.003,GBL_Z+0.036, fas,true);
+    bx( OW/2,0.70, yThr,OY1, GBL_Z+0.003,GBL_Z+0.036, fas,true);
+    bx(-0.70,0.70, OY1,OY1+0.10, GBL_Z+0.003,GBL_Z+0.036, fas,true);
+  }
 
   // ---- Buchshecken + Dünengräser (symmetrisch wie im Original) ----
   const beds=new THREE.Group(); scene.add(beds);
@@ -439,6 +584,11 @@ window.Friesen3D={
     applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce,1.0,0.9,0.0031);
     applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce,1.0,0.9,0.0031);
     applyTex(floorMat,floorCv,0xd0cdc8,0.8,0.55);
+    // Die Türlaibung trägt DAS PRODUKT, sonst stünde grauer Putz in einer
+    // Klinkerwand. Als Schnittfläche sieht sie weniger Himmel → tint dunkelt ab.
+    // Kein POM: bei 0.136 m Streifenbreite kostet der Raymarch mehr, als er zeigt.
+    if(revealMat) applySurface(revealMat,gableCv||facadeCv,{fallback:0xb8b4ae,tint:0xa8a49e,
+      rough:1.0,normalScale:0.7,aniso:maxAniso,env:0.28,pom:0});
   },
   snapshot(w,h){
     if(!renderer) return null;

@@ -50,11 +50,54 @@ function makeEnvironment(){
   const env=pm.fromScene(es,0.05).texture; pm.dispose();
   return env;
 }
+// ---- Innenraum hinter der Scheibe: Quader für das Interior-Mapping ----
+// PROBLEM (gemessen, nicht geraten): In der linken Achse stand in OG1 und OG2 je
+// ein kleines weisses Rechteck im Glas. Die drei möglichen Ursachen einzeln geprüft:
+//  1. Möbel-Mesh, das durch die Fensterebene ragt? NEIN. Die Frontfassade ist ein
+//     geschlossenes PlaneGeometry(HW,HE) bei z=0.001 OHNE Loch. Lobby-Glow (z=-1.2),
+//     Tresen (z=-0.9) und die Seitenfenster-Gruppen liegen alle hinter dieser opaken
+//     Fläche. Zwischen z=0.001 und den Fensterteilen (z=0.05…0.11) liegt nichts.
+//  2. envMap-Spiegelung? NEIN. buildEnv() enthält nur Himmelskugel, Sonnenkugel und
+//     Bodenebene — kein rechteckiges Objekt. Eine Spiegelung wäre ausserdem in allen
+//     36 Scheiben gleich und nicht auf zwei Fenster EINER Achse beschränkt.
+//  3. interiorRoom-Shader: JA. Nachweis: Nachbau des Fragment-Shaders in JS, je
+//     Scheibe mit 96x48 Punkten abgetastet, Default-Kamera (15.08 / 2.60 / 20.84).
+//     Ergebnis für x=-7.35:  OG1 (y=5.15) 92.2 % Seitenwand (max 145) + 3.4 %
+//     Deckenpanel mit max 253/255 · OG2 (y=8.45) 85.4 % Seitenwand + 7.6 % Panel
+//     max 218 · EG (y=1.62) 0.0 % Panel — genau deshalb nur die oberen zwei Reihen:
+//     die EG-Fenster liegen UNTER dem Augpunkt, der Sehstrahl geht nach unten auf
+//     den Boden statt nach oben an die Decke.
+// Das Rechteck ist also das Leuchtpanel der Büro-Rasterdecke im Shader
+// (col = vec3(1.0,1.0,0.93)*(0.5+lampOn)). Zwei Aufrufparameter waren schuld:
+//  a) Es wurde KEIN Raumtyp übergeben → ROOMS[undefined] fällt auf 'wohnen' zurück,
+//     und 'wohnen' hat mit lampAn = 0.9 den höchsten Wert der ganzen Tabelle.
+//     (0.5+lampOn) wird damit 1.04…1.49 → das Panel clippt auf 253/255. Die besonnte
+//     Fassade liegt (0xdad6d1, N·L 0.421, ACES, Exposure 1.05) bei 216/255. Eine
+//     Bürodecke von aussen heller als die Sonnenfassade — das kann nicht stimmen.
+//  b) Der Raumquader war exakt so breit wie die Scheibe (2.38 m). Bei az = 0.65
+//     trifft der Sehstrahl die linke Achse mit rd.x/rd.z = 1.08; er verlässt den
+//     Quader nach 1.1 m seitlich und erreicht die Rückwand (2.6 m) NIE. Übrig bleibt
+//     nackte Seitenwand + Deckenstreifen — das Panel steht allein im Bild.
+// LÖSUNG (scene3d-lib.js bleibt unangetastet, alles über die Aufrufparameter):
+// Raumtyp 'kind' — im office-Zweig liest der Shader vom ROOMS-Eintrag NUR lampAn,
+// milchglas und durchblick>0.02; 'kind' liefert lampAn 0.4 (Panel 186 statt 253),
+// milchglas 0 und durchblick 0.25, das Rückfenster bleibt also erhalten.
+// Quader 6.60 x 3.20 x 2.20 m statt 2.38 x 2.43 x 2.60: 6.60 m ist gut zwei Achsen
+// (Achsmass 2.94 m) offene Bürofläche, 3.20 m lichte Höhe unter 3.30 m Geschosshöhe,
+// 2.20 m Tiefe, damit der schräge Strahl die Rückwand noch erreicht.
+// Nachgemessen über alle 16 Frontfenster und az -0.85…+0.85:
+// Panel max 253 → 186, Panelfläche max 13.7 % → 9.5 %, Seitenwandanteil der linken
+// Achse 92/85 % → 0…15 % (die Fenster zeigen jetzt Rückwand, Schreibtisch, Monitore).
+const RAUM_B=6.60, RAUM_H=3.20, RAUM_T=2.20, RAUM_TYP='kind';
+
 // Büro-Fenster: dunkler Rahmen, breite Scheibe links, schmale rechts mit Kämpfer
 function officeWindow(parent,x,y,w,h,glassM){
   const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.04),mat(0x3a3e43,0.55,0.2));
   frame.position.set(x,y,0.05); parent.add(frame);           // dunkler Rahmen
-  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.12,h-0.12),interiorRoom(w-0.12,h-0.12,2.6,x*2.3+y*1.1,'office'));
+  // Scheibe (w-0.12) bleibt die Öffnung, der Raum dahinter ist bewusst GRÖSSER:
+  // ein Büro ist breiter und höher als sein Fenster.
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.12,h-0.12),
+    interiorRoom(RAUM_B,RAUM_H,RAUM_T,x*2.3+y*1.1,'office',0,RAUM_TYP));
   inter.position.set(x,y,0.09); parent.add(inter);           // 3D-Büroraum (Interior-Mapping)
   const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.08,h-0.08),glassM);
   glass.position.set(x,y,0.105); parent.add(glass);          // reflektierendes Glas
