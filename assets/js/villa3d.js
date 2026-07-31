@@ -315,7 +315,7 @@ function buildScene(){
     h.scale.set(1.7,0.30,1); h.position.set(x,0,z); scene.add(h);
   });
 
-  camera=new THREE.PerspectiveCamera(46,16/10,0.1,180);
+  camera=new THREE.PerspectiveCamera(46,16/10,0.5,180);
   applyCam(true);
 }
 

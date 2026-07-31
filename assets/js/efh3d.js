@@ -710,7 +710,16 @@ function buildScene(){
     rf.position.set(x,2.2,z); rf.rotation.y=Math.PI/4+s*0.4; scene.add(rf);
   });
 
-  camera=new THREE.PerspectiveCamera(46,16/10,0.1,180);
+  // Nahebene 0.10 -> 0.50. Die Tiefenauflösung eines perspektivischen Puffers ist
+  //   dz = z2 * (far-near) / (near * far * (2^bits - 1))
+  // und haengt damit fast nur an der NAHebene. Bei 0.10/180 loest der Puffer auf
+  // 25 m Gebaeudeabstand 0.37 mm auf, solange er 24 Bit hat — und 95 mm, wenn ein
+  // Geraet nur 16 Bit liefert. Bei 95 mm kippen Vorplatz, Kontaktschatten und
+  // Sockel bei jeder Kamerabewegung gegeneinander: genau das Flackern, das man
+  // auf dem Handy sieht und am Desktop nicht. 0.50 verbessert das um das
+  // Fuenffache und schneidet nichts weg — die Kamera kommt dem Gebaeude nie
+  // naeher als 10 m.
+  camera=new THREE.PerspectiveCamera(46,16/10,0.5,180);
   applyCam(true);
 }
 

@@ -207,7 +207,7 @@ function buildScene(){
     fo.scale.set(1,1.15,1); fo.position.set(x,3.6,z); fo.castShadow=true; scene.add(fo);
   });
 
-  camera=new THREE.PerspectiveCamera(46,16/10,0.1,220);
+  camera=new THREE.PerspectiveCamera(46,16/10,0.5,220);
   applyCam(true);
 }
 

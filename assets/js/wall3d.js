@@ -81,7 +81,7 @@ function buildScene(){
       const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,D),em);
       m.position.set(x,y,-D/2); m.castShadow=true; m.receiveShadow=true; panel.add(m); }); }
 
-  camera=new THREE.PerspectiveCamera(38,16/10,0.05,60);
+  camera=new THREE.PerspectiveCamera(38,16/10,0.4,60);
   applyCam(true);
 }
 function applyCam(hard){
