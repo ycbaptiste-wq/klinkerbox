@@ -1376,6 +1376,26 @@
       }, allP);
       return;
     }
+    // Nahansicht in 3D: das gemalte Fugenbild ohne Relief und Licht war ausgerechnet
+    // dort flach, wo der Kunde am genauesten hinschaut. Faellt auf die 2D-Leinwand
+    // zurueck, wenn WebGL nicht laeuft.
+    if(!sceneView && mix.length){
+      if(!window.Wall3D){ load3D('wall',host); return; }
+      if(window.Wall3D.available()){
+        stopAll3D('Wall3D');
+        if(!mixLayout.length) genLayout();
+        const allW=[]; mix.forEach(m=>allW.push(m.p));
+        ensureImgObjs(map=>{
+          if(mixView==='exterior'||mixView==='interior') return;   // Ansicht inzwischen gewechselt
+          const isFloor=(mixSurface==='floor');
+          const fam=mixShape||'brick', len=(fmtOf(mix[0]&&mix[0].p)||{}).len;
+          const div=isFloor?floorDiv(2.60,fam,len):facadeDiv(2.60,fam,len);
+          const cvw=zoneTexFull(activeZone,2000,1400,div,map);
+          if(window.Wall3D.mount(host)) window.Wall3D.setTextures(cvw,isFloor);
+        }, allW);
+        return;
+      }
+    }
     if(!sceneView) stopAll3D();                      // Muster-Ansicht braucht kein 3D
     if(!sceneView && !mixLayout.length) genLayout();
     let cv=host.querySelector('canvas.mixcanvas');
@@ -1405,6 +1425,7 @@
     }, allP);
   }
   // 3D-Module laden asynchron (ES-Module) → betroffene Ansicht neu rendern, sobald bereit
+  window.addEventListener('wall3d-ready',()=>{ if(mixView!=='exterior'&&mixView!=='interior') refreshWall(); });
   window.addEventListener('room3d-ready',()=>{ if(mixView==='interior') refreshWall(); });
   window.addEventListener('bungalow3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='bungalow') refreshWall(); });
   window.addEventListener('efh3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='efh') refreshWall(); });
@@ -1413,14 +1434,14 @@
   window.addEventListener('friesen3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='friesen') refreshWall(); });
   // three.js + Szenen-Module werden ERST beim Öffnen der jeweiligen 3D-Ansicht geladen
   // (nicht beim Seitenaufbau) → deutlich schnellerer Erststart.
-  const MOD3D={interior:'room3d',bungalow:'bungalow3d',efh:'efh3d',villa:'villa3d',office:'office3d',friesen:'friesen3d'};
-  const GLOB3D={interior:'Room3D',bungalow:'Bungalow3D',efh:'Efh3D',villa:'Villa3D',office:'Office3D',friesen:'Friesen3D'};
+  const MOD3D={wall:'wall3d',interior:'room3d',bungalow:'bungalow3d',efh:'efh3d',villa:'villa3d',office:'office3d',friesen:'friesen3d'};
+  const GLOB3D={wall:'Wall3D',interior:'Room3D',bungalow:'Bungalow3D',efh:'Efh3D',villa:'Villa3D',office:'Office3D',friesen:'Friesen3D'};
   const _load3D={}, L3D={de:'3D wird geladen …',fr:'Chargement 3D …',it:'Caricamento 3D …',en:'Loading 3D …'};
   function load3D(key,host){
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=85', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=87', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -1559,7 +1580,7 @@
   // Inaktive Module bekommen dispose() statt stop(): sonst bleibt pro angeschautem
   // Gebaeude ein WebGL-Kontext liegen und der Browser haengt sich nach ein paar Wechseln auf.
   function stopAll3D(except){
-    ['Room3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
+    ['Wall3D','Room3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
       const m=window[n]; if(!m || n===except) return;
       if(m.dispose) m.dispose(); else if(m.stop) m.stop();
     });
