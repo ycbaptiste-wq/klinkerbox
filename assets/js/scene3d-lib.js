@@ -671,6 +671,14 @@ vec2 klbParallax(vec2 uv){
 function patchParallax(m,depth){
   m.userData.klbPomDepth=depth;
   m.onBeforeCompile=sh=>{
+    // Ohne Karten gibt es im Shader weder roughnessMap noch vMapUv. Der eingesetzte
+    // Code zeigte dann auf undeklarierte Bezeichner, der Fragment-Shader kompilierte
+    // ueberhaupt nicht mehr, und three zeichnet ein Material mit kaputtem Programm
+    // gar nicht — die Flaeche war schlicht weg. Genau das passierte, sobald der
+    // Kunde den letzten Stein aus einer Zone entfernte: die Wand wurde durchsichtig.
+    // customProgramCacheKey unterscheidet bereits Tiefe>0 von 0, three baut das
+    // Programm also neu, sobald diese Pruefung greift.
+    if(!(m.userData.klbPomDepth>0) || !m.map || !m.roughnessMap) return;
     const marker='void main() {';
     if(sh.fragmentShader.indexOf(marker)<0) return;   // three-Version passt nicht → still ohne POM
     sh.uniforms.uPomDepth={value:m.userData.klbPomDepth||0};
@@ -706,7 +714,11 @@ export function applySurface(m,cv,opts){
     m.map=null;
     if(opts.fallback!=null) m.color.set(opts.fallback);
     m.roughness=0.95; m.envMapIntensity=opts.env!=null?opts.env:0.3;
-    m.userData.klbPomDepth=0; m.needsUpdate=true; return;
+    // klbShader mit auf null: die Referenz zeigte sonst auf ein Programm, das es
+    // nicht mehr gibt, und applySurface haette beim naechsten Aufruf versucht,
+    // dessen Uniform zu setzen.
+    m.userData.klbPomDepth=0; m.userData.klbShader=null;
+    m.needsUpdate=true; return;
   }
   const t=new THREE.CanvasTexture(cv);
   t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=aniso;

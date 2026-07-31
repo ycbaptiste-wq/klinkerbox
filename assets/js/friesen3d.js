@@ -4,7 +4,7 @@
 // dunkle Paneel-Tür mit Oberlicht, Buchshecken + Dünengräser, Marsch-Kulisse.
 // Fassade (EG + Giebel + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, grassTuft, LOWQ } from './scene3d-lib.js?v=53';
+import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, grassTuft, LOWQ } from './scene3d-lib.js?v=54';
 
 const MOBILE=LOWQ;
 
@@ -160,8 +160,27 @@ function buildScene(){
   const roofM=new THREE.MeshStandardMaterial({map:rT,roughness:0.85,side:THREE.DoubleSide});
   const roof=new THREE.Mesh(hipRoofGeo(HW+0.9,HD+0.9,RIDGE-HE,2.0),roofM);
   roof.position.set(0,HE+0.05,-HD/2); roof.castShadow=true; scene.add(roof);
-  const ridge=new THREE.Mesh(new THREE.BoxGeometry(4.3,0.14,0.24),mat(0x33363b,0.7));
+  // Der Firstziegel war 4.30 m lang, die Firstlinie der hipRoofGeo ist aber nur
+  // 2*ridgeHalf = 4.00 m. Links und rechts standen also je 15 cm frei in die Luft —
+  // genau die zwei Stellen, die der Nutzer markiert hat. Jetzt 3.96 m, damit die
+  // Enden sauber im Gratanschluss verschwinden statt darüber hinauszuragen.
+  const ridge=new THREE.Mesh(new THREE.BoxGeometry(3.96,0.14,0.24),mat(0x33363b,0.7));
   ridge.position.set(0,RIDGE+0.10,-HD/2); scene.add(ridge);
+  // Ein Walmdach hat neben dem First auch vier GRATE. Ohne Gratziegel stossen die
+  // vier Dachflächen als nackte Kante aneinander, und der First endet im Nichts —
+  // deshalb wirkten seine Enden auch mit korrekter Länge noch unfertig.
+  // Firstenden (world): (±2.00 | 7.65 | -4.50), Traufecken: (±6.95 | 3.05 | 0.45)
+  // und (±6.95 | 3.05 | -9.45). Gratlänge damit 8.38 m.
+  { const gratM=mat(0x33363b,0.7), up=new THREE.Vector3(0,1,0);
+    [[ 2.0, 6.95, 0.45],[ 2.0, 6.95,-9.45],[-2.0,-6.95, 0.45],[-2.0,-6.95,-9.45]]
+      .forEach(([xr,xe,ze])=>{
+        const a=new THREE.Vector3(xr,RIDGE+0.05,-HD/2), b=new THREE.Vector3(xe,HE+0.05,ze);
+        const v=new THREE.Vector3().subVectors(b,a);
+        const g=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.075,v.length(),8),gratM);
+        g.position.copy(a).add(b).multiplyScalar(0.5);
+        g.quaternion.setFromUnitVectors(up,v.clone().normalize());
+        g.castShadow=true; scene.add(g);
+      }); }
   const gutter=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,HW+0.7,12),mat(0xc9c7c2,0.4,0.6));
   gutter.rotation.z=Math.PI/2; gutter.position.set(0,HE+0.02,0.50); scene.add(gutter);
   [[-HW/2+0.12],[HW/2-0.12]].forEach(([x])=>{
@@ -248,8 +267,13 @@ function buildScene(){
       const sl=new THREE.Mesh(new THREE.BoxGeometry(len+0.08,0.08,dRd),roofM);
       sl.rotation.z=s*ang; sl.position.set(x - s*run/2, baseY+bh+gr/2, dRz);
       sl.castShadow=true; scene.add(sl);
-      const vb=new THREE.Mesh(new THREE.BoxGeometry(len+0.08,0.10,0.07),mat(0xf2f1ee,0.6));
-      vb.rotation.z=s*ang; vb.position.set(x - s*run/2, baseY+bh+gr/2+0.03, bz+bd/2+0.02); scene.add(vb);
+      // Der Ortgang war genauso lang wie die Dachplatte darüber (len+0.08) und
+      // ragte damit an der Traufe mit seiner hellen Schnittfläche frei heraus —
+      // gegen das dunkle Dach las sich das als weisser Splitter. Ein Ortgangbrett
+      // liegt UNTER der Dachkante und endet vor ihr: 12 cm kürzer, dann verschwindet
+      // das Ende im Schatten der Platte.
+      const vb=new THREE.Mesh(new THREE.BoxGeometry(len-0.04,0.10,0.07),mat(0xf2f1ee,0.6));
+      vb.rotation.z=s*ang; vb.position.set(x - s*(run/2-0.05), baseY+bh+gr/2+0.005, bz+bd/2+0.02); scene.add(vb);
     });
     // Gauben-Firstziegel (deckt die Naht der beiden Dachflächen)
     const dCap=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.10,dRd),mat(0x33363b,0.7));

@@ -6,7 +6,7 @@
 // streifendem Licht, das das Fugenrelief ueberhaupt erst sichtbar macht.
 // Drehbar wie die Gebaeudeansichten, nur mit engeren Grenzen.
 import * as THREE from './three.module.min.js';
-import { buildEnv, applySurface, disposeScene, addVignette, LOWQ } from './scene3d-lib.js?v=53';
+import { buildEnv, applySurface, disposeScene, addVignette, LOWQ } from './scene3d-lib.js?v=54';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -166,7 +166,11 @@ window.Wall3D={
   // ein Bodenbelag wird nicht an der Wand beurteilt.
   setTextures(cv,floor){
     if(!renderer) return;
-    applySurface(panelMat,cv,{fallback:0xdad6d1,rough:1.0,normalScale:0.95,
+    // Fallback bewusst hell, aber nicht Reinweiss: 0xecebe8 rendert unter dem
+    // streifenden Licht als weisse Wand und behaelt trotzdem eine lesbare
+    // Schattierung. Bei 0xffffff waere die belichtete Haelfte geklippt und die
+    // Flaeche haette ueberhaupt keine Form mehr.
+    applySurface(panelMat,cv,{fallback:0xf5f4f1,rough:1.0,normalScale:0.95,
       aniso:maxAniso,env:0.40,pom:POM});
     if(panel) panel.rotation.x=floor?-Math.PI/2:0;
     po=floor?0.98:1.515; az=floor?0.12:0.36; rad=radT=floor?2.55:2.15;

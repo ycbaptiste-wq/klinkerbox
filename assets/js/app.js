@@ -1330,7 +1330,11 @@
     clearTimeout(_rwT);
     const host=$('#mixPreview'); if(!host) return;
     const sceneView=(mixView==='exterior'||mixView==='interior');
-    if(!mix.length && !sceneView){ host.innerHTML=''; return; }
+    // Hier wurde die Vorschau bei leerer Auswahl schlicht GELEERT und zurueck-
+    // gesprungen. Danach stand im Vorschaubereich gar kein Bild mehr und man sah
+    // durch den Mixer hindurch auf die Seite dahinter — der Zustand "noch nichts
+    // gewaehlt" sah aus wie ein Fehler. Jetzt laeuft die Nahansicht weiter und
+    // zeigt ihre Flaeche mit dem hellen Fallback: eine schlichte weisse Wand.
     saveActive();
     // Innen-Ansicht: echter 3D-Wohnraum (WebGL).
     if(mixView==='interior'){
@@ -1404,10 +1408,19 @@
     // Nahansicht in 3D: das gemalte Fugenbild ohne Relief und Licht war ausgerechnet
     // dort flach, wo der Kunde am genauesten hinschaut. Faellt auf die 2D-Leinwand
     // zurueck, wenn WebGL nicht laeuft.
-    if(!sceneView && mix.length){
+    if(!sceneView){
       if(!window.Wall3D){ load3D('wall',host); return; }
       if(window.Wall3D.available()){
         stopAll3D('Wall3D');
+        // Ohne gewaehlten Stein lief die Nahansicht bisher in die 2D-Leinwand, und
+        // paintWall zeichnet bei leerem Mix nichts — die Flaeche blieb durchsichtig
+        // und man sah durch den Mixer hindurch auf die Seite dahinter. Jetzt steht
+        // eine schlichte helle Wand. Das ist der Zustand "noch nichts gewaehlt",
+        // und der muss aussehen wie eine Wand, nicht wie ein Loch.
+        if(!mix.length){
+          if(window.Wall3D.mount(host)) window.Wall3D.setTextures(null,mixSurface==='floor');
+          return;
+        }
         if(!mixLayout.length) genLayout();
         const allW=[]; mix.forEach(m=>allW.push(m.p));
         ensureImgObjs(map=>{
@@ -1466,7 +1479,7 @@
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=105', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=113', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -1721,11 +1734,12 @@
       </button>`).join('')}</div>`;
     // ---------- Tab «Steine»: Katalog-Grid direkt im Konfigurator ----------
     if(mixTab==='stones'){
-      if(!mix.length && !sceneView){
-        const sugs=getSuggestions();
-        prev.innerHTML=`<div class="mixsuggest"><div class="mixsuggest__h">${M.suggest_title[lang]}</div>${sugCards(sugs)}<p class="mixsuggest__hint">${M.empty[lang]}</p></div>`;
-        prev.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
-      } else refreshWall();
+      // Auch hier keine Vorschlagstafel mehr ANSTELLE der Vorschau: die Nahansicht
+      // zeigt jetzt in jedem Fall ihre Flaeche, ohne Auswahl eben eine schlichte
+      // helle Wand. Vorher ueberschrieb die Tafel den ganzen Vorschaubereich,
+      // dahinter stand kein Bild, und man sah durch den Mixer auf die Seite.
+      // Die Vorschlaege stehen weiterhin bereit — im Katalog gleich daneben.
+      refreshWall();
       const cats=mixSurface==='facade'?['mauer']:['pflaster','tonplatten'];
       let pool=P.filter(p=>cats.includes(p.cat));
       if(mixView==='exterior' && mixSurface==='floor') pool=pool.filter(p=>!(p.cat==='tonplatten'&&p.sub==='Indoor'));
@@ -1751,16 +1765,17 @@
     // ---------- Tab «Gestaltung» ----------
     if(!mix.length){
       const sugs=sceneView?surfSuggestions():getSuggestions();
-      if(sceneView){
-        refreshWall();
-        list.innerHTML=zonesHtml+`<div class="mixgrp"><div class="mixgrp__h">${surfName} · ${M.surf_add[lang]}</div>${sugCards(sugs)}</div>`;
-        bindZones();
-        list.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
-        return;
-      }
-      prev.innerHTML=`<div class="mixsuggest"><div class="mixsuggest__h">${M.suggest_title[lang]}</div>${sugCards(sugs)}<p class="mixsuggest__hint">${M.empty[lang]}</p></div>`;
-      list.innerHTML=zonesHtml; bindZones();
-      prev.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
+      // Auch die Nahansicht zeigt jetzt ihre Flaeche, statt sie durch die
+      // Vorschlagstafel zu ERSETZEN. Vorher ueberschrieb die Tafel den ganzen
+      // Vorschaubereich, dahinter stand kein Bild, und man sah durch den Mixer
+      // hindurch auf die Seite — genau das "Durchsichtige". Die Vorschlaege
+      // wandern in die Seitenleiste, dorthin also, wo sie in der Aussen- und
+      // Innenansicht ohnehin schon stehen.
+      refreshWall();
+      const kopf=sceneView?(surfName+' · '+M.surf_add[lang]):M.suggest_title[lang];
+      list.innerHTML=zonesHtml+`<div class="mixgrp"><div class="mixgrp__h">${kopf}</div>${sugCards(sugs)}</div>`;
+      bindZones();
+      list.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
       return;
     }
     refreshWall();
