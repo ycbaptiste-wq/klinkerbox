@@ -4,7 +4,7 @@
 // Portikus mit Freitreppe und Geländer, Buchs-Vorgarten mit Metallzaun.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, LOWQ } from './scene3d-lib.js?v=51';
+import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, LOWQ } from './scene3d-lib.js?v=52';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -12,11 +12,13 @@ let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
 let rafId=0, failed=false;
 
 const TARGET=new THREE.Vector3(0,3.6,1.2);
-let az=0.50, po=1.492, rad=27.0;    // Dreiviertel-Ansicht braucht mehr Abstand als frontal
+let az=0.50, po=1.6300, rad=22.0;   // Augpunkt 3.60-1.30=2.30 m statt 3.60+0.63=4.23 m
 let azT=az, poT=po, radT=rad;
-const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.32, PO_MAX=1.565, R_MIN=13, R_MAX=30;
+const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.32, PO_MAX=1.6572, R_MIN=12, R_MAX=28;
 
 const HW=13.0, HE=7.0, HD=10.0;                 // Breite, Traufe, Tiefe
+// Fugentiefe in UV-Einheiten, geometrisches Mittel beider Texturachsen bei 16 mm
+const POM_F=0.016/Math.sqrt(HW*HE), POM_S=0.016/Math.sqrt(HD*HE);
 const PL=0.75;                                   // Sockelhöhe
 
 function mat(c,rough,metal){ return new THREE.MeshStandardMaterial({color:c,roughness:rough!=null?rough:0.9,metalness:metal||0}); }
@@ -111,12 +113,12 @@ function buildScene(){
   scene.fog=new THREE.Fog(0xe9ebe9,55,110);
 
   { const sky=new THREE.Mesh(new THREE.SphereGeometry(85,48,28),
-      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.12,1.12,1.12),side:THREE.BackSide,fog:false}));
+      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(2.90,2.90,2.90),side:THREE.BackSide,fog:false}));
     scene.add(sky); }
 
-  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x7d8a70,0.30));   // Himmel oben, Rasengrün unten
+  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x8a9179,1.60));   // Himmel oben, Rasengrün unten
   scene.add(new THREE.AmbientLight(0xffffff,0.05));
-  const sun=new THREE.DirectionalLight(0xfff1d8,4.4);
+  const sun=new THREE.DirectionalLight(0xfff6ea,2.8);
   sun.position.set(20,14,11);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,1);
   sun.castShadow=true;
@@ -323,7 +325,7 @@ function ensureRenderer(){
     renderer.shadowMap.type=MOBILE?THREE.BasicShadowMap:THREE.PCFShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure=0.86;
+    renderer.toneMappingExposure=1.05;
     maxAniso=renderer.capabilities.getMaxAnisotropy()||8;
     buildScene();
     const el=renderer.domElement;
@@ -349,7 +351,7 @@ function sizeToHost(){
   renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
-  camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+  camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
   camera.updateProjectionMatrix();
 }
 // rAF-Loop + Timer-Watchdog: rendert auch weiter, wenn der Browser rAF drosselt
@@ -364,7 +366,7 @@ function startLoops(){
 // Fugentiefe in UV-Einheiten (~14 mm auf die von der Textur abgedeckte Breite)
 function applyTex(m,cv,fallback,rough,ns,pom){
   applySurface(m,cv,{fallback,rough,normalScale:ns!=null?ns:0.9,aniso:maxAniso,
-    env:cv?0.20:0.3, pom:pom||0});
+    env:cv?0.40:0.3, pom:pom||0});
 }
 window.Villa3D={
   available(){ return !failed; },
@@ -391,9 +393,9 @@ window.Villa3D={
   },
   setTextures(facadeCv,sideCv,floorCv){
     if(!renderer) return;
-    applyTex(facadeMat,facadeCv,0xdad6d1);
-    applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce);
-    applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce);
+    applyTex(facadeMat,facadeCv,0xdad6d1,1.0,0.9,POM_F);
+    applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce,1.0,0.9,POM_S);
+    applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce,1.0,0.9,POM_S);
     applyTex(floorMat,floorCv,0xd0cdc8,0.8,0.55);
   },
   snapshot(w,h){
@@ -401,13 +403,13 @@ window.Villa3D={
     const pr=renderer.getPixelRatio(), sz=new THREE.Vector2(); renderer.getSize(sz);
     renderer.setPixelRatio(1); renderer.setSize(w,h,false);
     camera.aspect=w/h;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     const url=renderer.domElement.toDataURL('image/png');
     renderer.setPixelRatio(pr); renderer.setSize(sz.x,sz.y,false);
     camera.aspect=sz.x/sz.y;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     return url;

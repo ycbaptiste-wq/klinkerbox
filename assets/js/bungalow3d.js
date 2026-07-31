@@ -4,7 +4,7 @@
 // Flachdach mit Attika, Vordach mit Stütze, dunkle Holztür, Glasfront,
 // Pflanzkübel, Kiesbeete, Gartenmauern, Himmel. Orbit + Zoom wie innen.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, grassTuft, LOWQ } from './scene3d-lib.js?v=51';
+import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, grassTuft, LOWQ } from './scene3d-lib.js?v=52';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -12,9 +12,9 @@ let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
 let rafId=0, failed=false;
 
 const TARGET=new THREE.Vector3(0,1.55,2.2);
-let az=0.48, po=1.487, rad=17.0;    // Dreiviertel-Ansicht braucht mehr Abstand als frontal
+let az=0.48, po=1.5208, rad=15.0;   // Augpunkt 1.55+0.75=2.30 m
 let azT=az, poT=po, radT=rad;
-const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.30, PO_MAX=1.565, R_MIN=8.5, R_MAX=20;
+const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.30, PO_MAX=1.5941, R_MIN=8.5, R_MAX=20;
 
 function mat(c,rough,metal){ return new THREE.MeshStandardMaterial({color:c,roughness:rough!=null?rough:0.9,metalness:metal||0}); }
 function noiseTex(base,vari,w,h){
@@ -68,13 +68,13 @@ function buildScene(){
 
   // Himmel: grosse Kuppel, teilsonnig mit weichen Quellwolken
   { const sky=new THREE.Mesh(new THREE.SphereGeometry(70,32,18),
-      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.12,1.12,1.12),side:THREE.BackSide,fog:false}));
+      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(2.90,2.90,2.90),side:THREE.BackSide,fog:false}));
     scene.add(sky); }
 
   // Licht: sonniger Tag — kühles Himmelslicht + warme Sonne von links vorn
-  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x7d8a70,0.30));   // Himmel oben, Rasengrün unten
+  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x8a9179,1.60));   // Himmel oben, Rasengrün unten
   scene.add(new THREE.AmbientLight(0xffffff,0.05));
-  const sun=new THREE.DirectionalLight(0xfff1d8,4.4);
+  const sun=new THREE.DirectionalLight(0xfff6ea,2.8);
   sun.position.set(14,9.6,8);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,2);
   sun.castShadow=true;
@@ -301,7 +301,7 @@ function ensureRenderer(){
     renderer.shadowMap.type=MOBILE?THREE.BasicShadowMap:THREE.PCFShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure=0.86;
+    renderer.toneMappingExposure=1.05;
     maxAniso=renderer.capabilities.getMaxAnisotropy()||8;
     buildScene();
     const el=renderer.domElement;
@@ -327,7 +327,7 @@ function sizeToHost(){
   renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
-  camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+  camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
   camera.updateProjectionMatrix();
 }
 // rAF-Loop + Timer-Watchdog: rendert auch weiter, wenn der Browser rAF drosselt
@@ -341,7 +341,7 @@ function startLoops(){
 // Fugentiefe in UV-Einheiten (~14 mm auf die von der Textur abgedeckte Breite)
 function applyTex(m,cv,fallback,rough,ns,pom){
   applySurface(m,cv,{fallback,rough,normalScale:ns!=null?ns:0.9,aniso:maxAniso,
-    env:cv?0.20:0.3, pom:pom||0});
+    env:cv?0.40:0.3, pom:pom||0});
 }
 window.Bungalow3D={
   available(){ return !failed; },
@@ -369,9 +369,9 @@ window.Bungalow3D={
   // Fassade vorne, Fassade Seiten, Terrasse — je ein Canvas (null → neutral)
   setTextures(facadeCv,sideCv,floorCv){
     if(!renderer) return;
-    applyTex(facadeMat,facadeCv,0xdad6d1);
-    applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce);
-    applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce);
+    applyTex(facadeMat,facadeCv,0xdad6d1,1.0,0.9,0.0024);
+    applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce,1.0,0.9,0.0031);
+    applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce,1.0,0.9,0.0031);
     applyTex(floorMat,floorCv,0xd0cdc8,0.8,0.55);
   },
   snapshot(w,h){
@@ -379,13 +379,13 @@ window.Bungalow3D={
     const pr=renderer.getPixelRatio(), sz=new THREE.Vector2(); renderer.getSize(sz);
     renderer.setPixelRatio(1); renderer.setSize(w,h,false);
     camera.aspect=w/h;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     const url=renderer.domElement.toDataURL('image/png');
     renderer.setPixelRatio(pr); renderer.setSize(sz.x,sz.y,false);
     camera.aspect=sz.x/sz.y;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     return url;
