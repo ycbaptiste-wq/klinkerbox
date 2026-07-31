@@ -13,16 +13,20 @@ let renderer=null, scene=null, camera=null, host=null, ro=null;
 let panel=null, panelMat=null, maxAniso=8;
 let rafId=0, failed=false;
 
-// Wandstueck 2.60 x 1.82 m — gross genug fuer mehrere Schichten, klein genug,
-// dass der einzelne Stein noch als Stein liest.
-const PW=2.60, PH=1.82;
+// Wandstueck 3.20 x 2.24 m. Bewusst groesser als der sichtbare Ausschnitt: bei
+// der schraegen Standardansicht blitzte sonst am linken Rand der Hintergrund
+// durch. Seitenverhaeltnis 1.4286 = das der Textur (2000 x 1400).
+const PW=3.20, PH=2.24;
 // Fester Blickwinkel — die Nahansicht muss nicht drehbar sein, sie soll das
 // PROFIL zeigen. Leicht schräg und leicht von oben: nur so wirft die Fuge einen
 // Schatten und der Stein bekommt eine sichtbare Dicke.
+// Standardabstand so nah, dass die Wand das Bild FÜLLT — kein Musterbrett vor
+// Hintergrund, sondern der Blick, den man an einer echten Wand hätte.
+// Herauszoomen bis zum ganzen Stück bleibt möglich.
 const TARGET=new THREE.Vector3(0,0,0);
-let az=0.30, po=1.485, rad=3.05;
+let az=0.36, po=1.515, rad=2.15;
 let radT=rad;                       // nur Zoom bleibt, kein Drehen
-const R_MIN=1.60, R_MAX=4.20;
+const R_MIN=1.35, R_MAX=4.20;
 let needsRender=true;
 
 // Fugentiefe in UV-Einheiten: 16 mm auf die Flaeche, die die Karte abdeckt
@@ -165,7 +169,7 @@ window.Wall3D={
     applySurface(panelMat,cv,{fallback:0xdad6d1,rough:1.0,normalScale:0.95,
       aniso:maxAniso,env:0.40,pom:POM});
     if(panel) panel.rotation.x=floor?-Math.PI/2:0;
-    po=floor?0.95:1.485; az=floor?0.10:0.30; rad=radT=floor?3.3:3.05;
+    po=floor?0.98:1.515; az=floor?0.12:0.36; rad=radT=floor?2.55:2.15;
     applyCam(true); needsRender=true;
   },
   snapshot(w,h){

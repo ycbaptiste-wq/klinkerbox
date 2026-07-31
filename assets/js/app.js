@@ -1389,7 +1389,7 @@
           if(mixView==='exterior'||mixView==='interior') return;   // Ansicht inzwischen gewechselt
           const isFloor=(mixSurface==='floor');
           const fam=mixShape||'brick', len=(fmtOf(mix[0]&&mix[0].p)||{}).len;
-          const div=isFloor?floorDiv(2.60,fam,len):facadeDiv(2.60,fam,len);
+          const div=isFloor?floorDiv(3.20,fam,len):facadeDiv(3.20,fam,len);   // = PW in wall3d.js
           const cvw=zoneTexFull(activeZone,2000,1400,div,map);
           if(window.Wall3D.mount(host)) window.Wall3D.setTextures(cvw,isFloor);
         }, allW);
@@ -1441,7 +1441,7 @@
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=89', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=91', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
