@@ -405,13 +405,16 @@ function buildScene(){
       b.position.set(x1,0.67,KZ-rl*i/nS); beds.add(b);
     }
     post(x0,KZ); post(x1,KZ); post(x1,ZEND);
-    // Randstein 0.14 breit, Oberkante 0.12 über dem Rasen, Fuss auf -0.06 (Rasen -0.01)
-    const kf=new THREE.Mesh(new THREE.BoxGeometry(run+0.07,0.18,0.14),kerbM);
-    kf.position.set(cx+s*0.035,0.03,KZ); kf.receiveShadow=true; beds.add(kf);
-    // endet an der HINTERkante des vorderen Randsteins (z=8.20): läge er bis 8.34,
-    // wären beide Deckflächen auf y=0.12 deckungsgleich → z-Fighting am Eckstück
-    const ks=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.18,KZ-0.07-1.60),kerbM);
-    ks.position.set(x1,0.03,(KZ-0.07+1.60)/2); ks.receiveShadow=true; beds.add(ks);
+    // Randstein: Oberkante 0.12 über dem Rasen, Fuss auf -0.06 (Rasen liegt auf -0.01).
+    // 0.20 breit und NICHT 0.14: bei 0.14 lägen seine Seitenflächen exakt auf denen des
+    // 0.14er Pfostens — im Test flimmerte dort ein Dither-Keil. Mit 0.20 bleibt 0.03
+    // Luft je Seite, und der Stein greift 0.03 über die Pflasterkante, Fuge zu.
+    const kf=new THREE.Mesh(new THREE.BoxGeometry(run+0.10,0.18,0.20),kerbM);
+    kf.position.set(cx+s*0.05,0.03,KZ); kf.receiveShadow=true; beds.add(kf);
+    // endet an der Hinterkante des vorderen Steins (8.17), sonst zwei deckungsgleiche
+    // Deckflächen auf y=0.12 im Eckstück
+    const ks=new THREE.Mesh(new THREE.BoxGeometry(0.20,0.18,KZ-0.10-1.60),kerbM);
+    ks.position.set(x1,0.03,(KZ-0.10+1.60)/2); ks.receiveShadow=true; beds.add(ks);
     groundContact(cx,KZ,run,0.55,beds);
     // Strauchband setzt die Grundstücksgrenze dort fort, wo der Zaun aufhört
     bushClump(s*8.30,ZEND-0.30,0.50,0x4e603f,beds);
