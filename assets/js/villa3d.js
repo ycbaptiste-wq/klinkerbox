@@ -172,7 +172,9 @@ function buildScene(){
   const rT=roofTex(); rT.repeat.set(7,3);
   const roofM=new THREE.MeshStandardMaterial({map:rT,roughness:0.85,side:THREE.DoubleSide});
   const roof=new THREE.Mesh(hipRoofGeo(HW+0.9,HD+0.9,2.95,(HW-HD)/2+0.4),roofM);
-  roof.position.set(0,HE+0.34,-HD/2); roof.castShadow=true; scene.add(roof);
+  // receiveShadow war aus: die Gaube warf keinen Schatten auf die Dachfläche und
+  // wirkte dadurch aufgeklebt. Sonneneinfall 49° zur Dachnormalen → kein Acne-Risiko.
+  roof.position.set(0,HE+0.34,-HD/2); roof.castShadow=true; roof.receiveShadow=true; scene.add(roof);
   // ---- Gaube (Schleppgaube) ----
   // PROBLEM 1: BoxGeometry(dW,1.90,dBz-dFz) bekam dBz-dFz = -2.60-(-0.60) = -2.00,
   // also eine NEGATIVE Tiefe. Three.js spiegelt die Box dann an z, alle Umlaufsinne

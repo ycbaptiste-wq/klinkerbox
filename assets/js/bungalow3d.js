@@ -151,11 +151,36 @@ function buildScene(){
   // Tür (dunkles Holz) + Seitenfenster + Oberlicht
   const doorFrame=new THREE.Mesh(new THREE.BoxGeometry(2.9,2.55,0.10),mat(0x2e3134,0.5,0.2));
   doorFrame.position.set(-3.9,1.275,0.05); scene.add(doorFrame);
-  const door=new THREE.Mesh(new THREE.BoxGeometry(1.02,2.28,0.06),mat(0x3a2b22,0.55));
-  door.position.set(-3.72,1.14,0.115); scene.add(door);
-  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.30,8),mat(0xb9bcbe,0.3,0.8));
-  handle.position.set(-3.30,1.10,0.16); handle.rotation.x=Math.PI/2; scene.add(handle);
   const glassM=glassMaterial();
+  // Das Blatt hatte mit 0x3a2b22 eine lineare Albedo von rund 0.02 — dasselbe
+  // Problem, das am Einfamilienhaus gemessen wurde (Blatt 25/255 gegen 106/255
+  // Fassade, also als Bauteil gar nicht lesbar). Dazu ein WAAGRECHTER Griffstab
+  // von 30 cm, der quer aus dem Blatt ragte, und ein Blatt von nur 60 mm Dicke.
+  // Aufgeteilt in zwei Stollen mit echtem Lichtausschnitt dazwischen: das Glas
+  // liefert den Materialwechsel, den eine blosse Farbstufe bei diffusem Licht
+  // nicht hergibt.
+  { const DZ=0.115, DT=0.08, yC=1.14, hh=2.28;
+    const blattM=new THREE.MeshStandardMaterial({color:0x4a3a2c,roughness:0.5,envMapIntensity:1.0});
+    // linker Stollen 0.61, Lichtausschnitt 0.10, rechter Stollen 0.31 = 1.02 gesamt
+    [[-3.925,0.61],[-3.365,0.31]].forEach(([x,w])=>{
+      const d=new THREE.Mesh(new THREE.BoxGeometry(w,hh,DT),blattM);
+      d.position.set(x,yC,DZ); d.castShadow=true; d.receiveShadow=true; scene.add(d); });
+    // Ausschnitt: dunkle Laibung dahinter, Glas davor — sonst sieht man durch die Tuer
+    const nis=new THREE.Mesh(new THREE.BoxGeometry(0.10,1.70,0.03),mat(0x22201d,0.9));
+    nis.position.set(-3.57,1.20,DZ-0.02); scene.add(nis);
+    const lg=new THREE.Mesh(new THREE.PlaneGeometry(0.10,1.70),glassM);
+    lg.position.set(-3.57,1.20,DZ+DT/2+0.004); scene.add(lg);
+    // Stossgriff senkrecht, 28 mm Rohr, 1.40 m lang, auf zwei Stuetzen mit 55 mm
+    // Abstand zum Blatt — vorher schwebte ein Querstab ohne jede Halterung.
+    const gM=mat(0xb9bcbe,0.35,0.9);
+    const zF=DZ+DT/2;
+    const bar=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.014,1.40,12),gM);
+    bar.position.set(-3.365,1.20,zF+0.055); bar.castShadow=true; scene.add(bar);
+    [0.60,1.80].forEach(y=>{ const st=new THREE.Mesh(new THREE.CylinderGeometry(0.011,0.011,0.055,8),gM);
+      st.rotation.x=Math.PI/2; st.position.set(-3.365,y,zF+0.0275); scene.add(st); });
+    // Schwelle: das Blatt endete vorher frei ueber dem Podest
+    const sw=new THREE.Mesh(new THREE.BoxGeometry(1.10,0.025,0.14),mat(0xa8acae,0.42,0.55));
+    sw.position.set(-3.72,0.012,DZ); sw.receiveShadow=true; scene.add(sw); }
   [[-4.62,1.14,0.5,2.28],[-2.98,1.14,0.42,2.28],[-3.9,2.43,2.7,0.22]].forEach(([x,y,w,h])=>{
     const g=new THREE.Mesh(new THREE.PlaneGeometry(w,h),glassM);
     g.position.set(x,y,0.105); scene.add(g);
