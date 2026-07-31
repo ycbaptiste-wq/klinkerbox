@@ -111,6 +111,35 @@ function woodTex(){
     c.bezierCurveTo(170,y+(Math.random()*14-7),340,y+(Math.random()*14-7),512,y+(Math.random()*10-5)); c.stroke(); }
   const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace; return t;
 }
+// Travertin: feine Poren und Wolken.
+// Der Couchtisch war eine einfarbige helle Fläche ohne jede Karte. Sein
+// Schattierungsverlauf lief damit über nur wenige 8-Bit-Stufen, und die wurden als
+// Bänder sichtbar — genau die Kante, die der Nutzer auf dem Tisch markiert hat.
+// Das ist kein Geometrie- und kein Normalenfehler, sondern Quantisierung: ohne
+// Post-Processing gibt es dagegen kein Dithering, wohl aber eine Textur. Eine
+// feine Struktur bricht die Stufen auf UND lässt den Tisch wie Stein aussehen
+// statt wie lackiertes Plastik.
+function stoneTex(){
+  const cv=document.createElement('canvas'); cv.width=cv.height=512;
+  const c=cv.getContext('2d');
+  c.fillStyle='#d8cfc2'; c.fillRect(0,0,512,512);
+  for(let i=0;i<26;i++){                       // Wolken
+    c.fillStyle='rgba('+(200+Math.random()*40|0)+','+(190+Math.random()*40|0)+',176,0.10)';
+    c.beginPath(); c.ellipse(Math.random()*512,Math.random()*512,40+Math.random()*90,
+      22+Math.random()*50,Math.random()*3.1,0,7); c.fill();
+  }
+  const id=c.getImageData(0,0,512,512);        // Poren
+  for(let i=0;i<id.data.length;i+=4){ const v=(Math.random()-0.5)*17;
+    id.data[i]+=v; id.data[i+1]+=v; id.data[i+2]+=v; }
+  c.putImageData(id,0,0);
+  for(let i=0;i<260;i++){                      // typische Travertin-Löcher
+    c.fillStyle='rgba(150,140,126,'+(0.10+Math.random()*0.16).toFixed(2)+')';
+    c.beginPath(); c.ellipse(Math.random()*512,Math.random()*512,1+Math.random()*3.4,
+      0.8+Math.random()*1.8,Math.random()*3.1,0,7); c.fill();
+  }
+  const t=new THREE.CanvasTexture(cv); t.colorSpace=THREE.SRGBColorSpace;
+  t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
+}
 // weicher runder Kontaktschatten
 function shadowBlob(w,d,strength){
   const cv=document.createElement('canvas'); cv.width=256; cv.height=256;
@@ -355,13 +384,20 @@ function buildScene(){
   });
   // Sitz- und Rückenpolster jetzt als gewölbte Kissen. P=3.6 hält sie noch
   // deutlich rechteckig — ein Sitzpolster ist strammer gefüllt als ein Zierkissen.
+  // Die Kissen standen bei 0.845 Abstand und 0.84/0.85 Breite praktisch auf Stoss.
+  // Ein Superellipsoid zieht sich zu den Kanten hin aber ein — zwischen zwei
+  // Nachbarn oeffnete sich dadurch ein linsenfoermiger Spalt, der nach oben und
+  // unten breiter wird, und dahinter sah man auf den dunklen Sofakoerper. Genau
+  // die zwei Stellen hat der Nutzer markiert. 0.89 statt 0.84 bei gleichem Abstand
+  // gibt 4.5 cm Ueberdeckung: die eingezogenen Kanten schieben sich ineinander,
+  // wie bei echten Polstern, die aneinander gedrueckt sind.
   for(let i=-1;i<=1;i++){
-    const c=new THREE.Mesh(pillowGeo(0.84,0.15,0.86,6,3.4),fabricLite);
+    const c=new THREE.Mesh(pillowGeo(0.89,0.15,0.86,6,3.4),fabricLite);
     c.position.set(i*0.845,0.30,0.02); c.castShadow=true; c.receiveShadow=true; sofa.add(c);
   }
   for(let i=-1;i<=1;i++){
-    const b=new THREE.Mesh(pillowGeo(0.85,0.20,0.50,5,3.2),fabricLite);
-    b.rotation.x=-1.45; b.position.set(i*0.845,0.58,-SD/2+0.18); b.castShadow=true; b.receiveShadow=true; sofa.add(b);
+    const b=new THREE.Mesh(pillowGeo(0.90,0.20,0.52,5,3.2),fabricLite);
+    b.rotation.x=-1.45; b.position.set(i*0.845,0.55,-SD/2+0.20); b.castShadow=true; b.receiveShadow=true; sofa.add(b);
   }
   [-1,1].forEach(s=>{
     const a=new THREE.Mesh(rbox(0.22,SD,0.36,0.05,0.05),fabric);
@@ -406,16 +442,33 @@ function buildScene(){
   // zwischen Sofa und Wand. Die Einzelteile behalten ihre gewachsenen Koordinaten
   // zueinander — nur die Gruppe wird versetzt.
   const cofG=new THREE.Group(); cofG.position.set(0.15,0,-0.15); scene.add(cofG);
-  const table=new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.34,48),
-    new THREE.MeshStandardMaterial({color:0xd8cfc2,roughness:0.6,envMapIntensity:0.55}));
+  // 64 statt 48 Segmente: der Tisch steht 1.4 m vor der Linse und ist mit 0.92 m
+  // Durchmesser das groesste einfarbige Objekt im Bild — bei 48 Segmenten sind die
+  // Facetten am Rand einzeln abzaehlbar. Dazu die Travertin-Karte, die das Banding
+  // im Verlauf aufbricht (siehe stoneTex).
+  const travT=stoneTex(); travT.repeat.set(2,1);
+  const travB=stoneTex(); travB.repeat.set(2,1);
+  const table=new THREE.Mesh(new THREE.CylinderGeometry(0.46,0.46,0.34,64),
+    new THREE.MeshStandardMaterial({map:travT,bumpMap:travB,bumpScale:0.06,
+      roughness:0.62,envMapIntensity:0.55}));
   table.position.set(-0.4,0.17,2.7); table.castShadow=true; table.receiveShadow=true; cofG.add(table);
   const tShadow=shadowBlob(1.4,1.4,0.3); tShadow.position.set(-0.4,0.0045,2.7); cofG.add(tShadow);
   [[0x7c4436,0.30],[0x33404a,0.27]].forEach(([c,wd],i)=>{
     const b=new THREE.Mesh(new THREE.BoxGeometry(wd,0.03,wd-0.06),mat(c,0.7));
     b.position.set(-0.55,0.34+0.033+i*0.032,2.58); b.rotation.y=0.3-i*0.4; b.castShadow=true; cofG.add(b);
   });
-  const bowlPts=[]; [[0.002,0],[0.075,0.008],[0.105,0.05],[0.092,0.085]].forEach(([r,y])=>bowlPts.push(new THREE.Vector2(r,y)));
-  const bowl=new THREE.Mesh(new THREE.LatheGeometry(bowlPts,26),mat(0x27292c,0.5,0.2));
+  // Die Schale hatte kein Innen. Das Lathe-Profil lief von der Mitte nach aussen
+  // und hoerte am Rand auf — die Drehflaeche war damit einseitig, man sah von oben
+  // durch sie hindurch auf die Tischplatte, und weil FrontSide von innen wegge-
+  // cullt wird, blieb ein schwarzer Klecks. Jetzt laeuft das Profil ueber den Rand
+  // und innen wieder hinunter: dadurch entsteht eine echte Wandstaerke von 4 mm,
+  // der Rand faengt Licht und die Schale liest sich als Schale.
+  const bowlPts=[[0.002,0],[0.062,0.004],[0.098,0.038],[0.108,0.082],   // aussen hoch
+                 [0.104,0.086],                                          // Rand
+                 [0.094,0.080],[0.086,0.040],[0.050,0.010],[0.002,0.008]] // innen zurueck
+    .map(([r,y])=>new THREE.Vector2(r,y));
+  const bowl=new THREE.Mesh(new THREE.LatheGeometry(bowlPts,30),
+    new THREE.MeshStandardMaterial({color:0x27292c,roughness:0.5,metalness:0.2,side:THREE.DoubleSide}));
   bowl.position.set(-0.2,0.34,2.86); bowl.castShadow=true; cofG.add(bowl);
   const tray=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.02,0.22),brass(0.4));
   tray.position.set(-0.5,0.35,2.82); tray.castShadow=true; cofG.add(tray);
@@ -440,13 +493,31 @@ function buildScene(){
   sb.position.set(2.0,0,0.4); scene.add(sb);
   const sbShadow=shadowBlob(2.0,0.9,0.3); sbShadow.position.set(2.0,0.004,0.4); scene.add(sbShadow);
   // Tischlampe auf dem Sideboard (leuchtet)
-  const tlBody=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.055,0.30,18),new THREE.MeshStandardMaterial({color:0xcabfb0,roughness:0.5,metalness:0.2}));
-  tlBody.position.set(1.5,0.72,0.4); scene.add(tlBody);
-  const tlShade=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.145,0.18,28,1,true),
-    new THREE.MeshStandardMaterial({color:0xf3ead8,emissive:0xffe1a8,emissiveIntensity:1.7,roughness:0.9,side:THREE.DoubleSide}));
-  tlShade.position.set(1.5,0.95,0.4); scene.add(tlShade);
-  const tlGlow=new THREE.Mesh(new THREE.CircleGeometry(0.1,20),new THREE.MeshBasicMaterial({color:0xffe9c4}));
-  tlGlow.rotation.x=Math.PI/2; tlGlow.position.set(1.5,0.875,0.4); scene.add(tlGlow);
+  // Der Schirm war ein OFFENER Zylinder (openEnded), man sah oben in ihn hinein
+  // und durch ihn hindurch — es fehlten Deckel und Fassung, und der Fuss war ein
+  // blosser Kegelstumpf ohne Absatz. Jetzt Teller, Schaft, Absatz, geschlossene
+  // Schirmoberseite mit sichtbarer Fassung. Masse einer echten Tischleuchte:
+  // Schirm 0.30 m Durchmesser, Gesamthoehe 0.50 m ueber der Sideboardplatte (0.60).
+  { const LX=1.5, LZ=0.4, LY=0.60;                       // Standflaeche = Sideboard-Oberkante
+    const messing=new THREE.MeshStandardMaterial({color:0xb08d57,roughness:0.35,metalness:0.9,envMapIntensity:1.0});
+    const teller=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.085,0.018,24),messing);
+    teller.position.set(LX,LY+0.009,LZ); teller.castShadow=true; scene.add(teller);
+    const schaft=new THREE.Mesh(new THREE.CylinderGeometry(0.021,0.030,0.235,20),messing);
+    schaft.position.set(LX,LY+0.135,LZ); schaft.castShadow=true; scene.add(schaft);
+    const fassung=new THREE.Mesh(new THREE.CylinderGeometry(0.030,0.030,0.045,16),
+      new THREE.MeshStandardMaterial({color:0x6f6a63,roughness:0.55,metalness:0.4}));
+    fassung.position.set(LX,LY+0.275,LZ); scene.add(fassung);
+    // Schirmmantel: nach unten weiter, wie ein gespannter Stoffschirm
+    const tlShade=new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.150,0.185,28,1,true),
+      new THREE.MeshStandardMaterial({color:0xf3ead8,emissive:0xffe1a8,emissiveIntensity:1.7,
+        roughness:0.9,side:THREE.DoubleSide}));
+    tlShade.position.set(LX,LY+0.345,LZ); tlShade.castShadow=true; scene.add(tlShade);
+    // Deckel: ohne ihn schaut man von oben in die Leuchte hinein
+    const deckel=new THREE.Mesh(new THREE.RingGeometry(0.031,0.105,28),
+      new THREE.MeshStandardMaterial({color:0xe7dcc6,roughness:0.9,side:THREE.DoubleSide}));
+    deckel.rotation.x=-Math.PI/2; deckel.position.set(LX,LY+0.4375,LZ); scene.add(deckel);
+    const tlGlow=new THREE.Mesh(new THREE.CircleGeometry(0.14,24),new THREE.MeshBasicMaterial({color:0xffe9c4}));
+    tlGlow.rotation.x=Math.PI/2; tlGlow.position.set(LX,LY+0.254,LZ); scene.add(tlGlow); }
   // Die Tischlampe stand 0.50 m vor der Klinkerwand und lieferte dort das 25-fache
   // der Sonne — ein weisses Loch von 242/255 ueber rund 0.6 m Radius, in dem weder
   // Stein noch Fuge noch Farbe lesbar waren. Der einzige Punkt der Szene, an dem das
@@ -457,8 +528,16 @@ function buildScene(){
   [[0x6e5a43,0.30],[0x394049,0.27]].forEach(([c,wd],i)=>{
     const bk=new THREE.Mesh(new THREE.BoxGeometry(wd,0.035,0.20),mat(c,0.7)); bk.position.set(2.45,0.55+0.02+i*0.037,0.42); bk.rotation.y=0.1; bk.castShadow=true; scene.add(bk);
   });
-  const scArc=new THREE.Mesh(new THREE.TorusGeometry(0.09,0.02,12,24,Math.PI),mat(0x2b2c2f,0.5,0.2));
-  scArc.position.set(2.75,0.66,0.42); scene.add(scArc);
+  // Die Skulptur war ein HALBER Torus (Bogenwinkel PI), der auf seinen beiden
+  // offenen Schnittflaechen stand — von der Kamera aus zwei Rohrenden, die auf dem
+  // Sideboard aufsetzen, ohne dass etwas sie haelt. Jetzt ein geschlossener Ring
+  // auf einem Sockel: dieselbe Formidee, aber ein Gegenstand, den es geben kann.
+  { const SX=2.62, SZ=0.42, SY=0.60;                     // Sideboard-Oberkante
+    const stein=new THREE.MeshStandardMaterial({color:0x2b2c2f,roughness:0.5,metalness:0.2});
+    const sockel=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.022,0.09),stein);
+    sockel.position.set(SX,SY+0.011,SZ); sockel.castShadow=true; scene.add(sockel);
+    const ring=new THREE.Mesh(new THREE.TorusGeometry(0.082,0.016,14,36),stein);
+    ring.position.set(SX,SY+0.104,SZ); ring.rotation.y=0.22; ring.castShadow=true; scene.add(ring); }
   const svase=new THREE.Mesh(new THREE.LatheGeometry(
     [[0.001,0],[0.06,0.01],[0.085,0.06],[0.05,0.14],[0.055,0.17]].map(([r,y])=>new THREE.Vector2(r,y)),24),mat(0xb8ada0,0.8));
   svase.position.set(2.15,0.55,0.4); scene.add(svase);
