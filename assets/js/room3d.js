@@ -175,12 +175,17 @@ function buildScene(){
   // hat 7000–12000 K und muss sich vom 2600-K-Kunstlicht absetzen können. Die
   // Aufhellung von unten kommt von einer TONPLATTE, ist also warm — das ist die
   // Reflexion, die in einem echten Raum die Unterseiten der Polster einfärbt.
-  scene.add(new THREE.HemisphereLight(0xd2e2f4,0xa07354,0.55));
-  scene.add(new THREE.AmbientLight(0xffffff,0.06));
+  scene.add(new THREE.HemisphereLight(0xd2e2f4,0xa07354,0.92));
+  scene.add(new THREE.AmbientLight(0xffffff,0.09));
   // 4.8 statt 2.15: darüber verliert der Klinker auf der rechten Wand (die zum
   // Fenster schaut, N·L = 0.86) die Farbe, darunter fällt der Wandkontrast unter 3:1.
-  const sun=new THREE.DirectionalLight(0xfff1da,4.8);
-  sun.position.set(-7,4.0,4.6); sun.target.position.set(1.4,0.3,1.4);
+  // Sonnenhöhe von 22.4° auf 13.1° gesenkt. Bei 22.4° reicht das Licht durch ein
+  // 3.00 m hohes Fenster nur bis 0.18 m Höhe an die 6.40 m entfernte rechte Wand —
+  // die grösste Produktfläche des Raums stünde also fast vollständig im Schatten.
+  // Flach einfallendes Nachmittagslicht kommt tiefer in den Raum und streift dabei
+  // beide Wände, statt eine frontal zu treffen und die andere gar nicht.
+  const sun=new THREE.DirectionalLight(0xfff1da,6.0);
+  sun.position.set(-7,2.4,4.6); sun.target.position.set(1.4,0.3,1.4);
   sun.castShadow=true; sun.shadow.mapSize.set(MOBILE?1024:4096,MOBILE?1024:4096);
   // Etwas weiter als vorher: bei -7/7/-2/5 lag ein Teil der Szene ausserhalb, was
   // die Schattengrenze auf der Wand messbar verschob. 16 m auf 4096 sind immer
@@ -195,7 +200,7 @@ function buildScene(){
   // keiner Quelle abgebildet: die Fensterseite jedes Möbels war die dunkelste
   // Seite dieses Möbels, obwohl sie direkt vor dem Licht steht. Jetzt kommt es
   // von dort, wo das Fenster ist. Kein castShadow — es füllt nur.
-  const fill=new THREE.DirectionalLight(0xe9edf4,0.55);
+  const fill=new THREE.DirectionalLight(0xe9edf4,0.86);
   fill.position.set(-9,3.0,6.0); fill.target.position.set(0,1.1,3.0);
   scene.add(fill); scene.add(fill.target);
   // Die zwei Wandfluter sind ersatzlos gestrichen. Sie trafen die Klinkerwand mit
@@ -223,7 +228,51 @@ function buildScene(){
   const floor=new THREE.Mesh(new THREE.PlaneGeometry(W,D),floorMat);
   floor.rotation.x=-Math.PI/2; floor.position.set(0,0,D/2); floor.receiveShadow=true; scene.add(floor);
   const ceil=new THREE.Mesh(new THREE.PlaneGeometry(W,D),new THREE.MeshStandardMaterial({color:0xf1efec,roughness:1}));
-  ceil.rotation.x=Math.PI/2; ceil.position.set(0,H,D/2); scene.add(ceil);
+  // Die Decke MUSS Schatten werfen. Ohne sie steht die Szene unter freiem Himmel:
+  // Sonnenlicht traf die rechte Klinkerwand mit N·L = 0.86, obwohl es dorthin durch
+  // ein 3.00 m hohes Fenster über 6.40 m Distanz gar nicht gelangen kann. Dieselbe
+  // Ware las sich dadurch auf den beiden Wänden 1.46-mal verschieden hell — der
+  // Kunde schloss daraus auf zwei verschiedene Produkte, und zwar ausgerechnet an
+  // der Innenecke, an der er beurteilen will, wie der Verband umläuft.
+  // Gemessen ueber je vier freie Wandstellen: vorher 117 zu 171, jetzt 94 zu 89.
+  ceil.rotation.x=Math.PI/2; ceil.position.set(0,H,D/2); ceil.castShadow=true; scene.add(ceil);
+
+  // ---------- KANTENVERSCHATTUNG ----------
+  // Ohne Addon gibt es kein SSAO, und die aoMap aus surfaceMaps verschattet nur die
+  // Fugen INNERHALB der Produkttextur — die Raumkanten selbst bekommen gar nichts.
+  // Die Klinkerwand trifft ohne jeden Übergang auf den Boden. Verschärft wird das
+  // durch das IBL: buildEnv liefert eine volle Himmelskugel ohne Verdeckungsrechnung,
+  // der Boden bekommt also Himmelslicht DURCH die Decke. Genau in den Ecken, wo real
+  // fast kein Licht hinkommt, ist das Fülllicht am stärksten überschätzt — das ist
+  // der Hauptgrund, warum der Raum flach wirkt, obwohl die Materialien stimmen.
+  // Also gebacken statt gerechnet: ein Verlauf von Schwarz nach Transparent, der
+  // dem Lichtabfall einer diffusen Kavität folgt. Drei Draw-Calls.
+  // dir gibt die undurchsichtige KANTE DER EBENE an (u/o/l/r) — so kommt jede Fläche
+  // mit höchstens einer Drehung aus. Canvas-x ist u, Canvas-y wird durch flipY zu v.
+  const kanteTex=(a0,dir)=>{
+    const horiz=(dir==='l'||dir==='r');
+    const cv=document.createElement('canvas'); cv.width=horiz?128:4; cv.height=horiz?4:128;
+    const c=cv.getContext('2d');
+    const p={u:[0,128,0,0], o:[0,0,0,128], l:[0,0,128,0], r:[128,0,0,0]}[dir];
+    const g=c.createLinearGradient(p[0],p[1],p[2],p[3]);
+    g.addColorStop(0,'rgba(24,20,16,'+a0+')');
+    g.addColorStop(0.35,'rgba(24,20,16,'+(a0*0.34).toFixed(3)+')');
+    g.addColorStop(1,'rgba(24,20,16,0)');
+    c.fillStyle=g; c.fillRect(0,0,cv.width,cv.height);
+    return new THREE.CanvasTexture(cv);
+  };
+  const kante=(w,h,a0,dir)=>{
+    const m=new THREE.Mesh(new THREE.PlaneGeometry(w,h),
+      new THREE.MeshBasicMaterial({map:kanteTex(a0,dir),transparent:true,depthWrite:false}));
+    m.renderOrder=2; scene.add(m); return m;
+  };
+  // Wandfuss (0.40 m), Deckenkehle (0.25 m), Innenecke (0.35 m) — je an beiden Wänden
+  kante(W,0.40,0.30,'u').position.set(0,0.20,0.012);
+  kante(W,0.25,0.14,'o').position.set(0,H-0.125,0.012);
+  kante(0.35,H,0.22,'r').position.set(W/2-0.175,H/2,0.014);
+  { const b=kante(D,0.40,0.30,'u'); b.rotation.y=-Math.PI/2; b.position.set(W/2-0.012,0.20,D/2);
+    const c2=kante(D,0.25,0.14,'o'); c2.rotation.y=-Math.PI/2; c2.position.set(W/2-0.012,H-0.125,D/2);
+    const e2=kante(0.35,H,0.22,'l'); e2.rotation.y=-Math.PI/2; e2.position.set(W/2-0.014,H/2,0.175); }
   // Decken-Einbauspots (leuchten dezent)
   [[-1.5,1.3],[1.3,1.3],[-1.5,3.9],[1.3,3.9]].forEach(([x,z])=>{
     const ring=new THREE.Mesh(new THREE.CircleGeometry(0.065,20),blackM); ring.rotation.x=Math.PI/2; ring.position.set(x,H-0.006,z); scene.add(ring);
