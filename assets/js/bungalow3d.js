@@ -247,11 +247,35 @@ function buildScene(){
   const benchSh=shadowBlob(1.9,1.0,0.26); benchSh.position.set(benchX,0.006,benchZ); scene.add(benchSh);
 
   // ---- Pflanzkübel (schwarz) + Gräser nahe Eingang ----
+  // Drei Fehler auf einmal, alle nachgerechnet:
+  // 1. CylinderGeometry(r*0.82, r, ...) setzt den OBEREN Radius auf 0.82 und den
+  //    unteren auf 1.0 — der Kübel war oben schmaler als unten, also ein auf den
+  //    Kopf gestellter Eimer. Ein Pflanzkübel öffnet sich nach oben.
+  // 2. Das Grasbüschel hing als Kind des Kübels bei y = r*1.5, die Oberkante des
+  //    Kübels liegt aber bei r*0.8 (halbe Höhe von r*1.6). Das Gras schwebte also
+  //    0.7*r über dem Rand — beim grossen Kübel 27 cm Luft.
+  // 3. Der Kübel war ein geschlossener Zylinder ohne Wandstärke und ohne Substrat.
+  // Jetzt ein Lathe-Profil, das aussen hoch, über den Rand und innen wieder
+  // hinunter läuft: dadurch hat der Rand eine sichtbare Dicke. Darin eine dunkle
+  // Substratfläche, aus der das Gras tatsächlich herauswächst.
   [[-2.35,1.5,0.30],[-1.75,1.85,0.38]].forEach(([x,z,r])=>{
-    const pot=new THREE.Mesh(new THREE.CylinderGeometry(r*0.82,r,r*1.6,22),mat(0x232527,0.7));
-    pot.position.set(x,r*0.8,z); pot.castShadow=true; scene.add(pot);
-    const g=new THREE.Group(); g.position.set(0,r*1.5,0); pot.add(g);
-    grassTuft(0,0,1.15,g);
+    const h=r*1.7, wand=r*0.08;
+    const prof=[[0.001,0],[r*0.74,0],[r*0.80,h*0.12],[r,h],[r-wand,h],
+                [r*0.80-wand,h*0.30],[r*0.74-wand,h*0.22]]
+      .map(([rr,yy])=>new THREE.Vector2(rr,yy));
+    const pot=new THREE.Mesh(new THREE.LatheGeometry(prof,24),
+      new THREE.MeshStandardMaterial({color:0x232527,roughness:0.7,side:THREE.DoubleSide}));
+    pot.position.set(x,0,z); pot.castShadow=true; pot.receiveShadow=true; scene.add(pot);
+    // Substrat knapp unter dem Rand, damit man in den Kübel hineinsieht statt
+    // durch ihn hindurch
+    const erde=new THREE.Mesh(new THREE.CircleGeometry(r-wand*1.1,24),mat(0x2a2320,1));
+    erde.rotation.x=-Math.PI/2; erde.position.set(x,h*0.30,z); scene.add(erde);
+    const g=new THREE.Group(); g.position.set(x,h*0.30,z); scene.add(g);
+    // grassTuft macht den Büschelradius zu 0.34*scale. Mit scale = 2.4*r bleibt der
+    // Büschel bei 0.49 m Durchmesser gegen 0.60 m Kübeldurchmesser — er steht also
+    // IM Kübel statt daneben. Die Halmlänge haengt am selben scale und wuerde
+    // dadurch zu kurz, deshalb die Gruppe getrennt in der Höhe gestreckt.
+    grassTuft(0,0,r*2.4,g); g.scale.set(1,1.7,1);
     const sb=shadowBlob(r*3,r*3,0.25); sb.position.set(x,0.006,z); scene.add(sb);
   });
 
