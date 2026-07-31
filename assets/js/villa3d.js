@@ -4,19 +4,21 @@
 // Portikus mit Freitreppe und Geländer, Buchs-Vorgarten mit Metallzaun.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=42';
+import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, bushClump, groundContact, LOWQ } from './scene3d-lib.js?v=54';
 
-const MOBILE=matchMedia('(pointer:coarse)').matches;
+const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
 let rafId=0, failed=false;
 
 const TARGET=new THREE.Vector3(0,3.6,1.2);
-let az=0.14, po=1.520, rad=20.5;
+let az=0.50, po=1.6300, rad=22.0;   // Augpunkt 3.60-1.30=2.30 m statt 3.60+0.63=4.23 m
 let azT=az, poT=po, radT=rad;
-const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.32, PO_MAX=1.565, R_MIN=13, R_MAX=30;
+const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.32, PO_MAX=1.6572, R_MIN=12, R_MAX=28;
 
 const HW=13.0, HE=7.0, HD=10.0;                 // Breite, Traufe, Tiefe
+// Fugentiefe in UV-Einheiten, geometrisches Mittel beider Texturachsen bei 16 mm
+const POM_F=0.016/Math.sqrt(HW*HE), POM_S=0.016/Math.sqrt(HD*HE);
 const PL=0.75;                                   // Sockelhöhe
 
 function mat(c,rough,metal){ return new THREE.MeshStandardMaterial({color:c,roughness:rough!=null?rough:0.9,metalness:metal||0}); }
@@ -110,14 +112,14 @@ function buildScene(){
   scene.environment=buildEnv(renderer);
   scene.fog=new THREE.Fog(0xe9ebe9,55,110);
 
-  { const sky=new THREE.Mesh(new THREE.SphereGeometry(85,32,18),
-      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.5,1.5,1.5),side:THREE.BackSide,fog:false}));
+  { const sky=new THREE.Mesh(new THREE.SphereGeometry(85,48,28),
+      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(2.90,2.90,2.90),side:THREE.BackSide,fog:false}));
     scene.add(sky); }
 
-  scene.add(new THREE.HemisphereLight(0xdbe7f2,0x8d9084,0.35));
-  scene.add(new THREE.AmbientLight(0xffffff,0.06));
-  const sun=new THREE.DirectionalLight(0xffeed2,2.6);
-  sun.position.set(17,20,10.5);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
+  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x8a9179,1.60));   // Himmel oben, Rasengrün unten
+  scene.add(new THREE.AmbientLight(0xffffff,0.05));
+  const sun=new THREE.DirectionalLight(0xfff6ea,2.8);
+  sun.position.set(20,14,11);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,1);
   sun.castShadow=true;
   sun.shadow.mapSize.set(MOBILE?1024:4096,MOBILE?1024:4096);
@@ -125,7 +127,8 @@ function buildScene(){
   sun.shadow.camera.top=16;   sun.shadow.camera.bottom=-9;
   sun.shadow.camera.near=1; sun.shadow.camera.far=60;
   sun.shadow.camera.updateProjectionMatrix();
-  sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.05;
+  sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.035;
+  sun.shadow.radius=MOBILE?1:5;                   // PCF-Kernel → weiche Schattenkante
   scene.add(sun); scene.add(sun.target);
 
   // ---- Gelände: Rasen + Vorplatz (Boden-Mix) + Weg ----
@@ -169,27 +172,71 @@ function buildScene(){
   const rT=roofTex(); rT.repeat.set(7,3);
   const roofM=new THREE.MeshStandardMaterial({map:rT,roughness:0.85,side:THREE.DoubleSide});
   const roof=new THREE.Mesh(hipRoofGeo(HW+0.9,HD+0.9,2.95,(HW-HD)/2+0.4),roofM);
-  roof.position.set(0,HE+0.34,-HD/2); roof.castShadow=true; scene.add(roof);
-  const dormer=new THREE.Mesh(new THREE.BoxGeometry(3.3,1.6,1.9),mat(0xe9e7e3,0.85));
-  dormer.position.set(0,8.5,-1.9); dormer.castShadow=true; dormer.receiveShadow=true; scene.add(dormer);
-  const dRoof=new THREE.Mesh(new THREE.BoxGeometry(3.7,0.12,2.15),mat(0x3b3e43,0.7));
-  dRoof.position.set(0,9.36,-1.9); dRoof.castShadow=true; scene.add(dRoof);
-  const dFascia=new THREE.Mesh(new THREE.BoxGeometry(3.7,0.12,0.06),mat(0xeceae6,0.7));
-  dFascia.position.set(0,9.26,-0.84); scene.add(dFascia);
+  // receiveShadow war aus: die Gaube warf keinen Schatten auf die Dachfläche und
+  // wirkte dadurch aufgeklebt. Sonneneinfall 49° zur Dachnormalen → kein Acne-Risiko.
+  roof.position.set(0,HE+0.34,-HD/2); roof.castShadow=true; roof.receiveShadow=true; scene.add(roof);
+  // ---- Gaube (Schleppgaube) ----
+  // PROBLEM 1: BoxGeometry(dW,1.90,dBz-dFz) bekam dBz-dFz = -2.60-(-0.60) = -2.00,
+  // also eine NEGATIVE Tiefe. Three.js spiegelt die Box dann an z, alle Umlaufsinne
+  // kippen, das Backface-Culling schluckt die Wangen — deshalb stand rechts eine
+  // harte helle Fläche wie ein Loch (man sah in den Kasten hinein).
+  // PROBLEM 2: Die Box war unten bei y=7.25 waagerecht gekappt, die Dachhaut steigt
+  // aber von 7.91 (Gaubenfront) auf 8.99 (z=-2.60) — der Anschluss war Zufall, oben
+  // hinten fehlten 0.16 m. Jetzt folgen Wangen und Gaubendach der gemessenen Neigung.
+  const dRT=2.95/((HD+0.9)/2);                  // Walmdach-Neigung 2.95/5.45 = 0.5413 → 28.42°
+  const dEZ=-HD/2+(HD+0.9)/2, dEY=HE+0.34;      // vordere Traufkante: z=+0.45, y=7.34
+  const roofY=z=>dEY+(dEZ-z)*dRT;               // Dachhaut-Höhe über z (vorderes Trapez)
+  const dW=3.30, dFz=-0.55, dWT=0.14;           // Gaubenfront-z, Wandstärke
+  const dTopF=9.10, dPT=0.12;                   // Unterkante Gaubendach vorn, Plattenstärke
+  const dRD=Math.tan(6*Math.PI/180);            // 6° Gaubendach-Gefälle nach vorn (Wasserablauf)
+  const dachY=z=>dTopF+(dFz-z)*dRD;             // Unterseite Gaubendach über z
+  // z, bei dem eine Gaubendach-Linie der Höhe y0 (bei z=dFz) die Dachhaut trifft
+  const dieZ=y0=>(dEY+dEZ*dRT-(y0+dFz*dRD))/(dRT-dRD);
+  // 0.05 m über den Schnittpunkt hinaus = 0.05*(0.5413-0.1051) = 22 mm unter der
+  // Dachhaut: klar mehr als die 3-5 mm gegen z-Fighting, aber unsichtbar.
+  const dZU=dieZ(dTopF)-0.05, dZT=dieZ(dTopF+dPT)-0.05;   // -3.394 / -3.669
+  // Front mit ECHTEN Fensteröffnungen (Shape + Path-Löcher) statt aufgesetzter Platten
+  const dwy=8.50, dwW=0.72, dwH=0.78;
+  const dyBot=roofY(dFz)-0.18, dyTop=dachY(dFz-dWT)+0.01;  // 7.70 / 9.12: unten 0.18 in die
+  const dfS=new THREE.Shape();                             // Dachhaut, oben 0.01 in die Platte
+  dfS.moveTo(-dW/2,dyBot); dfS.lineTo(dW/2,dyBot); dfS.lineTo(dW/2,dyTop); dfS.lineTo(-dW/2,dyTop);
+  [-1.02,0,1.02].forEach(x=>{ const hp=new THREE.Path();
+    hp.moveTo(x-dwW/2,dwy-dwH/2); hp.lineTo(x-dwW/2,dwy+dwH/2);
+    hp.lineTo(x+dwW/2,dwy+dwH/2); hp.lineTo(x+dwW/2,dwy-dwH/2); hp.closePath(); dfS.holes.push(hp); });
+  const dFront=new THREE.Mesh(new THREE.ExtrudeGeometry(dfS,{depth:dWT,bevelEnabled:false}),mat(0xe9e7e3,0.85));
+  dFront.position.z=dFz-dWT; dFront.castShadow=true; dFront.receiveShadow=true; scene.add(dFront);
+  // Wangen: Profil in der z/y-Ebene, Oberkante am Gaubendach, Unterkante 0.12 unter
+  // der Dachhaut — dadurch schneidet die Dachfläche selbst die Silhouette, kein Spalt.
+  const dwS=new THREE.Shape();
+  dwS.moveTo(dFz-dWT,roofY(dFz-dWT)-0.12); dwS.lineTo(dFz-dWT,dachY(dFz-dWT)+0.01);
+  dwS.lineTo(dZU,dachY(dZU)+0.01);         dwS.lineTo(dZU,roofY(dZU)-0.12);
+  const dwG=new THREE.ExtrudeGeometry(dwS,{depth:0.09,bevelEnabled:false});
+  [dW/2,-dW/2+0.09].forEach(px=>{          // rotation.y=-PI/2: Shape-x → Welt-z, Extrusion → -x
+    const w=new THREE.Mesh(dwG,mat(0xe4e1dc,0.85));
+    w.rotation.y=-Math.PI/2; w.position.x=px; w.castShadow=true; w.receiveShadow=true; scene.add(w);
+  });
+  // Gaubendach: Keilprofil, hintere Kante liegt in der Dachhaut → wird sauber gekappt
+  const drS=new THREE.Shape();
+  drS.moveTo(dFz+0.22,dachY(dFz+0.22));         drS.lineTo(dFz+0.22,dachY(dFz+0.22)+dPT);
+  drS.lineTo(dZT,dachY(dZT)+dPT);               drS.lineTo(dZU,dachY(dZU));
+  const dRoof=new THREE.Mesh(new THREE.ExtrudeGeometry(drS,{depth:dW+0.44,bevelEnabled:false}),mat(0x3b3e43,0.7));
+  dRoof.rotation.y=-Math.PI/2; dRoof.position.x=dW/2+0.22; dRoof.castShadow=true; scene.add(dRoof);
+  const dFascia=new THREE.Mesh(new THREE.BoxGeometry(dW+0.40,0.13,0.035),mat(0xe6e4e0,0.7));
+  dFascia.position.set(0,dachY(dFz+0.22)+dPT/2-0.005,dFz+0.22+0.023); dFascia.castShadow=true; scene.add(dFascia);
   const glassM=glassMaterial();
-  // drei Gaubenfenster mit Attikaraum (Interior-Mapping) + weisser Fasche + Sprosse
-  const dFz=-0.95;   // Gaubenfront (Vorderseite, zur Kamera +z)
-  [[-0.98],[0],[0.98]].forEach(([x])=>{
-    const inter=new THREE.Mesh(new THREE.PlaneGeometry(0.72,1.02),interiorRoom(0.72,1.02,1.3,x*5.7+7.9,'home'));
-    inter.position.set(x,8.5,dFz+0.06); scene.add(inter);
-    const g=new THREE.Mesh(new THREE.PlaneGeometry(0.72,1.02),glassM);
-    g.position.set(x,8.5,dFz+0.085); scene.add(g);
-    [[0,0.55,0.84,0.05],[0,-0.55,0.84,0.05],[-0.40,0,0.05,1.12],[0.40,0,0.05,1.12]].forEach(([dx,dy,bw,bh])=>{
-      const b=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,0.04),mat(0xf4f3f0,0.6));
-      b.position.set(x+dx,8.5+dy,dFz+0.10); scene.add(b);
-    });
-    const mull=new THREE.Mesh(new THREE.BoxGeometry(0.03,1.0,0.02),mat(0xf4f3f0,0.6));
-    mull.position.set(x,8.5,dFz+0.095); scene.add(mull);
+  // Fenster sitzen jetzt IN der 0.14 m tiefen Laibung des Extrusionslochs
+  [-1.02,0,1.02].forEach(x=>{
+    const inter=new THREE.Mesh(new THREE.PlaneGeometry(dwW,dwH),
+      interiorRoom(dwW,dwH,2.2,x*5.7+7.9,'home',0,'estrich'));
+    inter.position.set(x,dwy,dFz-dWT-0.02); scene.add(inter);
+    const g=new THREE.Mesh(new THREE.PlaneGeometry(dwW,dwH),glassM);
+    g.position.set(x,dwy,dFz-0.055); scene.add(g);
+    const fw=0.055, frM=mat(0xf4f3f0,0.6);
+    [[0,dwy+dwH/2-fw/2,dwW,fw],[0,dwy-dwH/2+fw/2,dwW,fw],
+     [-dwW/2+fw/2,dwy,fw,dwH-fw*2],[dwW/2-fw/2,dwy,fw,dwH-fw*2],
+     [0,dwy,0.03,dwH-fw*2]].forEach(([dx,dy,bw,bh])=>{
+      const b=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,0.045),frM);
+      b.position.set(x+dx,dy,dFz-0.045); scene.add(b); });
   });
 
   // ---- Fenster: OG fünf Achsen (mit Verdachung), EG vier Achsen ----
@@ -204,26 +251,80 @@ function buildScene(){
   });
 
   // ---- Portikus: Pilaster + Gebälk + Doppeltür + Oberlicht ----
-  const pil=(x)=>{ const p=new THREE.Mesh(new THREE.BoxGeometry(0.38,2.85,0.22),mat(0xeceae6,0.7));
-    p.position.set(x,PL+1.425,0.11); p.castShadow=true; scene.add(p);
-    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.5,0.12,0.28),mat(0xe6e4e0,0.7));
-    cap.position.set(x,PL+2.91,0.14); scene.add(cap); };
-  pil(-1.45); pil(1.45);
-  const entab=new THREE.Mesh(new THREE.BoxGeometry(3.6,0.5,0.34),mat(0xeceae6,0.7));
-  entab.position.set(0,PL+3.28,0.17); entab.castShadow=true; scene.add(entab);
-  const reveal=new THREE.Mesh(new THREE.BoxGeometry(2.15,2.9,0.10),mat(0x8f8b85,0.9));
-  reveal.position.set(0,PL+1.45,0.03); scene.add(reveal);
-  const doorM=mat(0x5d3a26,0.5);
-  [[-0.44],[0.44]].forEach(([dx])=>{
-    const d=new THREE.Mesh(new THREE.BoxGeometry(0.84,2.15,0.07),doorM);
-    d.position.set(dx,PL+1.1,0.09); scene.add(d);
-    const panel=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.9,0.02),mat(0x4e3120,0.55));
-    panel.position.set(dx,PL+1.35,0.13); scene.add(panel);
+  // PROBLEM: Gebälk 3.60 breit über Kapitellen 0.50 über Pilastern 0.38 — gemessen
+  // kragte das Gebälk 0.16 und die nur 0.12 dünne Kapitellplatte 0.06 je Seite über
+  // den Pilaster hinaus, dazwischen (Kapitell-Oberkante 3.72, Gebälk-Unterkante 3.78)
+  // standen 0.06 m Luft. Das waren die beiden weissen Splitter. Jetzt enden alle
+  // Teile bündig auf der Pilasterflucht x=±1.64; ausgekragt wird nur noch nach vorn.
+  const PX=1.45, PW=0.38, POUT=PX+PW/2;
+  [-PX,PX].forEach(x=>{
+    const p=new THREE.Mesh(new THREE.BoxGeometry(PW,2.87,0.22),mat(0xeceae6,0.7));
+    p.position.set(x,PL+1.435,0.11); p.castShadow=true; scene.add(p);        // 0.75 … 3.62
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(PW,0.16,0.30),mat(0xe6e4e0,0.7));
+    cap.position.set(x,3.70,0.15); cap.castShadow=true; scene.add(cap);      // 3.62 … 3.78, fugenlos
   });
-  const transom=new THREE.Mesh(new THREE.PlaneGeometry(1.7,0.5),glassM);
-  transom.position.set(0,PL+2.55,0.10); scene.add(transom);
-  const knob=new THREE.Mesh(new THREE.SphereGeometry(0.045,10,10),mat(0xc9b88a,0.3,0.8));
-  knob.position.set(0.12,PL+1.1,0.15); scene.add(knob);
+  const frieze=new THREE.Mesh(new THREE.BoxGeometry(POUT*2,0.42,0.26),mat(0xeceae6,0.7));
+  frieze.position.set(0,3.99,0.13); frieze.castShadow=true; scene.add(frieze);          // 3.78 … 4.20
+  const corn=new THREE.Mesh(new THREE.BoxGeometry(POUT*2,0.14,0.38),mat(0xeceae6,0.7));
+  corn.position.set(0,4.27,0.19); corn.castShadow=true; scene.add(corn);                // 4.20 … 4.34
+
+  // ---- Haustür ----
+  // PROBLEM: Die Blätter lagen bei z 0.055…0.125, der graue "Gewände"-Block endete
+  // bei 0.08 — die Tür klebte VOR der Wand statt in einer Leibung. Die Füllungen
+  // waren 0.015 erhabene Rechtecke, der Knauf ø0.09 steckte zur Hälfte im Blatt.
+  const OHW=0.93, OY0=0.74, OY1=3.54;            // Nische 1.86 breit, Sturz bündig unter dem Gebälk
+  const nb=new THREE.Mesh(new THREE.PlaneGeometry(OHW*2,OY1-OY0),mat(0x3c3830,0.95));
+  nb.position.set(0,(OY0+OY1)/2,0.016); scene.add(nb);          // dunkler Nischengrund
+  const gwM=mat(0xeceae6,0.7);
+  [-1,1].forEach(s=>{ const j=new THREE.Mesh(new THREE.BoxGeometry(0.22,OY1-OY0,0.13),gwM);
+    j.position.set(s*(OHW+0.11),(OY0+OY1)/2,0.07); j.castShadow=true; scene.add(j); });
+  const lint=new THREE.Mesh(new THREE.BoxGeometry(OHW*2+0.44,0.24,0.13),gwM);
+  lint.position.set(0,OY1+0.12,0.07); lint.castShadow=true; scene.add(lint);
+  // Podest: zwischen Sockelfront (z=0.06) und oberster Stufe (z=0.55) klafften 0.49 m
+  // offener Boden — die Schwelle hätte über einem Loch gestanden. Reicht bis z=0.80
+  // und x=±1.70, damit auch die oberen Geländerpfosten (x=±1.60, z=0.70) aufstehen;
+  // Oberkante 0.747 statt 0.750, sonst z-Fighting mit der obersten Stufe.
+  const landing=new THREE.Mesh(new THREE.BoxGeometry(3.40,0.13,0.74),mat(0xc9c6c0,0.85));
+  landing.position.set(0,0.682,0.43); landing.receiveShadow=true; landing.castShadow=true; scene.add(landing);
+  const thr=new THREE.Mesh(new THREE.BoxGeometry(1.98,0.05,0.30),mat(0xb0aca5,0.75));
+  thr.position.set(0,0.765,0.15); thr.castShadow=true; thr.receiveShadow=true; scene.add(thr);
+  // Zarge als EIN Rahmen mit Loch; Vorderkante 0.105 liegt 0.03 hinter dem Gewände
+  const doorM=mat(0x5d3a26,0.5);
+  const zS=new THREE.Shape();
+  zS.moveTo(-OHW,OY0); zS.lineTo(OHW,OY0); zS.lineTo(OHW,OY1); zS.lineTo(-OHW,OY1);
+  const zH=new THREE.Path();
+  zH.moveTo(-0.875,0.79); zH.lineTo(0.875,0.79); zH.lineTo(0.875,3.46); zH.lineTo(-0.875,3.46); zH.closePath();
+  zS.holes.push(zH);
+  const zarge=new THREE.Mesh(new THREE.ExtrudeGeometry(zS,{depth:0.09,bevelEnabled:false}),doorM);
+  zarge.position.z=0.015; zarge.castShadow=true; scene.add(zarge);
+  // Blatt 0.86 × 2.15 m: Friese/Stäbe als Extrusion MIT Öffnungen, dahinter ein um
+  // 0.028 zurückgesetztes Füllungsbrett. Die 0.012-Fase an den Öffnungen ist der
+  // Profilstab — dadurch echtes Relief statt aufgemalter Rechtecke.
+  const LW=0.836, LY0=0.79, LY1=2.94;            // +2×0.012 Fase = 0.86 fertige Blattbreite
+  const lS=new THREE.Shape();
+  lS.moveTo(-LW/2,LY0); lS.lineTo(LW/2,LY0); lS.lineTo(LW/2,LY1); lS.lineTo(-LW/2,LY1);
+  [[1.08,1.72],[1.90,2.80]].forEach(([y0,y1])=>{ const p=new THREE.Path();
+    p.moveTo(-0.30,y0); p.lineTo(0.30,y0); p.lineTo(0.30,y1); p.lineTo(-0.30,y1); p.closePath(); lS.holes.push(p); });
+  const lG=new THREE.ExtrudeGeometry(lS,{depth:0.05,bevelEnabled:true,bevelThickness:0.012,bevelSize:0.012,bevelSegments:1});
+  const brassM=mat(0xc9b88a,0.32,0.8);
+  [-0.44,0.44].forEach(dx=>{
+    const lf=new THREE.Mesh(lG,doorM); lf.position.set(dx,0,0.032);   // Blattfront bei z=0.094
+    lf.castShadow=true; lf.receiveShadow=true; scene.add(lf);
+    const pb=new THREE.Mesh(new THREE.BoxGeometry(0.70,1.80,0.02),mat(0x4e3120,0.55));
+    pb.position.set(dx,1.94,0.056); scene.add(pb);
+    // Knauf ø0.064 auf Rosette ø0.09, 1.05 m über der Schwelle (0.79) — reale Griffhöhe
+    const kx=dx-Math.sign(dx)*0.365;
+    const ros=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.014,14),brassM);
+    ros.rotation.x=Math.PI/2; ros.position.set(kx,1.84,0.100); scene.add(ros);
+    const kn=new THREE.Mesh(new THREE.SphereGeometry(0.032,12,12),brassM);
+    kn.position.set(kx,1.84,0.134); kn.castShadow=true; scene.add(kn);
+  });
+  const kmp=new THREE.Mesh(new THREE.BoxGeometry(1.75,0.11,0.075),doorM);
+  kmp.position.set(0,2.995,0.0575); kmp.castShadow=true; scene.add(kmp);     // Kämpfer 2.94 … 3.05
+  const transom=new THREE.Mesh(new THREE.PlaneGeometry(1.75,0.41),glassM);
+  transom.position.set(0,3.255,0.062); scene.add(transom);                   // Oberlicht 3.05 … 3.46
+  [-0.45,0,0.45].forEach(x=>{ const tb=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.41,0.05),doorM);
+    tb.position.set(x,3.255,0.075); scene.add(tb); });
 
   // ---- Freitreppe + Geländer ----
   const stG=new THREE.Group(); scene.add(stG);
@@ -263,20 +364,58 @@ function buildScene(){
   bush(-2.2,0.9,0.4,0x4a5e3e,beds); bush(2.2,0.9,0.4,0x4a5e3e,beds);
   bush(-5.9,1.0,0.5,0x46583c,beds); bush(5.9,1.0,0.5,0x46583c,beds);
   conifer(-4.4,0.9,1.5,beds); conifer(4.4,0.9,1.5,beds);
-  bush(-6.9,2.2,0.35,0x516446,beds); bush(6.9,2.2,0.35,0x516446,beds);
-  const railM2=mat(0x33363a,0.5,0.6);
-  [[-1,0],[1,0]].forEach(([s])=>{
-    const run=5.6, x0=s*(1.9+run/2);
+  // bush(±6.9, 2.2) stand bei z=2.2 volle 0.60 m INNERHALB der Pflasterkante (fore:
+  // x=±7.50, z=1.60…8.20) — also mitten im Pflaster. Steht jetzt im Beet (z=0…1.60).
+  bush(-6.9,0.95,0.35,0x516446,beds); bush(6.9,0.95,0.35,0x516446,beds);
+
+  // ---- Zaun auf Randstein ----
+  // PROBLEM: Der Zaun lief von x=±1.90 bis ±7.50 und hatte NUR innen (x=±1.90) einen
+  // Pfosten; aussen endeten Riegel und Stäbe frei in der Wiese, das letzte Feld hing.
+  // Die Stäbe standen ausserdem 0.025 über dem Boden. Und Zaunende und Pflasterecke
+  // fielen exakt auf denselben Punkt (7.50/8.20) — eine harte Kante ohne Anlass.
+  // Lösung: Randstein an der Pflasterkante (Zaun steht darauf), Eckpfosten, kurzer
+  // Rücksprung entlang der Seitenkante, Ende im Strauchband.
+  const railM2=mat(0x33363a,0.5,0.6), kerbM=mat(0xb4b0a8,0.9);
+  const KZ=8.27, KX=7.57, KTOP=0.12, ZEND=5.90;   // Zaunachse, Randstein-Oberkante, Ende Rücksprung
+  const post=(x,z)=>{
+    const p=new THREE.Mesh(new THREE.BoxGeometry(0.14,1.30,0.14),railM2);
+    p.position.set(x,KTOP+0.62,z); p.castShadow=true; beds.add(p);      // 0.09 … 1.39, 3 cm im Stein
+    const c=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.05,0.19),railM2);
+    c.position.set(x,KTOP+1.295,z); c.castShadow=true; beds.add(c);
+  };
+  [-1,1].forEach(s=>{
+    const x0=s*1.90, x1=s*KX, run=Math.abs(x1-x0), cx=(x0+x1)/2;
     const rt=new THREE.Mesh(new THREE.BoxGeometry(run,0.05,0.05),railM2);
-    rt.position.set(x0,1.12,8.2); beds.add(rt);
+    rt.position.set(cx,1.225,KZ); beds.add(rt);
     const rb=new THREE.Mesh(new THREE.BoxGeometry(run,0.04,0.04),railM2);
-    rb.position.set(x0,0.25,8.2); beds.add(rb);
-    for(let i=0;i<=14;i++){
-      const bar=new THREE.Mesh(new THREE.BoxGeometry(0.025,1.15,0.025),railM2);
-      bar.position.set(s*(1.9+i*(run/14)),0.6,8.2); beds.add(bar);
+    rb.position.set(cx,0.28,KZ); beds.add(rb);
+    const nF=Math.round(run/0.40);
+    for(let i=1;i<nF;i++){
+      const b=new THREE.Mesh(new THREE.BoxGeometry(0.025,1.10,0.025),railM2);
+      b.position.set(x0+(x1-x0)*i/nF,0.67,KZ); beds.add(b);             // Stab 0.12 … 1.22
     }
-    const post=new THREE.Mesh(new THREE.BoxGeometry(0.14,1.35,0.14),railM2);
-    post.position.set(s*1.9,0.675,8.2); beds.add(post);
+    const rl=KZ-ZEND, cz=(KZ+ZEND)/2;
+    const st2=new THREE.Mesh(new THREE.BoxGeometry(0.05,0.05,rl),railM2);
+    st2.position.set(x1,1.225,cz); beds.add(st2);
+    const sb=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.04,rl),railM2);
+    sb.position.set(x1,0.28,cz); beds.add(sb);
+    const nS=Math.round(rl/0.40);
+    for(let i=1;i<nS;i++){
+      const b=new THREE.Mesh(new THREE.BoxGeometry(0.025,1.10,0.025),railM2);
+      b.position.set(x1,0.67,KZ-rl*i/nS); beds.add(b);
+    }
+    post(x0,KZ); post(x1,KZ); post(x1,ZEND);
+    // Randstein 0.14 breit, Oberkante 0.12 über dem Rasen, Fuss auf -0.06 (Rasen -0.01)
+    const kf=new THREE.Mesh(new THREE.BoxGeometry(run+0.07,0.18,0.14),kerbM);
+    kf.position.set(cx+s*0.035,0.03,KZ); kf.receiveShadow=true; beds.add(kf);
+    // endet an der HINTERkante des vorderen Randsteins (z=8.20): läge er bis 8.34,
+    // wären beide Deckflächen auf y=0.12 deckungsgleich → z-Fighting am Eckstück
+    const ks=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.18,KZ-0.07-1.60),kerbM);
+    ks.position.set(x1,0.03,(KZ-0.07+1.60)/2); ks.receiveShadow=true; beds.add(ks);
+    groundContact(cx,KZ,run,0.55,beds);
+    // Strauchband setzt die Grundstücksgrenze dort fort, wo der Zaun aufhört
+    bushClump(s*8.30,ZEND-0.30,0.50,0x4e603f,beds);
+    bushClump(s*8.05,ZEND-1.35,0.40,0x56684a,beds);
   });
 
   // ---- Kulisse: Hecken, ferne Häuser, Bäume ----
@@ -300,7 +439,7 @@ function buildScene(){
     h.scale.set(1.7,0.30,1); h.position.set(x,0,z); scene.add(h);
   });
 
-  camera=new THREE.PerspectiveCamera(46,16/10,0.1,180);
+  camera=new THREE.PerspectiveCamera(46,16/10,0.5,180);
   applyCam(true);
 }
 
@@ -316,15 +455,17 @@ function applyCam(hard){
 function ensureRenderer(){
   if(renderer||failed) return !failed;
   try{
-    renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer=new THREE.WebGLRenderer({antialias:!MOBILE});
     renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    // PCF statt PCFSoft: nur PCF wertet shadow.radius aus → steuerbare Weichheit
+    renderer.shadowMap.type=MOBILE?THREE.BasicShadowMap:THREE.PCFShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure=0.72;
+    renderer.toneMappingExposure=1.05;
     maxAniso=renderer.capabilities.getMaxAnisotropy()||8;
     buildScene();
     const el=renderer.domElement;
+    el.addEventListener('webglcontextlost',e=>e.preventDefault());   // iOS: schwarzer Canvas vermeiden
     el.style.cssText='width:100%;height:100%;display:block;border-radius:inherit;cursor:grab;touch-action:none';
     let drag=false,lx=0,ly=0;
     el.addEventListener('pointerdown',e=>{ drag=true; lx=e.clientX; ly=e.clientY;
@@ -346,7 +487,7 @@ function sizeToHost(){
   renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
-  camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+  camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
   camera.updateProjectionMatrix();
 }
 // rAF-Loop + Timer-Watchdog: rendert auch weiter, wenn der Browser rAF drosselt
@@ -358,23 +499,10 @@ function startLoops(){
   if(!rafId) loop();
   if(!wdId) wdId=setInterval(()=>{ if(!document.hidden && performance.now()-lastRaf>200) step(); },120);
 }
-function texFromCanvas(cv){
-  if(!cv) return null;
-  const t=new THREE.CanvasTexture(cv);
-  t.colorSpace=THREE.SRGBColorSpace;
-  t.anisotropy=maxAniso;
-  return t;
-}
-function applyTex(m,cv,fallback,rough,ns){
-  if(m.map) m.map.dispose();
-  if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
-  m.map=texFromCanvas(cv);
-  m.color.set(cv?0xffffff:fallback);
-  m.roughness=cv?(rough!=null?rough:1.0):0.95;   // Klinker matt
-  if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.8; m.normalScale=new THREE.Vector2(s,s); } }
-  m.envMapIntensity=cv?0.18:0.3;                    // kaum Env-Reflexion
-  m.needsUpdate=true;
+// Fugentiefe in UV-Einheiten (~14 mm auf die von der Textur abgedeckte Breite)
+function applyTex(m,cv,fallback,rough,ns,pom){
+  applySurface(m,cv,{fallback,rough,normalScale:ns!=null?ns:0.9,aniso:maxAniso,
+    env:cv?0.40:0.3, pom:pom||0});
 }
 window.Villa3D={
   available(){ return !failed; },
@@ -392,11 +520,18 @@ window.Villa3D={
   },
   // Render-Loop + Watchdog anhalten (Mixer zu / anderes Gebaeude aktiv)
   stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId=0; } if(wdId){ clearInterval(wdId); wdId=0; } },
+  // Kontext und Speicher wirklich freigeben — ensureRenderer() baut beim naechsten mount() neu auf
+  dispose(){
+    this.stop();
+    if(ro){ ro.disconnect(); ro=null; }
+    disposeScene(scene,renderer);
+    renderer=null; scene=null; camera=null; host=null; failed=false;
+  },
   setTextures(facadeCv,sideCv,floorCv){
     if(!renderer) return;
-    applyTex(facadeMat,facadeCv,0xdad6d1);
-    applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce);
-    applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce);
+    applyTex(facadeMat,facadeCv,0xdad6d1,1.0,0.9,POM_F);
+    applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce,1.0,0.9,POM_S);
+    applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce,1.0,0.9,POM_S);
     applyTex(floorMat,floorCv,0xd0cdc8,0.8,0.55);
   },
   snapshot(w,h){
@@ -404,13 +539,13 @@ window.Villa3D={
     const pr=renderer.getPixelRatio(), sz=new THREE.Vector2(); renderer.getSize(sz);
     renderer.setPixelRatio(1); renderer.setSize(w,h,false);
     camera.aspect=w/h;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     const url=renderer.domElement.toDataURL('image/png');
     renderer.setPixelRatio(pr); renderer.setSize(sz.x,sz.y,false);
     camera.aspect=sz.x/sz.y;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     return url;

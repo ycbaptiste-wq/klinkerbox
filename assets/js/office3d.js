@@ -4,18 +4,18 @@
 // beleuchteter Lobby, grosser Vorplatz, Gräser-Beete, Stadt-Kulisse.
 // Fassade (vorne + Seiten) trägt den Wand-Mix, der Vorplatz den Boden-Mix.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=42';
+import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, grassTuft, LOWQ } from './scene3d-lib.js?v=54';
 
-const MOBILE=matchMedia('(pointer:coarse)').matches;
+const MOBILE=LOWQ;
 
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
 let rafId=0, failed=false;
 
 const TARGET=new THREE.Vector3(0,4.6,1.0);
-let az=0.65, po=1.505, rad=25.0;                 // 3/4-Ansicht → Front + Seitenfenster klar sichtbar
+let az=0.65, po=1.6509, rad=25.0;                // Augpunkt 4.60-2.00=2.60 m
 let azT=az, poT=po, radT=rad;
-const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.34, PO_MAX=1.565, R_MIN=16, R_MAX=36;
+const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.34, PO_MAX=1.6829, R_MIN=16, R_MAX=36;
 
 const HW=18.0, HD=12.0;                          // Breite, Tiefe
 const FH=3.3, NF=3, HE=FH*NF+0.35;               // Geschosshöhe, Attika-Oberkante ~10.25
@@ -30,19 +30,6 @@ function noiseTex(base,vari,w,h){
   c.putImageData(id,0,0);
   const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.colorSpace=THREE.SRGBColorSpace;
   return t;
-}
-function grassTuft(x,z,scale,parent){
-  const s=scale||1;
-  for(let i=0;i<9;i++){
-    const a=Math.random()*Math.PI*2, lean=(0.10+Math.random()*0.22)*s, hgt=(0.45+Math.random()*0.45)*s;
-    const p0=new THREE.Vector3(x,0,z);
-    const p1=new THREE.Vector3(x+Math.cos(a)*lean*0.4,hgt*0.6,z+Math.sin(a)*lean*0.4);
-    const p2=new THREE.Vector3(x+Math.cos(a)*lean,hgt,z+Math.sin(a)*lean);
-    const tube=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([p0,p1,p2]),6,0.006*s,5),mat(0xa8a06e,1));
-    parent.add(tube);
-    if(i%2===0){ const pl=new THREE.Mesh(new THREE.SphereGeometry(0.035*s,8,8),mat(0xcabf92,1));
-      pl.scale.set(1,2.6,1); pl.position.copy(p2); pl.position.y+=0.08*s; parent.add(pl); }
-  }
 }
 function bush(x,z,r,c,parent){
   const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),mat(c||0x5c6e4a,1));
@@ -63,11 +50,54 @@ function makeEnvironment(){
   const env=pm.fromScene(es,0.05).texture; pm.dispose();
   return env;
 }
+// ---- Innenraum hinter der Scheibe: Quader für das Interior-Mapping ----
+// PROBLEM (gemessen, nicht geraten): In der linken Achse stand in OG1 und OG2 je
+// ein kleines weisses Rechteck im Glas. Die drei möglichen Ursachen einzeln geprüft:
+//  1. Möbel-Mesh, das durch die Fensterebene ragt? NEIN. Die Frontfassade ist ein
+//     geschlossenes PlaneGeometry(HW,HE) bei z=0.001 OHNE Loch. Lobby-Glow (z=-1.2),
+//     Tresen (z=-0.9) und die Seitenfenster-Gruppen liegen alle hinter dieser opaken
+//     Fläche. Zwischen z=0.001 und den Fensterteilen (z=0.05…0.11) liegt nichts.
+//  2. envMap-Spiegelung? NEIN. buildEnv() enthält nur Himmelskugel, Sonnenkugel und
+//     Bodenebene — kein rechteckiges Objekt. Eine Spiegelung wäre ausserdem in allen
+//     36 Scheiben gleich und nicht auf zwei Fenster EINER Achse beschränkt.
+//  3. interiorRoom-Shader: JA. Nachweis: Nachbau des Fragment-Shaders in JS, je
+//     Scheibe mit 96x48 Punkten abgetastet, Default-Kamera (15.08 / 2.60 / 20.84).
+//     Ergebnis für x=-7.35:  OG1 (y=5.15) 92.2 % Seitenwand (max 145) + 3.4 %
+//     Deckenpanel mit max 253/255 · OG2 (y=8.45) 85.4 % Seitenwand + 7.6 % Panel
+//     max 218 · EG (y=1.62) 0.0 % Panel — genau deshalb nur die oberen zwei Reihen:
+//     die EG-Fenster liegen UNTER dem Augpunkt, der Sehstrahl geht nach unten auf
+//     den Boden statt nach oben an die Decke.
+// Das Rechteck ist also das Leuchtpanel der Büro-Rasterdecke im Shader
+// (col = vec3(1.0,1.0,0.93)*(0.5+lampOn)). Zwei Aufrufparameter waren schuld:
+//  a) Es wurde KEIN Raumtyp übergeben → ROOMS[undefined] fällt auf 'wohnen' zurück,
+//     und 'wohnen' hat mit lampAn = 0.9 den höchsten Wert der ganzen Tabelle.
+//     (0.5+lampOn) wird damit 1.04…1.49 → das Panel clippt auf 253/255. Die besonnte
+//     Fassade liegt (0xdad6d1, N·L 0.421, ACES, Exposure 1.05) bei 216/255. Eine
+//     Bürodecke von aussen heller als die Sonnenfassade — das kann nicht stimmen.
+//  b) Der Raumquader war exakt so breit wie die Scheibe (2.38 m). Bei az = 0.65
+//     trifft der Sehstrahl die linke Achse mit rd.x/rd.z = 1.08; er verlässt den
+//     Quader nach 1.1 m seitlich und erreicht die Rückwand (2.6 m) NIE. Übrig bleibt
+//     nackte Seitenwand + Deckenstreifen — das Panel steht allein im Bild.
+// LÖSUNG (scene3d-lib.js bleibt unangetastet, alles über die Aufrufparameter):
+// Raumtyp 'kind' — im office-Zweig liest der Shader vom ROOMS-Eintrag NUR lampAn,
+// milchglas und durchblick>0.02; 'kind' liefert lampAn 0.4 (Panel 186 statt 253),
+// milchglas 0 und durchblick 0.25, das Rückfenster bleibt also erhalten.
+// Quader 6.60 x 3.20 x 2.20 m statt 2.38 x 2.43 x 2.60: 6.60 m ist gut zwei Achsen
+// (Achsmass 2.94 m) offene Bürofläche, 3.20 m lichte Höhe unter 3.30 m Geschosshöhe,
+// 2.20 m Tiefe, damit der schräge Strahl die Rückwand noch erreicht.
+// Nachgemessen über alle 16 Frontfenster und az -0.85…+0.85:
+// Panel max 253 → 186, Panelfläche max 13.7 % → 9.5 %, Seitenwandanteil der linken
+// Achse 92/85 % → 0…15 % (die Fenster zeigen jetzt Rückwand, Schreibtisch, Monitore).
+const RAUM_B=6.60, RAUM_H=3.20, RAUM_T=2.20, RAUM_TYP='kind';
+
 // Büro-Fenster: dunkler Rahmen, breite Scheibe links, schmale rechts mit Kämpfer
 function officeWindow(parent,x,y,w,h,glassM){
   const frame=new THREE.Mesh(new THREE.BoxGeometry(w,h,0.04),mat(0x3a3e43,0.55,0.2));
   frame.position.set(x,y,0.05); parent.add(frame);           // dunkler Rahmen
-  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.12,h-0.12),interiorRoom(w-0.12,h-0.12,2.6,x*2.3+y*1.1,'office'));
+  // Scheibe (w-0.12) bleibt die Öffnung, der Raum dahinter ist bewusst GRÖSSER:
+  // ein Büro ist breiter und höher als sein Fenster.
+  const inter=new THREE.Mesh(new THREE.PlaneGeometry(w-0.12,h-0.12),
+    interiorRoom(RAUM_B,RAUM_H,RAUM_T,x*2.3+y*1.1,'office',0,RAUM_TYP));
   inter.position.set(x,y,0.09); parent.add(inter);           // 3D-Büroraum (Interior-Mapping)
   const glass=new THREE.Mesh(new THREE.PlaneGeometry(w-0.08,h-0.08),glassM);
   glass.position.set(x,y,0.105); parent.add(glass);          // reflektierendes Glas
@@ -86,13 +116,13 @@ function buildScene(){
   scene.fog=new THREE.Fog(0xe9ebe9,62,130);
 
   { const sky=new THREE.Mesh(new THREE.SphereGeometry(100,32,18),
-      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.5,1.5,1.5),side:THREE.BackSide,fog:false}));
+      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(2.90,2.90,2.90),side:THREE.BackSide,fog:false}));
     scene.add(sky); }
 
-  scene.add(new THREE.HemisphereLight(0xdbe7f2,0x8d9084,0.35));
-  scene.add(new THREE.AmbientLight(0xffffff,0.06));
-  const sun=new THREE.DirectionalLight(0xffeed2,2.6);
-  sun.position.set(19,23,12);                   // streifendes Nachmittagslicht → Relief + Schattenwurf
+  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x8a9179,1.60));   // Himmel oben, Rasengrün unten
+  scene.add(new THREE.AmbientLight(0xffffff,0.05));
+  const sun=new THREE.DirectionalLight(0xfff6ea,2.8);
+  sun.position.set(23,16,13);                   // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,1);
   sun.castShadow=true;
   sun.shadow.mapSize.set(MOBILE?1024:4096,MOBILE?1024:4096);
@@ -100,7 +130,8 @@ function buildScene(){
   sun.shadow.camera.top=20;   sun.shadow.camera.bottom=-10;
   sun.shadow.camera.near=1; sun.shadow.camera.far=70;
   sun.shadow.camera.updateProjectionMatrix();
-  sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.05;
+  sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.035;
+  sun.shadow.radius=MOBILE?1:5;                   // PCF-Kernel → weiche Schattenkante
   scene.add(sun); scene.add(sun.target);
 
   // ---- Gelände: Rasen + grosser Vorplatz (Boden-Mix) + Beete ----
@@ -219,7 +250,7 @@ function buildScene(){
     fo.scale.set(1,1.15,1); fo.position.set(x,3.6,z); fo.castShadow=true; scene.add(fo);
   });
 
-  camera=new THREE.PerspectiveCamera(46,16/10,0.1,220);
+  camera=new THREE.PerspectiveCamera(46,16/10,0.5,220);
   applyCam(true);
 }
 
@@ -235,15 +266,17 @@ function applyCam(hard){
 function ensureRenderer(){
   if(renderer||failed) return !failed;
   try{
-    renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer=new THREE.WebGLRenderer({antialias:!MOBILE});
     renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    // PCF statt PCFSoft: nur PCF wertet shadow.radius aus → steuerbare Weichheit
+    renderer.shadowMap.type=MOBILE?THREE.BasicShadowMap:THREE.PCFShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure=0.72;
+    renderer.toneMappingExposure=1.05;
     maxAniso=renderer.capabilities.getMaxAnisotropy()||8;
     buildScene();
     const el=renderer.domElement;
+    el.addEventListener('webglcontextlost',e=>e.preventDefault());   // iOS: schwarzer Canvas vermeiden
     el.style.cssText='width:100%;height:100%;display:block;border-radius:inherit;cursor:grab;touch-action:none';
     let drag=false,lx=0,ly=0;
     el.addEventListener('pointerdown',e=>{ drag=true; lx=e.clientX; ly=e.clientY;
@@ -265,7 +298,7 @@ function sizeToHost(){
   renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
-  camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+  camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
   camera.updateProjectionMatrix();
 }
 // rAF-Loop + Timer-Watchdog: rendert auch weiter, wenn der Browser rAF drosselt
@@ -276,23 +309,10 @@ function startLoops(){
   if(!rafId) loop();
   if(!wdId) wdId=setInterval(()=>{ if(!document.hidden && performance.now()-lastRaf>200) step(); },120);
 }
-function texFromCanvas(cv){
-  if(!cv) return null;
-  const t=new THREE.CanvasTexture(cv);
-  t.colorSpace=THREE.SRGBColorSpace;
-  t.anisotropy=maxAniso;
-  return t;
-}
-function applyTex(m,cv,fallback,rough,ns){
-  if(m.map) m.map.dispose();
-  if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
-  m.map=texFromCanvas(cv);
-  m.color.set(cv?0xffffff:fallback);
-  m.roughness=cv?(rough!=null?rough:1.0):0.95;   // Klinker matt
-  if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.8; m.normalScale=new THREE.Vector2(s,s); } }
-  m.envMapIntensity=cv?0.18:0.3;                    // kaum Env-Reflexion
-  m.needsUpdate=true;
+// Fugentiefe in UV-Einheiten (~14 mm auf die von der Textur abgedeckte Breite)
+function applyTex(m,cv,fallback,rough,ns,pom){
+  applySurface(m,cv,{fallback,rough,normalScale:ns!=null?ns:0.9,aniso:maxAniso,
+    env:cv?0.40:0.3, pom:pom||0});
 }
 window.Office3D={
   available(){ return !failed; },
@@ -310,11 +330,18 @@ window.Office3D={
   },
   // Render-Loop + Watchdog anhalten (Mixer zu / anderes Gebaeude aktiv)
   stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId=0; } if(wdId){ clearInterval(wdId); wdId=0; } },
+  // Kontext und Speicher wirklich freigeben — ensureRenderer() baut beim naechsten mount() neu auf
+  dispose(){
+    this.stop();
+    if(ro){ ro.disconnect(); ro=null; }
+    disposeScene(scene,renderer);
+    renderer=null; scene=null; camera=null; host=null; failed=false;
+  },
   setTextures(facadeCv,sideCv,floorCv){
     if(!renderer) return;
-    applyTex(facadeMat,facadeCv,0xdad6d1);
-    applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce);
-    applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce);
+    applyTex(facadeMat,facadeCv,0xdad6d1,1.0,0.9,0.0013);
+    applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce,1.0,0.9,0.0016);
+    applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce,1.0,0.9,0.0016);
     applyTex(floorMat,floorCv,0xd0cdc8,0.8,0.55);
   },
   snapshot(w,h){
@@ -322,13 +349,13 @@ window.Office3D={
     const pr=renderer.getPixelRatio(), sz=new THREE.Vector2(); renderer.getSize(sz);
     renderer.setPixelRatio(1); renderer.setSize(w,h,false);
     camera.aspect=w/h;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     const url=renderer.domElement.toDataURL('image/png');
     renderer.setPixelRatio(pr); renderer.setSize(sz.x,sz.y,false);
     camera.aspect=sz.x/sz.y;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     return url;

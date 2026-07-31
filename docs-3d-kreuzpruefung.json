@@ -1,0 +1,341 @@
+{
+ "widersprueche": [
+  {
+   "thema": "Klinker-Massstabssprung an der Gebäudeecke (Front vs. Giebel)",
+   "positionen": "Architektur: 'Schichthöhe auf der Giebelseite 39 % grösser, teuerster Fehler überhaupt'. Architekturvisualisierung: 'Faktor 1.67, fachlich schwerster Befund der Liste'. Sichtmauerwerk: 'Front 2000x1270 px auf 9.60x6.10 m = 4.80 mm/px isotrop, Giebel 1600x1700 px auf 8.00x8.50 m = 5.00 mm/px — exakt derselbe Steinmassstab, Finger weg'.",
+   "entscheidung": "Sichtmauerwerk hat recht. Architektur und Architekturvisualisierung sind BEIDE widerlegt. Der Befund wird gestrichen, und mit ihm der gesamte Umbau auf Meter-UVs + RepeatWrapping.",
+   "begruendung": "In app.js Zeile 1368-1371 bekommt das EFH ZWEI getrennte Canvas: facadeCv 2000x1270 mit fD=facadeDiv(9.6)=6.24 und sideCv 1600x1700 mit sD=facadeDiv(8.0)=5.20. paintCourses rechnet bw=W*0.156/texDiv: Front 2000*0.156/6.24=50.0 px bei 4.80 mm/px = 240.0 mm; Giebel 1600*0.156/5.20=48.0 px bei 5.00 mm/px = 240.0 mm. Beide Canvas sind in sich isotrop (2000/9.6=208 px/m und 1270/6.1=208 px/m; 1600/8.0=200 und 1700/8.5=200). Der Stein ist auf beiden Wänden 240 mm hoch UND breit. Architektur und Viz haben aus wallGeo() (UVs auf 0..1) auf einen Stretch geschlossen, ohne die von app.js gelieferten Canvas-Masse zu prüfen. Zusatzargument: RepeatWrapping wäre sogar eine Verschlechterung — paintCourses zeichnet von c=-1 bis cols ohne jede Wrap-Logik, das Canvas ist NICHT kachelbar; jede TILE_W Meter liefe eine sichtbare Naht durch die Fassade."
+  },
+  {
+   "thema": "Fugenflucht über Eck (das, was vom Eck-Befund übrig bleibt)",
+   "positionen": "Sichtmauerwerk: 'Front v=y/6.10, Giebel v=y/8.50, beide beginnen mit ganzer Schicht an der Texturoberkante — die liegen 2.40 m auseinander, die Lagerfuge springt an der Kante um 0-40 mm'.",
+   "entscheidung": "Bestätigt, aber niedrig priorisiert. Fix über einen Phasenversatz der Giebel-UV, NICHT über einen gemeinsamen Datum am Wandfuss.",
+   "begruendung": "paintCourses zeichnet r=0 am Canvas-OBEN, und die Wand-UV setzt v=1 an die Wandkrone — die ganze Schicht liegt oben, die angeschnittene unten hinter dem 0.32 m hohen Sockel. Das ist maurerhandwerklich richtig und darf nicht umgedreht werden (Sichtmauerwerk sagt das selbst). Der Versatz ist (HR-HE) mod Schichtmass = 2.40 mod 0.0836 = 0.059 m beim NF-Stein. Bei 32 px/m (Startansicht) sind das 1.9 Bildpunkte, bei maximalem Zoom 4.5. Kosten dagegen: setTextures() braucht einen zusätzlichen Parameter (Schichtmass in Metern) aus app.js, weil efh3d.js das Steinformat nicht kennt. Wirkung/Aufwand ist damit schlecht — Rang 22."
+  },
+  {
+   "thema": "Geschossaufbau: OG-Fussboden bei 3.20 oder 3.40 m",
+   "positionen": "Architektur: FFL EG 0.32 / lichte Höhe 2.58 / Decke 0.30 / FFL OG 3.20 / lichte Höhe 2.50 / Wandkrone 6.10. Innenarchitektur: 'OG-Rohdecke über dem EG-Sturz (3.10) → OG-Fussboden bei ca. 3.40, Decke 5.90'.",
+   "entscheidung": "Architektur gewinnt. FFL OG = 3.20, Decke OG = 5.70.",
+   "begruendung": "Innen leitet 3.40 aus dem heutigen EG-Sturz bei 3.10 ab — genau der Wert, den beide Fachleute als Fehler bezeichnen (Sturz auf Rohdeckenniveau, kein Platz für Auflager). Eine Ableitung aus einer Grösse, die gestrichen wird, ist wertlos. Architekturs Kette ist geschlossen und rechnet auf: 0.32+2.58+0.30 = 3.20, 3.20+2.50 = 5.70, Drempel 0.40 bis zur Wandkrone 6.10. Daraus folgen zwingend die Werte für den Innenraum-Shader: EG uBelow = 1.20-0.32 = 0.88, uAbove = 2.90-2.55 = 0.35; OG uBelow = 4.10-3.20 = 0.90, uAbove = 5.70-5.45 = 0.25."
+  },
+  {
+   "thema": "OG-Öffnungen anheben: y=4.775/h=1.35 oder y=4.70/h=1.45",
+   "positionen": "Architektur: OG-Mitte 4.775, Höhe 1.35 → Brüstung 4.10, Sturz 5.45. Innenarchitektur: 'OG-Öffnungen um 0.25 m anheben und strecken, y 4.45→4.70 bei h 1.30→1.45'.",
+   "entscheidung": "Architektur gewinnt. Innenarchitekturs Variante wird gestrichen.",
+   "begruendung": "Mit dem entschiedenen FFL OG = 3.20 ergibt Innens Vorschlag eine Brüstung von 3.975-3.20 = 0.775 m. Das unterschreitet die Absturzsicherung (SIA 358 bzw. MBO: 0.90 m bis 12 m Absturzhöhe) und wäre ohne absturzsichernde Verglasung unzulässig. Architekturs 4.10 ergibt exakt 0.90 m. Innens eigentliche Sorge ('Sturz nur 1.70 m über Fussboden, ein 2.20-m-Schrank füllt die ganze sichtbare Wand') erledigt sich mit demselben Schritt: Sturz 5.45 = 2.25 m über FFL. Der Befund ist damit gegenstandslos, nicht nur unterlegen."
+  },
+  {
+   "thema": "Innenarchitekturs Grundriss vs. Architekturs neue Fensterachsen",
+   "positionen": "Innenarchitektur bindet 14 Raum-IDs an die HEUTIGEN Koordinaten (Front (-2.9,1.95) WOHNEN, (0,4.50) BAD, Giebel x=±1.9/y=2.30 usw.). Architektur verschiebt alle Achsen auf ±2.70, vereinheitlicht auf 1.30x1.35 und legt das mittlere OG-Fenster auf ein Zwerchhaus bei z=+1.20.",
+   "entscheidung": "Achsen (Architektur) gewinnen; der Grundriss (Innenarchitektur) bleibt gültig und wird nur umkoordiniert. Der Zwerchhaus-Teil wird gestrichen, weil NUR er die Zuordnung wirklich bricht.",
+   "begruendung": "Die Raumzuordnung hängt an der Topologie (links/mitte/rechts, EG/OG), nicht an den Zahlen: -2.9→-2.70, 2.9→2.70, 1.95/2.30→1.875, 4.45/4.50→4.775. Alle 13 Zuordnungen bilden 1:1 ab, kein Raum verliert sein Fenster. Der EINZIGE echte Bruch ist das Zwerchhaus: es macht aus dem mittleren OG-Fenster eine Galerie-/Treppenhausöffnung bei z=+1.20 und nimmt Innen damit sein billigstes und glaubwürdigstes Element weg (Milchglas-Bad über der Haustür, ein früher return, ca. 15 statt 120 Instruktionen). Zusatzgewinn der Vereinheitlichung: ein einziger Fenstertyp macht die Instanzierung aller Laibungs-, Rahmen- und Sohlbankkörper trivial (siehe Rang 3)."
+  },
+  {
+   "thema": "Dachfarbe",
+   "positionen": "Architektur: 'Dachfarbe (Ziegel rgb 44-82, First 0x33363a) trifft die Referenz präzise. Farbwerte nicht anfassen, nur den Massstab.' Architekturvisualisierung: 'gemessen bei (510,141)-(590,166): L=10 von 255; Muhr L=41 (abgewandt) und L=86 (besonnt)'.",
+   "entscheidung": "Architekturvisualisierung gewinnt eindeutig. Grundwert in roofCanvas() von v=44+38*w auf v=58+46*w, First 0x33363a→0x4a4e54, Traufwulst 0x3a3d42→0x51555b.",
+   "begruendung": "Architektur hat die CANVAS-Werte mit der Absicht verglichen, Viz die GERENDERTEN Pixel mit den gerenderten Pixeln der Referenz. Nur letzteres zählt. Bei linear 0.003 ist überhaupt keine Modulation mehr darstellbar — deshalb bleibt das Dach in fin-efh.png eine schwarze Fläche, egal wie gut Normal-Map und Pfannenmassstab werden. Die Reihenfolge ist zwingend: erst aufhellen, dann den Massstab korrigieren, sonst sieht man das Ergebnis der Massstabskorrektur gar nicht."
+  },
+  {
+   "thema": "Dach-Kachelung repeat.x/repeat.y",
+   "positionen": "Architektur: rT.repeat.set(3.3, 1.1). Architekturvisualisierung: rT.repeat.set(3.6, 3.0) UND Reihenstösse im Canvas von y+=30 auf y+=96.",
+   "entscheidung": "Synthese: Canvas-Reihen auf y+=96 (Viz), repeat.set(3.3, 3.6). Beide Einzelvorschläge sind falsch.",
+   "begruendung": "Nachgerechnet auf der NEUEN Geometrie (Breite 10.50 m, Sparrenlänge 6.293 m): Canvas hat 512/48 = 10.667 Wellen quer und bei 96-px-Reihen 5.333 Reihen längs. Pfannenteilung 0.30 m → 35 Pfannen → repeat.x = 35/10.667 = 3.28 → 3.3 (Architektur trifft das, Viz' 3.6 gäbe 0.273 m). Ziegellänge 0.33 m → 19.07 Reihen → repeat.y = 19.07/5.333 = 3.58 → 3.6 (Viz' 3.0 gäbe 0.393 m, zu lang; Architekturs 1.1 rechnet noch mit den alten 30-px-Reihen). Viz' Canvas-Änderung ist trotzdem richtig: weniger, grössere Merkmale im Canvas heisst weniger Aliasing unter Nyquist. Zusätzlich rT.anisotropy = roofNm.normal.anisotropy = maxAniso — maxAniso wird in ensureRenderer() Zeile 396 vor buildScene() Zeile 397 gesetzt, ist also verfügbar."
+  },
+  {
+   "thema": "Glas-Opazität: Innenraum sichtbarer oder unsichtbarer machen",
+   "positionen": "Innenarchitektur: EG auf opacity 0.44 senken ('jede Arbeit am Innenraum verpufft sonst zur Hälfte'). Architekturvisualisierung: auf 0.62 anheben, Farbe 0x232b33→0x1b222a ('Muhrs Scheiben messen im Schlitz L=10 bis 16').",
+   "entscheidung": "Richtung Viz, Kompromiss opacity 0.58 (42 % Innenraum-Durchlass), Farbe 0x1f2731. Als Folge wird Innenarchitekturs Möbel-Detailschicht gestrichen.",
+   "begruendung": "Die Referenz gewinnt ihre Qualität genau dadurch, dass die Scheibe ein Spiegel ist — in muhr-ref.jpg ist in keinem Fenster ein Möbel erkennbar, nur Himmel und Baumsilhouette. Und das ist ein KLINKER-Konfigurator: der Innenraum existiert, damit die Öffnung kein schwarzes Loch ist, nicht als Schauobjekt. Innens Einwand bleibt aber gültig und wird angewendet — nur nicht so, wie er will: bei 42 % Durchlass und 32-76 px/m fallen nach Innens EIGENER Faustregel ('nichts unter 0.25 m Objektmass, nichts unter 30 % Tonwertunterschied') sein 0.02-m-Schattenschlitz (0.6-1.5 px), das 0.03-m-Lichtband, die ø-0.35-Pendelleuchte, die 0.012-m-Schrankfugen und die 0.175-m-Treppenstufen durch. Übrig bleiben genau die Elemente, die die Regel bestehen: Oberschrankband 0.80 m, Schrankfront 2.40x2.20, Wandton, Rollo, und die reine Treppen-DIAGONALE ohne Stufenmodulation."
+  },
+  {
+   "thema": "Mipmaps auf Normal- und ORM-Karte",
+   "positionen": "Sichtmauerwerk: 'generateMipmaps=true und minFilter=LinearMipmapLinearFilter für Normal- UND ORM-Karte, beim Höhenkanal sogar erwünscht'. Landschaftsarchitektur: 'bei aktivem POM darf das NICHT gelten, weil klbParallax den Blau-Kanal der roughnessMap traversiert'.",
+   "entscheidung": "Landschaftsarchitektur hat recht. Mipmaps NUR für die Normal-Karte; die ORM-Karte behält generateMipmaps=false / LinearFilter, solange POM aktiv ist.",
+   "begruendung": "scene3d-lib.js Zeile 486-490: texture2D(roughnessMap, uvc) steht in einer Schleife mit datenabhängigem break. In GLSL ES sind implizite Ableitungen in nicht-uniformem Kontrollfluss UNDEFINIERT — der Treiber nimmt das Mip-Level aus Ableitungen, die für uvc gar nicht gelten. Ergebnis ist wanderndes/springendes LOD im Parallax-Marsch, also genau das Kriechen, das man beseitigen wollte. Die Normal-Karte wird dagegen genau einmal in uniformem Fluss gesampelt — dort sind Mipmaps richtig und nötig. Preis: aoMap und roughnessMap teilen sich dieselbe Textur (Zeile 539), die AO bleibt also ohne Mipmaps. Das ist hinnehmbar, die AO ist dosiert (0.50-1.0)."
+  },
+  {
+   "thema": "Rollschicht-Vorsprung über den Öffnungen",
+   "positionen": "Architektur 0.025 m, Sichtmauerwerk 0.012 m, Architekturvisualisierung 0.115 m ('Soldatenschicht BoxGeometry(w+0.12, 0.24, 0.115)').",
+   "entscheidung": "Sichtmauerwerk: 0.012-0.015 m Vorsprung, Länge w+0.24, Höhe 0.24. Viz' 0.115 m wird gestrichen.",
+   "begruendung": "Eine Rollschicht über einer Öffnung IST die Wandebene, sie kragt nicht aus — 115 mm Vorsprung wäre ein Gesims, kein Sturz, und würde an jeder der 15 Öffnungen einen 115 mm tiefen Schlagschatten werfen, den die Referenz nirgends zeigt. 12 mm reichen für die Schattenkante und liegen unter der Ebenheitstoleranz von Verblendmauerwerk (DIN 18202, ±2-5 mm auf 1 m). Länge w+0.24 statt Sichtmauerwerks w+0.23: 120 mm Auflager je Seite ist genauso normgerecht und fluchtet exakt mit der bereits vorhandenen Sohlbankbreite (BoxGeometry(w+0.24,...) in makeWindow Zeile 134) — Sturz und Sohlbank stehen dann lotrecht übereinander."
+  },
+  {
+   "thema": "Sohlbank: Betonwerkstein beibehalten oder Klinker-Rollschicht",
+   "positionen": "Architektur: 'Sohlbank plus separate Wassernase — ein korrektes Mauerwerksdetail. Genau so lassen.' Sichtmauerwerk Variante B und Architekturvisualisierung: Sohlbankrollschicht aus dem gewählten Klinker.",
+   "entscheidung": "Klinker-Rollschicht (Sichtmauerwerk B / Viz). Architekturs 'nicht anfassen' unterliegt. Vorsprung 100 → 35 mm, Neigung 12 Grad, seitlicher Überstand 120 → 60 mm je Seite.",
+   "begruendung": "Kommerzielles Argument, und es ist zwingend: 15 Sohlbänke à ca. 0.20 m2 sind 3 m2 zusätzliche Produktfläche an der Stelle, an der der Kunde im Nahbild am nächsten hinschaut — heute zeigen sie 0xdedbd5, also Beton. Technisch kostet der Wechsel null: facadeMat ist bereits geladen, und weil das Front-Canvas mit 208 px/m in BEIDEN Richtungen isotrop ist (siehe erster Widerspruch), liefert ein blosser u/v-Tausch der UVs stehende Steine in exakt richtiger Grösse — keine zweite Textur, kein zweiter Draw-Call. Architekturs Detail (Wassernase) bleibt erhalten, nur als Teil desselben instanzierten Körpers. Der 100-mm-Vorsprung ist unabhängig davon falsch: Box-Tiefe D+0.10 = 0.29 bei Mitte z=-0.045 ergibt Vorderkante z=+0.10 — nachgerechnet und bestätigt."
+  },
+  {
+   "thema": "Sonnenhöhe",
+   "positionen": "Architektur und Innenarchitektur: 31.6 Grad. Landschaftsarchitektur und Architekturvisualisierung: 28.7 Grad.",
+   "entscheidung": "28.7 Grad ist richtig. Architektur/Innen haben den Zielpunkt vergessen.",
+   "begruendung": "sun.position (19,13.5,11), sun.target (0,1.5,0). Lichtrichtung = (-19,-12,-11), Horizontalbetrag sqrt(361+121) = 21.95, Elevation = atan(12/21.95) = 28.66 Grad. Architektur/Innen haben atan(13.5/21.95) = 31.6 gerechnet, also die Zielhöhe 1.5 unterschlagen. Praktische Folge: der Schattenlängenfaktor ist 1/tan(28.66) = 1.829, nicht 1.628 — Landschaftsarchitekturs sämtliche Schattenwurf-Positionen sind damit korrekt gerechnet, sie müssen aber nach Viz' Anhebung auf 33.1 Grad (Faktor 1.531, -16 %) allesamt neu bestimmt werden."
+  },
+  {
+   "thema": "Rollladenkasten: aufhellen oder verkleinern",
+   "positionen": "Architektur: Höhe 0.30→0.16, Farbe 0x33373c→0xe8e6e1 (Rahmenweiss), im EG ganz weg. Architekturvisualisierung: Höhe 0.30→0.16, Farbe →0x4a4d54, z zurücksetzen. Sichtmauerwerk: der Kasten sitzt genau dort, wo die Rollschicht hingehört.",
+   "entscheidung": "Beide Kompromisse unterliegen: withBox=false an allen 15 Öffnungen, das Bauteil entfällt ersatzlos.",
+   "begruendung": "In muhr-ref.jpg ist kein einziger Kasten sichtbar — bei Aufsatzrollläden liegt er hinter dem Sturz. Der Kasten ist nach der Dachfläche das auffälligste künstliche Element in fin-efh.png und p5b-detail.png, und Sichtmauerwerk hat recht, dass er die Rollschicht blockiert, also das Detail verhindert, das die Referenz an jeder Öffnung zeigt. Ein weisser oder grauer Kasten bleibt ein Kasten. Löschen kostet nichts, spart 15 Meshes und 15 Materialien und ist die einzige Variante, die mit der Referenz übereinstimmt."
+  },
+  {
+   "thema": "Tone-Mapping des Innenraum-Shaders: Includes oder handgeschriebener ACES-Fit",
+   "positionen": "Innenarchitektur: gl_FragColor = vec4(col,1.0) plus #include <tonemapping_fragment> und #include <colorspace_fragment>. Architekturvisualisierung: Uniform uExposure einführen und einen Narkowicz-ACES-Fit von Hand einsetzen.",
+   "entscheidung": "Innenarchitektur gewinnt. Die three-Includes verwenden.",
+   "begruendung": "three r160 setzt toneMappingExposure in WebGLRenderer.setProgram für JEDES Programm, das das Uniform deklariert, und ShaderMaterial hat toneMapped=true per Default — die Includes funktionieren also in einem ShaderMaterial (nur RawShaderMaterial ist ausgenommen) und liefern bitgenau dieselbe Kurve wie Fassade, Dach und Himmel. Viz' Handfit driftet dagegen sofort auseinander, sobald jemand renderer.toneMapping oder toneMappingExposure ändert — und genau das steht im selben Paket an (0.86 → 1.05). Beide Fachleute haben den Fehler unabhängig gefunden und beide haben in der Sache recht; nur die Umsetzung ist eine Frage."
+  }
+ ],
+ "gestrichen": [
+  {
+   "befund": "UVs in Metern + RepeatWrapping für Front- und Giebelwand, TILE_W/TILE_H, Eckriegel 0.365 x HE x 0.365 an allen vier Ecken (Architektur, Befund 7; Architekturvisualisierung, Befund 9)",
+   "grund": "Prämisse widerlegt: app.js liefert zwei getrennte, jeweils isotrope Canvas (2000x1270 auf 9.6x6.1 m = 208 px/m; 1600x1700 auf 8.0x8.5 m = 200 px/m), der Stein ist auf beiden Wänden 240 mm. Es gibt keinen Massstabssprung zu reparieren. Zweitens ist paintCourses nicht kachelbar (zeichnet c=-1..cols ohne Wrap), RepeatWrapping erzeugte also alle TILE_W Meter eine sichtbare Naht — eine Verschlechterung. Die Eckriegel fallen mit: sie brächten einen DRITTEN UV-Bezug an die Kante und wären bei 76 px/m maximalem Zoom 2-3 Bildpunkte breit."
+  },
+  {
+   "befund": "Zwerchhaus über der Mittelachse, 3.20 m breit, 1.20 m Vortritt, eigener First bei 8.30 m, 7 Meshes (Architektur, Befund 4)",
+   "grund": "Zurückgestellt, nicht dauerhaft verworfen. Drei Gründe: (1) Die Kehle zwischen einem 45-Grad-Zwerchdach und der 45-Grad-Hauptdachfläche lässt sich mit BoxGeometry nicht schliessen — es bleiben Durchdringungen und Schattenakne genau an der Stelle, auf die der Blick fällt; die Szene hat keine CSG und keine Addons. (2) Es nimmt Innenarchitektur das mittlere OG-Fenster als Bad weg, also deren billigsten Befund (früher return, ca. 15 statt 120 Instruktionen). (3) Das erklärte Ziel — starke Mittelachse — wird durch Segmentbogen über der Tür (9 instanzierte Keilsteine), einheitliches Achsraster und 45-Grad-Dach bereits erreicht, bei etwa einem Zehntel des Risikos."
+  },
+  {
+   "befund": "Reduzierte Variante: Vordach 2.40 x 1.10 m, Vorderkante y=2.85, auf zwei Konsolen (Architektur, Befund 4 Fallback)",
+   "grund": "Harte geometrische Kollision mit dem Segmentbogen, der ranghöher ist: Sturzlinie 2.55 + Stich 0.18 + Keilsteinhöhe 0.30 = Bogenoberkante 3.03 m. Ein Vordach mit Vorderkante bei 2.85 schneidet mitten durch den Bogen. Entweder-oder — und der Bogen gewinnt, weil er das Produkt zeigt und die Referenz ihn genau so ausführt."
+  },
+  {
+   "befund": "Parallax-Occlusion auf dem Vorplatz, pom = 0.008/12 (Landschaftsarchitektur, Befund 6b)",
+   "grund": "Von der eigenen Messung des Gutachters erledigt: vt.z liegt auf dem Boden bei 0.22-0.29, layers = mix(26,8,vt.z) ergibt 21-22 Samples pro Pixel auf 25-30 % der Bildfläche — der teuerste denkbare Ort für POM. Dazu ein Artefakt, das der Gutachter nicht nennt: klbParallax bricht bei vt.z < 0.10 mit 'return uv' ab (scene3d-lib.js Zeile 480). Auf einer 60 m tiefen Bodenebene liegt diese Schwelle als scharfe, quer durchs Bild laufende Kante, an der die Fugentiefe schlagartig verschwindet. Ersatz: Mipmaps auf der Boden-Normalkarte (der Boden hat kein POM, dort sind Mipmaps zulässig) plus anisotropy=maxAniso — 80 % der Wirkung für null Shader-Kosten."
+  },
+  {
+   "befund": "2 % Längs- und 1.5 % Quergefälle der Zufahrt über ein 0.50-m-Stützpunktraster, ca. 288 Dreiecke (Landschaftsarchitektur, Befund 5)",
+   "grund": "Der genannte Wirkmechanismus existiert nicht. Begründet wird das Gefälle mit einem 'wandernden Glanzband'; floorMat läuft aber mit roughness 0.85 und envMapIntensity 0.20-0.40 (efh3d.js Zeile 175 und applyTex-Aufruf Zeile 468) — es gibt kein Glanzband zu modulieren. Rein geometrisch sind 12.3 cm Fall auf 6.15 m bei 22-29 Grad Blickwinkel etwa 2 Bildpunkte Silhouettenänderung. Entwässerungsrinne und Punktablauf fallen mit, sie hängen am Tiefpunkt."
+  },
+  {
+   "befund": "Tufts auf die Heckenseitenflächen, zwei zusätzliche Reihen bei y=0.55 und 1.15, ca. 1260 zusätzliche Instanzen, 32'000 Dreiecke (Landschaftsarchitektur, Befund 9 Punkt 3)",
+   "grund": "Die Hecken stehen bei x=±10.6 und z=-13.5. Nach der Kameraänderung (Rang 6: rad 25, Shift, Haus füllt 82 % der Bildhöhe) belegen sie unter 5 % der Bildfläche bei 33-45 m Entfernung und liegen im neuen Fog (near 30). 32'000 Dreiecke plus verdoppelte Instanzzahl im Shadow-Pass für einen Bildanteil unter 5 % ist das schlechteste Verhältnis im ganzen Paket. Farbkorrektur (0x44553a → 0x506732, Tuft-HSL) und Schliessen der 6.0-m-Lücken zwischen z=-7.5 und -13.5 bleiben — beide kosten null."
+  },
+  {
+   "befund": "Hausbaum Amelanchier, 4.20 m hoch, bei x=+9.00 / z=+7.20 (Landschaftsarchitektur, Befund 2 Punkt 1)",
+   "grund": "Gegen die ALTE Kamera gerechnet ('bei az=0.52 liegt der Baum 7 Grad rechts der Giebelecke'). Mit der neuen Kamera steht diese bei (12.42, 1.70, 22.65): der Baum liegt dann 17.3 Grad neben der Blickachse bei 21 Grad halbem horizontalem Bildwinkel, also im Bild, und ist mit 15.9 m nur 0.70-mal so weit weg wie das Haus (22.65 m) — er vergrössert sich um Faktor 1.42 und verdeckt die rechte Giebelwand von 0 bis rund 6 m scheinbarer Höhe. Das ist die zweite Produktfläche des Konfigurators. Die geforderten Schattenwerfer liefern stattdessen die Kübel und Formschnittkugeln am Eingang (Rang 17), die nie verdecken."
+  },
+  {
+   "befund": "Müllplatz mit Lattenschirm, Veloabstellplatz mit Anlehnbügeln, Punktablauf, Parkfeldaufteilung 2x 2.60x5.00 m, Bistrotisch mit zwei Stühlen, Entwässerungsrinne (Landschaftsarchitektur, Befunde 1, 5, 12, 14) — zusammen ca. 18 Meshes",
+   "grund": "Alles liegt zwischen z=+2.2 und +6.9. Nach der Kameraänderung liegt die optische Achse waagrecht auf 1.70 m und das Bild reicht 2.64 m darunter — der Boden belegt am Hausabstand die unteren 14 % der Bildhöhe und nach hinten schnell weniger, bei 22 Grad Streifwinkel. Silhouetten von 0.72 m (Tisch) bis 1.30 m (Sichtschutz) sind dort 3-10 Bildpunkte hoch. Das ist Aufwand für Grundriss-Logik, die in dieser Kamera nie zu sehen ist. Die zonierte Belags-Shape selbst (ein Draw-Call statt vier Planes) bleibt, sie ist kostenlos und liefert die Randkante."
+  },
+  {
+   "befund": "Laibungstiefe REVEAL von 0.19 auf 0.13 m reduzieren (Sichtmauerwerk, Befund 2)",
+   "grund": "Fachlich richtig gedacht, aber am Bestand vorbei gemessen. Die wirksame Laibung bis zur Rahmenvorderkante beträgt heute schon 0.19 - 0.165 + 0.0275 = ca. 0.14 m (Blendrahmen fz = -D+0.025 = -0.165, Rahmentiefe 0.055) — also exakt Sichtmauerwerks eigener Sollwert 115 mm Vormauerschale plus 15-25 mm Anschlag. Die 0.19 m sind die Tiefe des Laibungs-KÖRPERS, nicht der sichtbaren Laibung; die Differenz ist genau der Schattenspalt. Drei von fünf Gutachtern nennen diese Laibung den Grund, warum die Fassade überhaupt gebaut aussieht. Nichts ändern."
+  },
+  {
+   "befund": "Entwässerungsöffnungen als offene Stossfugen, 10 x 71 mm, jede vierte Stossfuge (Sichtmauerwerk, Befund 10)",
+   "grund": "Vom Gutachter selbst mit 'gering' bewertet und unter der Auflösungsgrenze: 10 mm Breite sind bei 32 px/m (Startansicht) 0.32 Bildpunkte, bei 76 px/m (maximaler Zoom nach Kameraumstellung) 0.76 Bildpunkte. Unter einem Pixel bei jeder erreichbaren Kameraposition. Der Traufspalt von 25 mm aus demselben Befund fällt aus demselben Grund mit — er wird ohnehin von der neuen Traufblende verdeckt."
+  },
+  {
+   "befund": "Sockel mit eigenem Material sockelMat und drittem Texturkanal aus setTextures (Architektur, Befund 13)",
+   "grund": "Der Gutachter benennt die Kosten selbst und sie sind zu hoch: ein wirklich anderer Sockelstein bedeutet einen zweiten vollständigen surfaceMaps-Lauf bei jedem Produktwechsel. Dazu kommt ein Cache-Problem, das keiner gesehen hat: _mapCache (scene3d-lib.js Zeile 221) schlüsselt über cv.__klbKey, und dieser Schlüssel enthält maxW nicht — verschiedene Auflösungen desselben Canvas liefern sich gegenseitig das falsche Ergebnis. Gegenwert: der Sockel ist 0.32 m hoch, also 2.7 % der neuen Bildhöhe, und wird unten vom Kiesstreifen und vom Kontaktschatten-Decal überlagert. Stattdessen facadeMat mit color 0xb0aca6 als Abdunkler — dieselbe Karte, null zusätzliche Kosten."
+  },
+  {
+   "befund": "Handgeschriebener Narkowicz-ACES-Fit mit eigenem uExposure-Uniform im Innenraum-Shader (Architekturvisualisierung, Befund 8 Punkt 2)",
+   "grund": "Ersetzt durch Innenarchitekturs Lösung mit #include <tonemapping_fragment> und #include <colorspace_fragment>. three r160 injiziert toneMappingExposure in jedes nicht-Raw-Programm und ShaderMaterial hat toneMapped=true — die Includes liefern dieselbe Kurve, kosten dieselben ca. 10 Instruktionen und bleiben automatisch synchron, wenn renderer.toneMapping oder toneMappingExposure geändert wird. Genau das steht im selben Paket an (0.86 → 1.05), ein Handfit wäre sofort veraltet."
+  },
+  {
+   "befund": "Möbel-Detailschicht im Innenraum: Sofa auf eigener Tiefenebene z=-2.40, Unterbau-Lichtband 0.03 m, Schattenschlitz 0.02 m, Pendelleuchte ø 0.35 m, Treppen-Stufenmodulation (Steigung 0.175 / Auftritt 0.28), Schrankfugen 0.012 m, Nachttischleuchte ø 0.09 m (Innenarchitektur, Befunde 5, 6, 7, 8)",
+   "grund": "Fällt durch Innenarchitekturs EIGENE Faustregel ('nichts unter 0.25 m Objektmass und nichts unter 30 % Tonwertunterschied'), sobald die Glas-Opazität auf 0.58 geht: bei 32-76 px/m und 42 % Durchlass sind 0.02 m = 0.6-1.5 px bei effektiv unter 15 % Kontrast, 0.012 m Schrankfugen 0.4-0.9 px, ein 0.175-m-Riser 5.6-13 px bei etwa 8 % Kontrast. Bestehen bleiben genau die Elemente, die die Regel erfüllen: Oberschrankband 0.80 m hoch, Schrankfront 2.40 x 2.20 m, Wandton, Rollo — und die reine Treppen-DIAGONALE als Halbebenentest (3 Instruktionen) ohne Stufenmodulation, die Innen zu Recht als das beschreibt, woran man eine Diele auch bei 15 px erkennt."
+  },
+  {
+   "befund": "sun.shadow.camera.top von 16 auf 20 anheben (Architektur, Befund 1, echtzeit_risiko)",
+   "grund": "Faktisch unnötig, nachgerechnet. Die Shadow-Kamera blickt von (19,13.5,11) auf (0,1.5,0); ihre y-Achse im Lichtraum ist (-0.4131, 0.8727, -0.2390). Der NEUE First (0, 10.10, -4.0) liegt relativ zur Lichtposition bei (-19, -3.4, -15) und projiziert damit auf y = 8.47. Die Kaminspitze bei 11.00 m projiziert auf 9.25. Gegen top = 16 ist das über 40 % Reserve. Die Änderung würde die Texelgrösse verschlechtern — also genau das Gegenteil dessen, was Rang 12 erreichen will."
+  },
+  {
+   "befund": "OG-Öffnungen um 0.25 m anheben und strecken: y 4.45 → 4.70, h 1.30 → 1.45 (Innenarchitektur, Befund 14)",
+   "grund": "Doppelt erledigt. Erstens unzulässig: mit dem entschiedenen FFL OG = 3.20 ergäbe das eine Brüstung von 0.775 m, unter der Absturzsicherung von 0.90 m (SIA 358 / MBO bis 12 m Absturzhöhe). Zweitens gegenstandslos: die zugrundeliegende Klage ('Sturz nur 1.70 m über Fussboden') beruht auf dem alten Sturz 5.10 bei FFL 3.40; mit Architekturs 5.45 bei FFL 3.20 sind es 2.25 m, ein normales Rohbaumass. Vom Gutachter selbst mit 'gering' bewertet."
+  },
+  {
+   "befund": "SSAO in drei Passes (Depth-Prepass, AO, Blur), hinter !LOWQ (Architekturvisualisierung, Befund 12)",
+   "grund": "Vom Gutachter selbst korrekt zurückgestellt und hier bestätigt: three r160 bündelt keine Addons, EffectComposer müsste nachgezogen oder handgeschrieben werden, und 3 zusätzliche Full-Screen-Passes bei 1000x640 kosten auf einem Mittelklasse-Handy 3-6 ms von 16.7 ms Budget. Entscheidender ist die Reihenfolge: das Kontaktschatten-Decal (Rang 5, ein Draw-Call) liefert genau die Verdunkelung am Bauwerksfuss, die im Bild fehlt — und danach ist der Rest von SSAO Objekt-zu-Objekt-Kontakt an wenigen Kübeln. Erst nach Rang 1-20 überhaupt wieder bewerten."
+  },
+  {
+   "befund": "Zaunstäbe mit castShadow (Architekturvisualisierung, Befund 10, über Verdickung auf 0.035 m und Frustum ±11 gerettet)",
+   "grund": "Beide Fachleute haben in ihrem eigenen Rahmen recht — Landschaft (Stabschatten wird bei 7.3 mm/Texel und radius 5 zu grauem Rauschen), Viz (bei 5.4 mm/Texel und radius 2.5 löst 0.035 m auf 6.5 Texel auf). Entschieden wird es aber von der Kamera, nicht vom Schattenspeicher: der Zaun landet nach Rang 6 im untersten Zehntel des Bildes bei 22 Grad Streifwinkel. castShadow bleibt aus, die Stäbe werden zu EINEM InstancedMesh (-21 Draw-Calls). Die Verdickung auf 0.035 m wird trotzdem übernommen, gegen das Kantenflimmern im Haupt-Pass."
+  }
+ ],
+ "luecken": [
+  "DRAW-CALL-WIRKLICHKEIT — von keinem der fünf gezählt, und sie entscheidet, was man sich überhaupt leisten kann. makeWindow() erzeugt pro Fenster 15 Meshes (4 Laibungskörper, 1 Innenraum, 4 Rahmenhölzer, 1 Glas, 1 Pfosten, 1 Sohlbank, 1 Tropfblech, 1 Rollladenkasten, 1 Sturzuntersicht doppelt gezählt) und legt dabei FÜNF neue Materialien AN — revM, frM, die Sohlbank-, Tropfblech- und Kastenfarbe stehen alle als mat(...)-Aufruf INNERHALB der Funktion (Zeilen 114, 124, 134, 136, 139). Bei 13 Fenstern sind das 195 Meshes und 65 Materialien allein für die Fenster; die ganze Szene liegt bei rund 337 Meshes im Haupt-Pass plus dem Shadow-Pass. Zwei Eingriffe, zusammen etwa 40 Zeilen: (a) die fünf Materialien aus makeWindow herausziehen — 65 → 5 Materialien, reine Textänderung; (b) nach der Vereinheitlichung auf EINEN Fenstertyp (Rang 7) alle Laibungs-, Rahmen-, Sohlbank-, Tropfblech- und Glaskörper als InstancedMesh über eine Einheits-Box mit Instanz-Skalierung führen — 195 → etwa 21 Draw-Calls (14 Innenräume brauchen eigene Uniforms und bleiben einzeln). Das ist die Voraussetzung dafür, dass 15 Rollschichten, 15 Sohlbank-Rollschichten, 9 Bogenkeilsteine, Traufblende, Ortgangbretter und die Landschaftsobjekte überhaupt bezahlbar sind — sonst addieren die fünf Gutachten netto rund +100 Draw-Calls auf eine Szene, die schon zu viele hat.",
+  "scene3d-lib.js WIRD VON SECHS SZENEN BENUTZT — kein einziger Gutachter erwähnt es, und mehrere Vorschläge würden fünf Regressionen gleichzeitig auslösen. room3d.js, bungalow3d.js, villa3d.js, office3d.js, friesen3d.js und efh3d.js importieren alle dieselbe Bibliothek. Betroffen sind konkret: glassMaterial() — clearcoat:1 und clearcoatRoughness:0.06 sind HARTVERDRAHTET (Zeile 138), nicht über opts steuerbar, Viz' Abschaltung träfe alle sechs Gebäude; addVignette() — die 0.20 im Radialgradienten (Zeile 643) ist ebenfalls fest, Viz' Absenkung auf 0.09 gilt sonst überall; applySurface() — generateMipmaps=false / LinearFilter (Zeilen 534-535) gilt für jede Szene; interiorRoom() — der INT_FRAG-Umbau von Innenarchitektur ändert den Innenraum aller sechs Gebäude, was hier gewollt ist, aber die neuen Uniforms uRoom/uRoomId/uBelow/uAbove müssen Defaults bekommen, sonst brechen die fünf anderen Szenen beim ersten Aufruf. Regel für die gesamte Umsetzung: jede Bibliotheksänderung als opts-Parameter mit dem heutigen Wert als Default, nie in place. Das kostet je Fall zwei Zeilen und verhindert fünf Regressionen.",
+  "LAIBUNGSKÖRPER LIEGEN AUSSERHALB DER ÖFFNUNG — Sichtmauerwerk hat das Symptom gemessen (40-mm-Flimmerband über der Haustür in p5b-detail.png) und EINE der beiden Ursachen gefunden. Die zweite ist schlimmer und ebenso billig zu beheben. makeWindow Zeile 117: side(x, y+h/2+0.015, w+0.06, 0.03) erzeugt eine Box mit Mitte y+h/2+0.015 und Höhe 0.03, sie reicht also von y+h/2 bis y+h/2+0.03 — vollständig OBERHALB des Wandlochs, überlappt 30 mm massives Mauerwerk, und zwar 60 mm breiter als das Loch. Dasselbe bei der Brüstung (Zeile 118) und bei beiden seitlichen Laibungen (Zeilen 119-120, x±(w/2+0.015), also 30 mm ausserhalb). Im Türportal ist es noch krasser: rv(0, y0+h+0.02, w+0.08, 0.04) reicht von 2.92 bis 2.96 über 1.92 m Breite — exakt das gemessene 40-mm-Band. Alle diese Flächen liegen zusätzlich koplanar auf z=0.000. Der Fix ist zweiteilig und braucht acht Zahlen: die Körper nach INNEN setzen (Sturz y+h/2-0.015, Brüstung y-h/2+0.015, Laibungen x±(w/2-0.015), Türsturz y0+h-0.02) UND die z-Vorderkante auf -0.003. Danach verschwindet der auffälligste Nahfeld-Artefakt der ganzen Fassade, an 13 Fenstern und der Tür gleichzeitig.",
+  "INNENSCHALE ENDET BEI 6.00 m — HARTER BLOCKER FÜR FIRSTANHEBUNG UND GIEBELSPITZENFENSTER. efh3d.js Zeile 210: shell = BoxGeometry(HW-0.3, HE-0.2, HD-0.4) bei y=HE/2, spannt also y=0.10 bis 6.00. Die Giebelwände laufen mit wallGeo(HD,HE,HR,...) bis zum First. Der gesamte Dachraum zwischen 6.00 und 8.50 (nach Anhebung: 10.10) hat KEINE Rückwand — die Rückwand back (Zeile 206) ist ebenfalls nur HE hoch. Heute fällt es nicht auf, weil im Giebeldreieck keine Öffnung sitzt. Architekturs Giebelspitzenfenster bei (0, 7.10, 0.90, 1.30) würde durch das Haus hindurch auf Himmel und Kulisse blicken, und mit HR=10.10 wächst die offene Fläche je Giebel von 9.6 auf 16.0 m2. Fix: shell-Höhe von HE-0.2 auf HR-0.3 anheben und die Mitte entsprechend nachziehen, oder ein zweiter Prismenkörper für den Dachraum. Eine Zeile, aber ohne sie sind zwei ranghohe Befunde unbenutzbar.",
+  "POM IST AUF DER FRONTWAND ANISOTROP FALSCH — von keinem der fünf bemerkt, obwohl alle über POM reden. uPomDepth ist ein Skalar (scene3d-lib.js Zeile 463, dUv=(vt.xy/vt.z)*uPomDepth*ld in Zeile 483). Die Front-UV spannt aber 9.6 m in u und nur 6.1 m in v, Verhältnis 1.574. Richtig wäre uPomDepth.x = 0.014/9.6 = 0.001458 und uPomDepth.y = 0.014/6.1 = 0.002295 — die vertikale Parallaxenverschiebung ist heute um Faktor 1.57 zu klein, die Fugentiefe wirkt beim Blick entlang der Senkrechten flacher als beim Blick entlang der Waagrechten. Auf der Giebelwand ist der Fehler mit 8.0 gegen 8.5 m nur 6 % und vernachlässigbar. Fix: uniform vec2 uPomDepth statt float, drei Zeilen in POM_HEAD und patchParallax, plus zwei Zahlen im Aufruf. Kostet null zur Laufzeit.",
+  "NEBELFARBE PASST NICHT ZUM HORIZONT — und Viz' Vorschlag macht es schlimmer. scene.fog ist 0xe9ebe9 = RGB(233,235,233), leicht kühl. Der Dunstschleier des Himmel-Canvas ist rgba(243,240,232) = warmes Elfenbein (scene3d-lib.js Zeilen 90-92). Viz schlägt 0xdfe4e4 = RGB(223,228,228) vor, also noch kälter und dunkler. Sobald der Nebel überhaupt greift (Viz und Landschaft wollen beide eine Baumkulisse bei z=-52 bis -58, also 74 m Kameraabstand, Fog-Faktor rund 0.35-0.49), bekäme diese Kulisse einen blaugrauen Saum vor einem warmen Horizont — ein sichtbarer Halo genau an der Silhouette, die man verbessern wollte. Richtig ist eine Nebelfarbe, die den Horizontwert trifft: 0xf1eee6 = RGB(241,238,230). Eine Zahl.",
+  "FENSTERFARBE MUSS DEM PRODUKT FOLGEN — die stärkste einzelne Beobachtung aus dem Referenzvergleich, und niemand formuliert sie als Regel. Muhr funktioniert, weil die Polarität stimmt: heller Weissklinker mit ANTHRAZITEN Fenstern, Türen und Ortgängen. Unser Haus macht das Gegenteil — dunkelroter Klinker mit weissen Rahmen (0xf2f1ee bei roughness 0.55), weissen Laibungen (0xe3e0da) und weissen Sohlbänken (0xdedbd5). Viz misst das Ergebnis korrekt (Rahmen L=197-217 gegen Klinker L=56-101, also das 2.5- bis 3.5-fache der Wandhelligkeit, hellstes Objekt der Fassade), zieht aber nur den Schluss 'entweder Anthrazit oder gedämpftes Weiss'. Der Konfigurator kann das aber ENTSCHEIDEN, weil er das Produkt kennt: facadeCv auf 64x40 herunterskalieren, mittlere Luminanz bilden (rund 1 ms), und bei L unter 0.45 die Schreinerfarbe auf 0x30353a setzen, sonst auf 0xdad7d0. Das sind etwa 6 Zeilen in app.js plus ein vierter Parameter an setTextures — und es ist die einzige Änderung, die JEDES Produkt im Sortiment absichtlich aussehen lässt statt nur die hellen.",
+  "SCHATTENWERFER-AUDIT AM BESTAND FEHLT — Architektur und Landschaft fordern beide castShadow=false für IHRE neuen Kleinteile, aber keiner prüft, was heute schon Schatten wirft. Konkret: die vier Rahmenhölzer je Fenster setzen castShadow=true (Zeile 126) — das sind 52 Meshes, deren Eigenschatten hinter dem Glas liegt und nie sichtbar wird; das Tropfblech ebenso (Zeile 137), 13 Meshes, 35 mm hoch. Zusammen 65 Draw-Calls im Shadow-Pass ohne einen einzigen sichtbaren Schatten. Auch front.castShadow=true (Zeile 197) ist zweifelhaft: eine ebene ShapeGeometry bei z=0 kann nur sich selbst und den Boden dahinter verschatten, und Letzteres erledigt der Sockel. Abschalten kostet drei Zeilen und finanziert einen guten Teil dessen, was neu dazukommt.",
+  "SPITZBODEN HAT KEINEN RAUMTYP — Architektur fordert je Giebelseite ein Fenster bei (0, 7.10, 0.90, 1.30), Innenarchitektur plant zehn Zimmer und acht Raumtypen, aber der Dachraum kommt in keiner der beiden Listen vor. Mit HR=10.10 und 45 Grad ist der Spitzboden real (8.0 m Spannweite, 4.00 m Firsthöhe) und die beiden Fenster liegen 0.35 m über der Traufe. Ohne Zuordnung fielen sie auf den Default zurück und zeigten ein Wohnzimmer mit Sofa im Dachraum. Nötig ist der billigste Raumtyp des ganzen Satzes: uRoom=SPITZBODEN, uD=2.00, uBelow=0.10, uAbove=0.60, Wandton linear (0.20,0.19,0.18), uLight=0, kein Vorhang, kein Durchblick, ein sichtbarer Kehlbalken als waagrechter Streifen bei 1.10 m über Fussboden — vier Instruktionen mehr als das Milchglas-Bad.",
+  "KAMERAUMSTELLUNG BRAUCHT camera.aspect = w/(h*1.56) — sonst schlägt Viz' Rezept beim ersten Versuch fehl. Viz gibt korrekt camera.fov = 2*atan(tan(fovBase/2)*1.56) und camera.setViewOffset(w, h*1.56, 0, 0, w, h) an, lässt aber camera.aspect = w/h stehen. In PerspectiveCamera.updateProjectionMatrix wird die Frustumbreite als this.aspect * height aus der VIRTUELLEN Höhe gebildet und erst danach über view.width/fullWidth beschnitten; aspect muss also das virtuelle Seitenverhältnis w/(h*1.56) sein, sonst wird das Bild um Faktor 1.56 horizontal gestaucht. Zweitens muss dieselbe Kette an DREI Stellen identisch stehen: sizeToHost() Zeilen 420-422 und snapshot() Zeilen 474-476 sowie 480-482 — sonst weicht das geteilte Schnappschussbild vom Live-Bild ab. Drittens, als Beruhigung gegen den naheliegenden Einwand: R_MIN 11 → 17 nimmt keine Detailauflösung weg. Heute bei R_MIN=11 und fov 42 (aspect 1.5625) sind es 75.8 px/m; neu bei R_MIN=17 und 27 Grad vertikalem Bildwinkel 76.6 px/m. Gleichstand.",
+  "LIGHTMAP-RAMPE BRAUCHT PRO WAND EINE EIGENE KURVE — Viz' Vorschlag ist technisch korrekt (three r160 liest lightMap über Kanal 0, also dieselben UVs wie map; applySurface fasst lightMap nicht an, sie überlebt jeden Produktwechsel — beides geprüft), übersieht aber, dass die drei Wände verschiedene v-Bezüge haben. Auf der Front spannt v von 0 bis 1 über 6.10 m, auf den Giebeln über 8.50 m (bzw. 10.10 nach der Firstanhebung). Dieselbe Rampe mit dem Knick bei v=0.45 läge auf der Front bei 2.75 m und auf dem Giebel bei 4.55 m Höhe — der Bodenbounce wäre am Giebel um 1.80 m zu hoch gesetzt. Nötig sind zwei Canvas (4x256 je), oder eine Rampe, die in Metern parametriert und pro Wand mit texture.repeat.y = wandhöhe/8.50 skaliert wird. Zwei Zeilen mehr als von Viz veranschlagt."
+ ],
+ "rangfolge": [
+  {
+   "rang": 1,
+   "titel": "Belichtung und Weisspunkt — das Bild hat keine Lichter",
+   "soll": "renderer.toneMappingExposure 0.86 → 1.05. Sky-Dome-Farbe new Color(1.12,1.12,1.12) → (1.45,1.45,1.45). Oberster Gradientenstopp in skyCanvas() '#4f81b2' → '#6f9ac6'. sun.intensity 4.4 → 3.9, HemisphereLight 0.30 → 0.26 (damit die Fassade netto nur ca. 8 % heller wird). Sonnenhöhe 28.7 → 33.1 Grad bei gleichem Azimut 60 Grad: sun.position.set(18.9, 15.7, 10.9). Vignette rgba(14,17,22,0.20) → 0.09 und Startstopp 60 % → 74 %, ALS OPTS-PARAMETER von addVignette, nicht in place. Zielhistogramm: p50 ca. 145, p75 ca. 205, p95 ca. 238, Maximum ca. 250, Anteil über L=240 zwischen 6 und 9 % (heute 212/216/222 und 0.00 %).",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 150, 153, 157-158, 395) und C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\scene3d-lib.js (Zeilen 39, 643)",
+   "abhaengig_von": "nichts — muss als Erstes laufen, weil jede Farb- und Helligkeitsangabe der übrigen Ränge gegen diesen Bezugsrahmen kalibriert wird"
+  },
+  {
+   "rang": 2,
+   "titel": "Dach: Helligkeit, Pfannenmassstab, Anisotropie",
+   "soll": "In roofCanvas() den Grundwert v=44+38*w → v=58+46*w (RGB 58,61,65 bis 104,107,111, Mittel L≈86 = Muhrs besonnte Fläche gegen heute L=10). Reihenstösse y+=30 → y+=96. rT.repeat.set(7,3) → set(3.3, 3.6) und identisch roofNm.normal.repeat — ergibt 0.298 m Pfannenteilung und 0.330 m Ziegellänge auf der neuen Dachfläche (Rang 8). roofM.normalScale (1.1,1.1) → (0.65,0.65). rT.anisotropy = roofNm.normal.anisotropy = maxAniso. First 0x33363a → 0x4a4e54, Traufwulst 0x3a3d42 → 0x51555b. Traufwulst-Teilung tw 0.205 → 0.30 (n = round(10.50/0.30) = 35 statt 59), Radius 0.048 → 0.075.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 38-51, 221-253)",
+   "abhaengig_von": "Rang 1 (Belichtung) für die Helligkeitswerte; repeat-Werte gelten für die Geometrie aus Rang 8 — vorher mit repeat.set(3.4, 2.9) auf der Altgeometrie fahren"
+  },
+  {
+   "rang": 3,
+   "titel": "Laibungskörper in die Öffnung setzen und 3 mm zurückversetzen",
+   "soll": "In makeWindow(): side(x, y+h/2-0.015, w-0.03, 0.03) statt y+h/2+0.015 / w+0.06; side(x, y-h/2+0.015, w-0.03, 0.03); side(x-w/2+0.015, y, 0.03, h-0.06); side(x+w/2-0.015, y, 0.03, h-0.06). In side() die z-Lage von -D/2 auf -D/2-0.003 (Vorderfläche auf z=-0.003). Im Türportal: rv(0, y0+h-0.02, w-0.04, 0.04), rv(±(w/2-0.02), yc, 0.04, h), ebenfalls z=-D/2-0.003. Damit verschwindet das gemessene 40-mm-Barcode-Band über der 1.92 m breiten Türöffnung und die senkrechten Flimmerlinien an allen 13 Fenstern.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 115-120 und 294-298)",
+   "abhaengig_von": "nichts"
+  },
+  {
+   "rang": 4,
+   "titel": "Rollladenkästen ersatzlos entfernen",
+   "soll": "withBox=false an allen Aufrufen; den if(withBox)-Block in makeWindow (Zeilen 138-141) löschen. Entfernt 13 Meshes und 13 Materialien, beseitigt das schwarze 0.30-m-Band (26 % der Öffnungshöhe beim mittleren OG-Fenster, 23 % bei den 1.30-m-Fenstern, gemessen L=31-32 gegen eine Wand von L=70-100) und gibt den Platz für die Rollschicht aus Rang 11 frei. Die Referenz zeigt keinen einzigen sichtbaren Kasten.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 138-141, 275-286)",
+   "abhaengig_von": "nichts"
+  },
+  {
+   "rang": 5,
+   "titel": "Kontaktschatten-Decal am Bauwerksfuss",
+   "soll": "PlaneGeometry(26,22), rotation.x=-PI/2, Position (0, 0.012, -4.0), MeshBasicMaterial{map:contactTex, blending:THREE.MultiplyBlending, depthWrite:false, transparent:true, fog:false}, renderOrder nach den opaken Flächen. contactTex = 512x512 Canvas, weiss; darin das Grundrisspolygon 9.6 x 8.0 m mit 0.40 m breitem Saum, direkt an der Wand 55 % Helligkeit (RGB 140,140,140), nach aussen auf 100 % auslaufend, Weichzeichnung 6 px (= 0.30 m). Behebt den gemessenen Befund: in fin-efh.png Spalte x=470 liegen 87 Bildzeilen Vorplatz bei konstant L=179, Abweichung exakt null.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (neu, nach dem drive-Block Zeile 178)",
+   "abhaengig_von": "nichts"
+  },
+  {
+   "rang": 6,
+   "titel": "Innenraum: Kunstlicht aus, fester Raum je Öffnung, Milchglas-Bad, Durchblick raus",
+   "soll": "uSeed durch zwei Uniforms uRoom (0..8 Raumtyp) und uRoomId (0..1, identisch für beide Fenster eines Eckzimmers) ersetzen — beseitigt zugleich, dass beide Giebelseiten bitgleich sind (Seed aus LOKALEM x: -1.9*3.7+4.45*1.3 = -1.245 auf beiden Seiten). uLight explizit: WOHNEN/SCHLAFEN/KIND/ARBEITEN/ESSEN/BAD = 0, KUECHE 0.35, DIELE 0.55 — höchstens 2 von 15 Flächen mit Kunstlicht statt heute 13 von 13 (lampOn = 0.5+0.7*hash ist immer > 0.5). uShade=3 (Milchglas) als früher return VOR dem Boxschnitt für das Fenster über der Haustür: Grundton linear (0.30,0.32,0.31), oben +0.06, unten -0.05, kein Boxschnitt, ca. 15 statt ca. 120 Instruktionen. Durchblick nur noch auf DIELE (Hintertür 0.90 x 2.10 m in 3.80 m) und KUECHE (Durchbruch 1.60 x 2.10 m in 3.40 m), sonst geschlossene Zimmertür 0.90 x 2.01 m in linear (0.34,0.33,0.31); Rahmen- und Sprossenlinien (uW*0.013 = 0.02 m und uW*0.006 = 0.01 m, also 0.3-0.8 px) ersatzlos streichen. Wandton-Spreizung von 0.175-0.225 auf 0.24-0.46, Gesamtfaktor 0.62 → 0.52. Raumtiefen uD 1.7 → WOHNEN 4.15, KUECHE 3.40, ESSEN 3.85, DIELE 3.80, SCHLAFEN 4.00, KIND 3.45, ARBEITEN 3.20, SPITZBODEN 2.00.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\scene3d-lib.js (Zeilen 305-455) und efh3d.js (Zeilen 121, 310)",
+   "abhaengig_von": "Neue Uniforms brauchen Defaults, sonst brechen room3d/bungalow3d/villa3d/office3d/friesen3d — siehe Lücke 2"
+  },
+  {
+   "rang": 7,
+   "titel": "fmtOf(): Steinformate werden für 20+ Produkte halb so hoch gerendert",
+   "soll": "fmtOf() wertet len = grösste und hgt = KLEINSTE Zahl aus — bei Langformat ist die kleinste Zahl die DICKE. 'LF 468 x 108 x 38 mm' ergibt ar = 468/38 = 12.3, geklemmt auf 9, gerendert 468 x 52 statt 468 x 108 mm; auf 6.10 m Traufhöhe rund 100 statt 51 Schichten. Fix: Auswertung am sub-Feld festmachen (Langformat LF: 20 Produkte, Normalformat NF: 37, R-Format: 64) und bei LF die ZWEI GRÖSSTEN Zahlen als Sichtfläche nehmen — 468x108 (ar 4.33), 490x115 (4.26), 450x115 (3.91). Bei Doppelangaben mit Schrägstrich ('215x100x65 / 240x107x72') beide Formate mitteln: 227x68, ar 3.33 statt der heute gemischten 240/65 = 3.69. Längenklemmung Math.min(0.62, ...) auf 2.10 anheben, sonst rendert die Serie 2048 x 680 mm als 620 x 206 mm — Massstabsfehler Faktor 3.3.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\app.js (Zeilen 567-575)",
+   "abhaengig_von": "nichts — wirkt auf alle sechs 3D-Szenen UND die 2D-Musteransicht, deshalb trotz null Bildwirkung am EFH so weit oben"
+  },
+  {
+   "rang": 8,
+   "titel": "Kamera: Shift-Perspektive, 48-mm-Brennweite, waagrechte Achse",
+   "soll": "In sizeToHost() UND snapshot(): fovBase = aspect>1.45 ? 27 : (aspect>1.1 ? 31 : 38); camera.fov = 2*atan(tan(fovBase/2)*1.56); camera.aspect = w/(h*1.56) — NICHT w/h, sonst staucht das Bild um Faktor 1.56 (siehe Lücke 10); camera.setViewOffset(w, h*1.56, 0, 0, w, h). TARGET.y 3.0 → 1.70, rad 21 → 25, R_MIN/R_MAX 11/26 → 17/36, po-Default 1.492 → 1.5708, PO_MIN 1.30 → 1.45. In applyCam() camera.lookAt(TARGET.x, camera.position.y, TARGET.z) statt lookAt(TARGET), damit die Achse beim Orbitieren waagrecht bleibt und die Senkrechten parallel. Ergebnis bei d=25 m: Bildausschnitt -0.94 bis +11.06 m, Haus füllt 84 % der Bildhöhe (heute 47 %, Muhr 82 %), Kaminspitze bei 11.00 m liegt drin. Detailauflösung bleibt: 76.6 px/m bei R_MIN=17 gegen 75.8 px/m bei heutigem R_MIN=11.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 17-20, 377-385, 415-423, 470-485)",
+   "abhaengig_von": "muss VOR jeder Landschaftsarbeit stehen — sie entscheidet, welcher Aussenraum überhaupt noch im Bild ist, und begründet die Streichungen 7, 8 und 9"
+  },
+  {
+   "rang": 9,
+   "titel": "Fenster-Instancing und Material-Hoisting",
+   "soll": "(a) revM, frM, die Sohlbank-, Tropfblech- und Kastenfarbe aus makeWindow() herausziehen — 65 → 5 Materialien, reine Textumstellung. (b) Nach der Vereinheitlichung auf einen Fenstertyp (Rang 10) Laibungskörper, Rahmenhölzer, Pfosten, Sohlbank, Tropfblech und Glas als je EIN InstancedMesh über eine Einheits-Box mit Instanz-Skalierung: 195 → ca. 21 Draw-Calls (die 15 Innenräume brauchen eigene Uniforms und bleiben einzeln). Die Szene liegt heute bei rund 337 Meshes im Haupt-Pass. Ohne diesen Schritt addieren die Ränge 11-14 netto rund +60 Draw-Calls; mit ihm sind sie gratis.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 112-142, 275-287)",
+   "abhaengig_von": "Rang 10 (ein einziger Fenstertyp) macht (b) trivial; (a) geht sofort und unabhängig"
+  },
+  {
+   "rang": 10,
+   "titel": "Dachgeometrie 45 Grad, First 10.10 m, Innenschale bis in den Dachraum",
+   "soll": "HR 8.5 → 10.10, HE bleibt 6.10. Neigung über die WANDFLUCHT: pitch = atan2(HR-HE, HD/2) = atan(4.00/4.00) = 45.0 Grad statt heute atan2(2.40, HD/2+OV) = 27.6 Grad. OV 0.60 → 0.45; Traufkante damit bei y = 6.10-0.45 = 5.65, also 0.45 m UNTER der Wandkrone. slopeLen = (4.00+0.45)/cos(45) = 6.293. Frontfläche Mitte y=(10.10+5.65)/2 = 7.875, z=(0.45-4.00)/2 = -1.775. Dachbreite HW+2*0.45 = 10.50, First 10.55 lang. Dachstärke 0.14 → 0.30. Dachanteil steigt von 28 auf 40 % der Gesamthöhe, Verhältnis First/Breite von 0.89 auf 1.05. ZWINGEND MIT: shell-Höhe von HE-0.2 (spannt 0.10 bis 6.00) auf HR-0.3 anheben und Mitte nachziehen, sonst blickt man durch den Dachraum ins Freie (Lücke 4). shadow.camera.top bleibt bei 16 — der neue First projiziert im Lichtraum auf y=8.47.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 22, 210-211, 219-236)",
+   "abhaengig_von": "Rang 2 (Dachhelligkeit) sollte vorher stehen, sonst sieht man die Formänderung an einer schwarzen Fläche nicht"
+  },
+  {
+   "rang": 11,
+   "titel": "Öffnungsschema vereinheitlichen, Sturz- und Brüstungslinien binden",
+   "soll": "Ein Fenstertyp 1.30 x 1.35 m. Achsen auf x = -2.70 / 0 / +2.70 (Eckpfeiler damit 4.80-3.35 = 1.45 m an allen vier Ecken, heute 1.05 links und 1.20 rechts — die Ecken sind heute die SCHMALSTEN Mauerstücke der Fassade). Geschossaufbau: FFL EG 0.32, lichte Höhe 2.58, Decke 0.30, FFL OG 3.20, lichte Höhe 2.50, Wandkrone 6.10. Daraus eine einzige Sturzlinie EG = 2.55 (auch für die Tür) statt heute fünf Werte (2.92 / 3.05 / 3.10 / 5.075 / 5.10), Sturzlinie OG = 5.45, Brüstung EG = 1.20 (0.88 über FFL), Brüstung OG = 4.10 (0.90 über FFL, absturzsicher). FRONT OG: (-2.70, 4.775), (0, 4.775), (2.70, 4.775); FRONT EG: (-2.70, 1.875), (2.70, 1.875); TÜR: (0, 1.435, 1.60, 2.23); GIEBEL je Seite (±1.90, 4.775) und (±1.90, 1.875) plus Giebelspitze (0, 7.10, 0.90, 1.30). Öffnungsanteil der Front sinkt von 27 auf 21 %, sichtbare Klinkerfläche von 73 auf 79 %. Innenraum-Zuordnung bleibt 1:1 gültig, nur umkoordiniert; uBelow/uAbove: EG 0.88/0.35, OG 0.90/0.25.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 190-194, 275-287, 292)",
+   "abhaengig_von": "Rang 10 (Firsthöhe) für das Giebelspitzenfenster; Rang 6 für die Raumzuordnung"
+  },
+  {
+   "rang": 12,
+   "titel": "Rollschicht über jeder Öffnung und Segmentbogen über der Haustür",
+   "soll": "Je Öffnung eine stehende Rollschicht als Instanz: Länge = Öffnungsbreite + 0.24 (120 mm Auflager je Seite, fluchtet mit der Sohlbankbreite), Höhe 0.24 (= Steinlänge), Tiefe 0.025, Vorsprung 12 mm vor der Wandebene. Material facadeMat mit VERTAUSCHTEN UVs (u<->v) — weil das Front-Canvas mit 208 px/m in beiden Richtungen isotrop ist, liefert der blosse Tausch stehende Steine in exakt richtiger Grösse, ohne zweite Textur. Über der Haustür stattdessen ein Segmentbogen: 9 Keilsteine 0.13 x 0.30 x 0.025 auf einem Kreisbogen mit Stich 0.18 m über der Sturzlinie 2.55, Radius 1.89 m. Alle mit castShadow=false. 15 Rollschichten + 9 Keilsteine = EIN InstancedMesh nach Rang 9.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (neu in makeWindow und im Türportal)",
+   "abhaengig_von": "Rang 4 (Kasten weg, sonst blockiert er den Platz), Rang 9 (Instancing), Rang 11 (Sturzlinien)"
+  },
+  {
+   "rang": 13,
+   "titel": "Sohlbank als Klinker-Rollschicht, Vorsprung 100 → 35 mm",
+   "soll": "Heute: Box (b+0.24) x 0.070 x 0.290 bei z=-0.045, Vorderkante also bei z=+0.10 — 100 mm Vorsprung, 120 mm seitlicher Überstand je Seite, 0 Grad Gefälle, dazu ein separates 35-mm-Tropfblech. Neu: Sohlbankrollschicht aus dem gewählten Klinker, sichtbare Höhe 0.115 m, um 12 Grad geneigt, Vorsprung 0.035 m, seitlicher Überstand 0.060 m je Seite, Material facadeMat mit getauschten UVs wie Rang 12. Wassernase 20 x 15 mm, 20 mm hinter der Vorderkante, als Teil desselben instanzierten Satzes; das separate Tropfblech (Zeilen 136-137) entfällt. Gewinn: ca. 3 m2 zusätzliche Produktfläche an der Stelle, an der der Kunde im Nahbild am nächsten hinschaut — heute zeigen alle 15 Sohlbänke 0xdedbd5, also Beton.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 134-137)",
+   "abhaengig_von": "Rang 9 (Instancing), Rang 12 (gleicher UV-Tausch-Mechanismus)"
+  },
+  {
+   "rang": 14,
+   "titel": "Laibung in Klinker, Schreinerfarbe an die Produktluminanz koppeln",
+   "soll": "Die vier Laibungsflächen von revM (0xe3e0da, heller Putz) auf facadeMat mit weltbezogenen UVs: u = (x_wand + 4.80 ± z)/9.60, v = y/6.10 — dadurch laufen die Lagerfugen ohne Versatz von der Ansichtsfläche um die Kante in die Laibung. Sturzuntersicht darf neutral dunkelgrau 0x3a3733 bleiben, sie liegt im Schatten. Schreinerfarbe: facadeCv auf 64x40 herunterskalieren, mittlere Luminanz bilden (ca. 1 ms); bei L < 0.45 Blendrahmen und Pfosten auf 0x30353a (Anthrazit wie die Referenz), sonst auf 0xdad7d0 bei roughness 0.85 statt heute 0xf2f1ee bei 0.55. Heute sind die Rahmen mit gemessen L=197-217 gegen einen Klinker von L=56-101 das hellste Objekt der ganzen Fassade — das 2.5- bis 3.5-fache der Wandhelligkeit.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 114, 124) und app.js (setTextures-Aufruf Zeile 1373, vierter Parameter)",
+   "abhaengig_von": "Rang 9 (gemeinsames Material für alle Laibungen)"
+  },
+  {
+   "rang": 15,
+   "titel": "Wandverlauf, Traufblende und Schattenparameter",
+   "soll": "lightMap auf facadeMat/sideMatL/sideMatR (three r160 liest lightMap über Kanal 0, also dieselben UVs wie map; applySurface fasst lightMap nicht an, sie überlebt jeden Produktwechsel): Canvas 4x256, RGB(0,0,0) bei v=1.0 (Wandoberkante) auf RGB(56,52,46) bei v=0.06, weicher Knick bei v=0.45, lightMapIntensity 1.0 — ZWEI Canvas nötig, weil v auf der Front 6.10 m und am Giebel 10.10 m spannt (Lücke 11). Hebt den Wandfuss von L=70 auf ca. L=95 an; heute schwankt die Wand über 1.2 m Höhe um ±1 Stufe (gemessen 71,71,71,70,70,68,69,69,69,70,69), bei Muhr um +29 bis +35 %. soffitF von 0xdedbd6 auf 0x5a5f66. Traufblende: BoxGeometry(HW+1.1, 0.20, 0.03) in 0x2e3339 an der Traufkante. Schatten schärfen: normalBias 0.035 → 0.012, bias -0.0004 → -0.00015, shadow.radius 5 → 2.5, Schattenkamera von ±15 / 16 / -10 auf ±12 / 12 / -5 (24 m auf 4096 = 5.9 mm je Texel statt 7.3; ±11 wie von Viz vorgeschlagen wäre zu knapp, die Hecke bei x=-10.6 projiziert auf -10.07).",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 161-167, 254-255, neu für lightMap)",
+   "abhaengig_von": "Rang 10 (Traufhöhe ändert sich von 6.10 auf 5.65)"
+  },
+  {
+   "rang": 16,
+   "titel": "Fugenbreite absolut in Metern statt an der Steinlänge",
+   "soll": "paintWall rechnet sc = W/560*texJointMul/texDiv, daraus Lagerfuge = JW*0.55*Steinlänge/87.36. Beim 240er Stein sind das 6*0.55*0.24/87.36 = 9.07 mm statt 12 mm nach DIN 1053, beim Langformat 468 mm dagegen 17.7 mm — eine Fuge wird aber nach Wand vermauert, nicht nach Steinlänge. Neu: Fuge_px = Fuge_m * W / Wandbreite_m. Für die Front (2000 px auf 9.60 m): Lagerfuge 12 mm = 2.50 px, Stossfuge 10 mm = 2.08 px, formatunabhängig. Stufen: Klebefuge 2 mm, schmale Fuge 6 mm, Normalfuge 12 mm. Die Klemmung Math.max(1, ...) in Zeile 823 auf Math.max(0.4, ...) aufmachen — heute sind glue (0.31 px) und narrow (0.94 px) beide auf 1 px = 4.80 mm geklemmt und liefern das IDENTISCHE Bild.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\app.js (Zeilen 822-823)",
+   "abhaengig_von": "Rang 7 (fmtOf) — sonst rechnet die neue Fugenformel mit falschen Steinhöhen"
+  },
+  {
+   "rang": 17,
+   "titel": "Höhenfeld aus lokalem Kontrast statt aus absoluter Helligkeit",
+   "soll": "surfaceMaps() bildet h = 0.42 + 0.58*Luminanz. Ein kohlegebrannter Stein (L≈0.12) bekommt 0.49, ein heller Sandsteinklinker (L≈0.70) 0.83 — eine Differenz von 0.34, die bei 14 mm POM-Hub 4.8 mm scheinbaren Höhenversatz allein aus der FARBE erzeugt; ao = 0.80+(hb-hWide)*1.7 dunkelt dieselben Steine ein zweites Mal ab. In p5b-detail.png sehen die dunklen Steine dadurch aus wie ausgebrochene Löcher. Neu: h = 0.62 + 0.9*(L - blur(L, R = Steinbreite/3, also ca. 17 px bei 50 px Steinbreite)), Fugenpixel weiterhin fest auf 0.26. Damit bleibt die Streuung der Steinebenen unter ±2 mm (DIN 18202 für Verblendmauerwerk). Der Faktor rf = 0.28+0.9*lb (Zeile 266) entfällt ersatzlos — er ist nur ein Pflaster auf demselben Fehler. Ein zusätzlicher boxBlur-Durchgang, einmalig beim Texturbau.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\scene3d-lib.js (Zeilen 242-266)",
+   "abhaengig_von": "nichts"
+  },
+  {
+   "rang": 18,
+   "titel": "Kartenauflösung und Mipmap-Politik",
+   "soll": "applyTex() ruft applySurface() ohne maxW, surfaceMaps deckelt daher auf 1024 (mobil 512) — bei 9.60 m Wandbreite 9.4 mm je Pixel, die 12-mm-Lagerfuge ist damit 1.28 px breit, danach läuft noch boxBlur(R=1) darüber. maxW: 2048 auf Desktop (ergibt 2000x1270, also 4.80 mm/px und eine 2.5-px-Fuge mit auswertbaren Schultern), 1024 auf Mobil. VRAM: normal+orm steigen von ca. 14 auf ca. 42 MB — auf Desktop tragbar, mobil nicht, deshalb die Staffelung. VORHER ZWINGEND: _mapCache schlüsselt über cv.__klbKey (app.js Zeile 1469: name, width, height, div, zone) und enthält maxW NICHT — solange verschiedene Materialien verschiedene Auflösungen desselben Canvas anfordern, liefert der Cache die zuerst gebaute. maxW in den Schlüssel aufnehmen. Mipmaps: generateMipmaps=true und LinearMipmapLinearFilter NUR für maps.normal; maps.orm behält generateMipmaps=false, weil klbParallax sie in nicht-uniformem Kontrollfluss traversiert (Widerspruch 9).",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\scene3d-lib.js (Zeilen 219-224, 534-535) und efh3d.js (Zeilen 435-438)",
+   "abhaengig_von": "Rang 17 (sonst wird ein falsches Höhenfeld in höherer Auflösung gebaut)"
+  },
+  {
+   "rang": 19,
+   "titel": "Boden: Anisotropie, Mipmaps, Pflasterstruktur, Rasenfarbe",
+   "soll": "noiseTex() setzt nie eine Anisotropie — lawnT, gravelT und bedT auf maxAniso (maxAniso ist ab Zeile 396 verfügbar, buildScene läuft erst danach). lawnT.repeat von (12,12) auf (40,40) — 2.75 m statt 9.2 m je Kachel auf der 110-m-Ebene. Rasen-Grundfarbe '#7f8f60' (RGB 127,143,96, entsättigtes Olivgrau) auf '#5f7442' (95,116,66), Rauschamplitude 26 → 40, plus 12 Mähstreifen je Kachel (0.764 m breit, abwechselnd ±5 % Luminanz) — der eine Hinweis, der aus grüner Farbe einen gemähten Rasen macht, zu Laufzeitkosten null. Für floorMat einen eigenen Pfad: generateMipmaps=true und LinearMipmapLinearFilter für Normal und ORM (der Boden hat KEIN POM, dort sind Mipmaps zulässig und nötig — der Vorplatz wird bei az=0.52 unter 22-29 Grad gesehen, Minifikation in Tiefenrichtung etwa 5:1), plus ein Pflasterfugen-Canvas mit 0.20 m Steinraster als Fallback statt der heutigen toten Fläche 0xd0cdc8. Kein POM auf dem Boden (siehe Streichung 4). sun.color 0xfff1d8 → 0xfff6ea, HemisphereLight-Bodenfarbe 0x7d8a70 → 0x6d7663.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 26-35, 153, 157, 171-186, 435-438)",
+   "abhaengig_von": "Rang 1 (Farbwerte gegen die neue Belichtung)"
+  },
+  {
+   "rang": 20,
+   "titel": "Belagsrand, Traufstreifen, zonierte Vorplatz-Shape",
+   "soll": "Belag als EINE THREE.Shape (ShapeGeometry, rotation.x=-PI/2, ein Draw-Call statt vier Planes): Zufahrt x=+1.60..+7.40 / z=+1.90..+8.00, Gehweg 1.60 m breit x=-2.30..-0.70, Türpodest x=-1.30..+1.30 / z=+0.12..+1.56, Nebenfläche links x=-8.60..-5.10 / z=+0.80..+3.80 mit texture.rotation=PI/2 (zeigt das Produkt in einer zweiten Verlegerichtung). ShapeGeometry liefert in three r160 die UVs direkt in Shape-Koordinaten, also in METERN — deshalb genügt t.wrapS=t.wrapT=RepeatWrapping und t.repeat.set(1/12,1/12) (12 = pw aus app.js Zeile 1347), und das GLEICHE repeat muss auf maps.normal und maps.orm, sonst liegt das Relief um Faktor 12 daneben. Randeinfassung: Läuferreihe hochkant 0.12 m breit als extrudierter Ring (ExtrudeGeometry, ein Draw-Call), Oberkante y=+0.020, texture.rotation=PI/2. Belag insgesamt auf y=+0.020 (Rasen bleibt -0.010) — bei 1.5 cm und 28.7 Grad Sonnenstand ist der Schattenstreifen nur 2.7 cm breit und verschwindet. Traufstreifen 0.45 m Kies 0xb9b2a4 bei y=-0.030 umlaufend, statt des heutigen 13.0 m breiten Beetstreifens, der 1.70 m je Seite über die Hauskante hinausragt.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 175-186)",
+   "abhaengig_von": "Rang 8 (Kamera) — sie entscheidet, wie viel Vorplatz überhaupt sichtbar bleibt"
+  },
+  {
+   "rang": 21,
+   "titel": "Kübel und Formschnittkugeln am Eingang",
+   "soll": "Die Referenz-Geste, und der einzige Schattenwerfer, der bei der neuen Kamera nie etwas verdeckt: zwei Kübel neben der Haustür bei x=±1.15, z=+0.95, Topf 0.42 x 0.42 x 0.55 m in 0x3a3d40, Formschnittkugel ø 0.50 m, Oberkante y=1.05. Zwei Formschnittkugeln in hellen Töpfen am Zufahrtsrand bei (+7.10, +2.20) und (+7.10, +3.60), Topf ø 0.42 x 0.45 m in 0xb6b2ab. Als zwei InstancedMeshes (Töpfe, Kugeln), castShadow=true. Nachgerechnet: keiner der Punkte fällt aus dem verkleinerten Schattenfrustum aus Rang 15, und bei 33.1 Grad Sonnenhöhe (Faktor 1.531) landen die Schatten der rechten Kugeln bei x≈5.7 mitten auf dem Belag. Behebt den Kernbefund, dass heute auf 84 m2 Belag kein einziges Objekt steht und der Pflasterklinker deshalb keinen Massstabsvergleich hat.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (neu im beds-Block, Zeilen 321-328)",
+   "abhaengig_von": "Rang 1 (Sonnenstand), Rang 15 (Schattenfrustum), Rang 20 (Belagsfläche)"
+  },
+  {
+   "rang": 22,
+   "titel": "Bepflanzung und Hecken instanzieren, Zaun und Mauer auf eine Linie",
+   "soll": "Heute: 8 grassTuft plus 6 bushClump à 4 Einzel-Meshes mit je eigenem Material = 32 Draw-Calls und 24 MeshStandardMaterials für sechs kleine Sträucher, dazu 22 Zaunstab-Meshes. Neu drei InstancedMeshes: Formschnittkugeln Ilex ø 0.45 m in zwei Reihen à 5, Ziergräser 12 Stück im Raster 0.60 m, Bodendecker ca. 400 Instanzen — zusammen unter 7000 Dreiecke in 3 Draw-Calls bei DEUTLICH mehr Pflanzen. Pflanzhöhen NICHT anheben, 0.4-0.8 m ist für einen Neubau richtig. Bestehende bushClump-Farben von vier Grüntönen (0x5f6d4a, 0x71785f, 0x536444, 0x4c5c40) auf zwei reduzieren. Zaun und Mauer auf EINE Linie z=+7.90 statt heute z=+2.2 und z=+3.2 mit 0.55 m Überlappung in x; Mauerhöhe 1.50 → 0.90 m; Stäbe ø 0.025 → 0.035 m im Abstand 0.12 m als EIN InstancedMesh, castShadow=false. Heckenlücken zwischen z=-7.5 und -13.5 (6.0 m je Flanke) schliessen, Körperfarbe 0x44553a → 0x506732. Netto etwa -45 Draw-Calls.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 53-72, 321-347) und scene3d-lib.js (Zeilen 574-606)",
+   "abhaengig_von": "Rang 8 (Kamera) — begründet, warum die Heckenseitentufts gestrichen sind"
+  },
+  {
+   "rang": 23,
+   "titel": "Eingang: Türmass, Stufen, Farbe",
+   "soll": "Öffnung 1.84 x 2.60 m (Portalmass) → 1.60 x 2.23 m, Mitte y=1.435, Sturz 2.55 = exakt die Fensterlinie. Füllung ohne Restspalt: Blatt 1.05 (x=-0.24) + Setzholz 0.06 + Seitenteil 0.43 (x=+0.545) + 2 x 0.03 Rahmen = 1.60 — heute sitzen 1.02 + 0.46 = 1.48 m in einer 1.84 m breiten Öffnung, in p5b-detail.png sieht man rechts neben dem Seitenteil den dunklen Spalt auf die Rückwand. Blattfarbe 0x5a3d29 (mittelbraun glänzend, kämpft mit dem roten Klinker) → 0x2b2f33 (RAL 7016 wie die Referenz), Füllungen 0x24282c, Griffstange 1.20 m in 0xb8bcbe. Stufen: heute drei ungleiche Steigungen 9.6 / 9.6 / 12.8 cm — neu zwei gleiche von 0.16 m, untere Stufe OK 0.16 (Auftritt 0.30, Breite 2.60, Tiefe 1.40), obere OK 0.32 = Schwelle (Breite 2.20, Tiefe 1.10). Zwei Wandlaternen 0.11 x 0.30 x 0.11 bei x=±1.15, y=2.05, z=+0.06, Glas als MeshBasicMaterial 0xd8d2c4 — AUSDRÜCKLICH keine PointLights: jede zusätzliche dynamische Lichtquelle zwingt three zur Neukompilierung aller MeshStandardMaterials und kostet 8-12 % Fragment-Last für null sichtbaren Gewinn bei Tageslicht.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 292-318)",
+   "abhaengig_von": "Rang 11 (Sturzlinie 2.55), Rang 12 (Segmentbogen sitzt darüber)"
+  },
+  {
+   "rang": 24,
+   "titel": "Kulisse, Nebel, Regenrinne, Kamin",
+   "soll": "Die drei geplätteten Kugeln (r=9/11/15, scale 1.7/0.30/1) löschen — sie messen L=182 gegen einen Himmel von L=185, also null bis drei Stufen Trennung; Muhrs Baumwand liegt bei L=98 gegen L=234. Ersatz: 22-26 Kronen als EIN InstancedMesh bei z=-52 bis -58, x=-38..+38, Höhen 8-13 m, Farbe 0x44532f bis 0x53613c, castShadow=false. scene.fog auf THREE.Fog(0xf1eee6, 30, 120) — die Farbe muss den Horizontdunst des Himmel-Canvas treffen (rgba(243,240,232)), sonst bekommt die Kulisse einen kalten Halo (Lücke 6). Regenrinne: heute Vollzylinder r=0.075 bei z=+0.58, Fallrohre bei z=+0.10 — 0.48 m Luft dazwischen, überbrückt von nichts. Neu Halbrundprofil über CylinderGeometry mit thetaLength=Math.PI (Kern-three, kein Addon), zwei Schrägbogen je Rohr (Zylinder r=0.045, Länge 0.42, 40 Grad geneigt), unten Standrohr 0.30 m. Kamin: 0.55 x 1.6 in 0xe9e7e3 (weisser Putz) → 0.60 x 0.60 x 1.80 in facadeMat mit color 0xb0aca6 als Abdunkler, Kopf 0.90 m über dem neuen First 10.10 (Mindestüberhöhung 0.40 m erfüllt), plus Einfassung 0.72 x 0.06 x 0.72 in 0x8e9296.",
+   "datei": "C:\\Users\\ycbap\\Documents\\GitHub\\Klinkerbox\\assets\\js\\efh3d.js (Zeilen 147, 256-268, 350-353)",
+   "abhaengig_von": "Rang 10 (Firsthöhe für den Kamin), Rang 15 (Traufhöhe für die Rinne)"
+  }
+ ]
+}

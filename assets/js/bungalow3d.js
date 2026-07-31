@@ -4,17 +4,17 @@
 // Flachdach mit Attika, Vordach mit Stütze, dunkle Holztür, Glasfront,
 // Pflanzkübel, Kiesbeete, Gartenmauern, Himmel. Orbit + Zoom wie innen.
 import * as THREE from './three.module.min.js';
-import { buildEnv, glassMaterial, interiorMaterial, skyDomeTexture, normalFromCanvas, addVignette, interiorRoom } from './scene3d-lib.js?v=42';
+import { buildEnv, glassMaterial, skyDomeTexture, applySurface, disposeScene, addVignette, interiorRoom, grassTuft, LOWQ } from './scene3d-lib.js?v=54';
 
-const MOBILE=matchMedia('(pointer:coarse)').matches;
+const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
 let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
 let rafId=0, failed=false;
 
 const TARGET=new THREE.Vector3(0,1.55,2.2);
-let az=0.20, po=1.500, rad=13.6;
+let az=0.48, po=1.5208, rad=15.0;   // Augpunkt 1.55+0.75=2.30 m
 let azT=az, poT=po, radT=rad;
-const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.30, PO_MAX=1.565, R_MIN=8.5, R_MAX=20;
+const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.30, PO_MAX=1.5941, R_MIN=8.5, R_MAX=20;
 
 function mat(c,rough,metal){ return new THREE.MeshStandardMaterial({color:c,roughness:rough!=null?rough:0.9,metalness:metal||0}); }
 function noiseTex(base,vari,w,h){
@@ -39,19 +39,6 @@ function shadowBlob(w,d,strength){
   return m;
 }
 // Gras-Büschel (Ziergras) aus dünnen Röhren + Ähren
-function grassTuft(x,z,scale,parent){
-  const s=scale||1;
-  for(let i=0;i<9;i++){
-    const a=Math.random()*Math.PI*2, lean=(0.10+Math.random()*0.22)*s, hgt=(0.45+Math.random()*0.45)*s;
-    const p0=new THREE.Vector3(x,0,z);
-    const p1=new THREE.Vector3(x+Math.cos(a)*lean*0.4,hgt*0.6,z+Math.sin(a)*lean*0.4);
-    const p2=new THREE.Vector3(x+Math.cos(a)*lean,hgt,z+Math.sin(a)*lean);
-    const tube=new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([p0,p1,p2]),6,0.006*s,5),mat(0xa8a06e,1));
-    parent.add(tube);
-    if(i%2===0){ const pl=new THREE.Mesh(new THREE.SphereGeometry(0.035*s,8,8),mat(0xcabf92,1));
-      pl.scale.set(1,2.6,1); pl.position.copy(p2); pl.position.y+=0.08*s; parent.add(pl); }
-  }
-}
 function bush(x,z,r,c,parent){
   const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r,1),mat(c||0x5c6e4a,1));
   b.position.set(x,r*0.75,z); b.scale.set(1,0.8,1); b.castShadow=true; parent.add(b);
@@ -81,14 +68,14 @@ function buildScene(){
 
   // Himmel: grosse Kuppel, teilsonnig mit weichen Quellwolken
   { const sky=new THREE.Mesh(new THREE.SphereGeometry(70,32,18),
-      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.5,1.5,1.5),side:THREE.BackSide,fog:false}));
+      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(2.90,2.90,2.90),side:THREE.BackSide,fog:false}));
     scene.add(sky); }
 
   // Licht: sonniger Tag — kühles Himmelslicht + warme Sonne von links vorn
-  scene.add(new THREE.HemisphereLight(0xdbe7f2,0x8d9084,0.35));
-  scene.add(new THREE.AmbientLight(0xffffff,0.06));
-  const sun=new THREE.DirectionalLight(0xffeed2,2.6);
-  sun.position.set(12,14.2,7.5);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
+  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x8a9179,1.60));   // Himmel oben, Rasengrün unten
+  scene.add(new THREE.AmbientLight(0xffffff,0.05));
+  const sun=new THREE.DirectionalLight(0xfff6ea,2.8);
+  sun.position.set(14,9.6,8);                    // streifendes Nachmittagslicht → Relief + Schattenwurf
   sun.target.position.set(0,0,2);
   sun.castShadow=true;
   sun.shadow.mapSize.set(MOBILE?1024:4096,MOBILE?1024:4096);
@@ -96,7 +83,8 @@ function buildScene(){
   sun.shadow.camera.top=12;   sun.shadow.camera.bottom=-8;
   sun.shadow.camera.near=1; sun.shadow.camera.far=45;
   sun.shadow.camera.updateProjectionMatrix();
-  sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.04;
+  sun.shadow.bias=-0.0004; sun.shadow.normalBias=0.035;
+  sun.shadow.radius=MOBILE?1:5;                   // PCF-Kernel → weiche Schattenkante
   scene.add(sun); scene.add(sun.target);
 
   const HW=13, HH=3.3, HD=8;                     // Haus: Breite, Attika-Höhe, Tiefe
@@ -163,11 +151,36 @@ function buildScene(){
   // Tür (dunkles Holz) + Seitenfenster + Oberlicht
   const doorFrame=new THREE.Mesh(new THREE.BoxGeometry(2.9,2.55,0.10),mat(0x2e3134,0.5,0.2));
   doorFrame.position.set(-3.9,1.275,0.05); scene.add(doorFrame);
-  const door=new THREE.Mesh(new THREE.BoxGeometry(1.02,2.28,0.06),mat(0x3a2b22,0.55));
-  door.position.set(-3.72,1.14,0.115); scene.add(door);
-  const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.012,0.012,0.30,8),mat(0xb9bcbe,0.3,0.8));
-  handle.position.set(-3.30,1.10,0.16); handle.rotation.x=Math.PI/2; scene.add(handle);
   const glassM=glassMaterial();
+  // Das Blatt hatte mit 0x3a2b22 eine lineare Albedo von rund 0.02 — dasselbe
+  // Problem, das am Einfamilienhaus gemessen wurde (Blatt 25/255 gegen 106/255
+  // Fassade, also als Bauteil gar nicht lesbar). Dazu ein WAAGRECHTER Griffstab
+  // von 30 cm, der quer aus dem Blatt ragte, und ein Blatt von nur 60 mm Dicke.
+  // Aufgeteilt in zwei Stollen mit echtem Lichtausschnitt dazwischen: das Glas
+  // liefert den Materialwechsel, den eine blosse Farbstufe bei diffusem Licht
+  // nicht hergibt.
+  { const DZ=0.115, DT=0.08, yC=1.14, hh=2.28;
+    const blattM=new THREE.MeshStandardMaterial({color:0x4a3a2c,roughness:0.5,envMapIntensity:1.0});
+    // linker Stollen 0.61, Lichtausschnitt 0.10, rechter Stollen 0.31 = 1.02 gesamt
+    [[-3.925,0.61],[-3.365,0.31]].forEach(([x,w])=>{
+      const d=new THREE.Mesh(new THREE.BoxGeometry(w,hh,DT),blattM);
+      d.position.set(x,yC,DZ); d.castShadow=true; d.receiveShadow=true; scene.add(d); });
+    // Ausschnitt: dunkle Laibung dahinter, Glas davor — sonst sieht man durch die Tuer
+    const nis=new THREE.Mesh(new THREE.BoxGeometry(0.10,1.70,0.03),mat(0x22201d,0.9));
+    nis.position.set(-3.57,1.20,DZ-0.02); scene.add(nis);
+    const lg=new THREE.Mesh(new THREE.PlaneGeometry(0.10,1.70),glassM);
+    lg.position.set(-3.57,1.20,DZ+DT/2+0.004); scene.add(lg);
+    // Stossgriff senkrecht, 28 mm Rohr, 1.40 m lang, auf zwei Stuetzen mit 55 mm
+    // Abstand zum Blatt — vorher schwebte ein Querstab ohne jede Halterung.
+    const gM=mat(0xb9bcbe,0.35,0.9);
+    const zF=DZ+DT/2;
+    const bar=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.014,1.40,12),gM);
+    bar.position.set(-3.365,1.20,zF+0.055); bar.castShadow=true; scene.add(bar);
+    [0.60,1.80].forEach(y=>{ const st=new THREE.Mesh(new THREE.CylinderGeometry(0.011,0.011,0.055,8),gM);
+      st.rotation.x=Math.PI/2; st.position.set(-3.365,y,zF+0.0275); scene.add(st); });
+    // Schwelle: das Blatt endete vorher frei ueber dem Podest
+    const sw=new THREE.Mesh(new THREE.BoxGeometry(1.10,0.025,0.14),mat(0xa8acae,0.42,0.55));
+    sw.position.set(-3.72,0.012,DZ); sw.receiveShadow=true; scene.add(sw); }
   [[-4.62,1.14,0.5,2.28],[-2.98,1.14,0.42,2.28],[-3.9,2.43,2.7,0.22]].forEach(([x,y,w,h])=>{
     const g=new THREE.Mesh(new THREE.PlaneGeometry(w,h),glassM);
     g.position.set(x,y,0.105); scene.add(g);
@@ -259,11 +272,35 @@ function buildScene(){
   const benchSh=shadowBlob(1.9,1.0,0.26); benchSh.position.set(benchX,0.006,benchZ); scene.add(benchSh);
 
   // ---- Pflanzkübel (schwarz) + Gräser nahe Eingang ----
+  // Drei Fehler auf einmal, alle nachgerechnet:
+  // 1. CylinderGeometry(r*0.82, r, ...) setzt den OBEREN Radius auf 0.82 und den
+  //    unteren auf 1.0 — der Kübel war oben schmaler als unten, also ein auf den
+  //    Kopf gestellter Eimer. Ein Pflanzkübel öffnet sich nach oben.
+  // 2. Das Grasbüschel hing als Kind des Kübels bei y = r*1.5, die Oberkante des
+  //    Kübels liegt aber bei r*0.8 (halbe Höhe von r*1.6). Das Gras schwebte also
+  //    0.7*r über dem Rand — beim grossen Kübel 27 cm Luft.
+  // 3. Der Kübel war ein geschlossener Zylinder ohne Wandstärke und ohne Substrat.
+  // Jetzt ein Lathe-Profil, das aussen hoch, über den Rand und innen wieder
+  // hinunter läuft: dadurch hat der Rand eine sichtbare Dicke. Darin eine dunkle
+  // Substratfläche, aus der das Gras tatsächlich herauswächst.
   [[-2.35,1.5,0.30],[-1.75,1.85,0.38]].forEach(([x,z,r])=>{
-    const pot=new THREE.Mesh(new THREE.CylinderGeometry(r*0.82,r,r*1.6,22),mat(0x232527,0.7));
-    pot.position.set(x,r*0.8,z); pot.castShadow=true; scene.add(pot);
-    const g=new THREE.Group(); g.position.set(0,r*1.5,0); pot.add(g);
-    grassTuft(0,0,1.15,g);
+    const h=r*1.7, wand=r*0.08;
+    const prof=[[0.001,0],[r*0.74,0],[r*0.80,h*0.12],[r,h],[r-wand,h],
+                [r*0.80-wand,h*0.30],[r*0.74-wand,h*0.22]]
+      .map(([rr,yy])=>new THREE.Vector2(rr,yy));
+    const pot=new THREE.Mesh(new THREE.LatheGeometry(prof,24),
+      new THREE.MeshStandardMaterial({color:0x232527,roughness:0.7,side:THREE.DoubleSide}));
+    pot.position.set(x,0,z); pot.castShadow=true; pot.receiveShadow=true; scene.add(pot);
+    // Substrat knapp unter dem Rand, damit man in den Kübel hineinsieht statt
+    // durch ihn hindurch
+    const erde=new THREE.Mesh(new THREE.CircleGeometry(r-wand*1.1,24),mat(0x2a2320,1));
+    erde.rotation.x=-Math.PI/2; erde.position.set(x,h*0.30,z); scene.add(erde);
+    const g=new THREE.Group(); g.position.set(x,h*0.30,z); scene.add(g);
+    // grassTuft macht den Büschelradius zu 0.34*scale. Mit scale = 2.4*r bleibt der
+    // Büschel bei 0.49 m Durchmesser gegen 0.60 m Kübeldurchmesser — er steht also
+    // IM Kübel statt daneben. Die Halmlänge haengt am selben scale und wuerde
+    // dadurch zu kurz, deshalb die Gruppe getrennt in der Höhe gestreckt.
+    grassTuft(0,0,r*2.4,g); g.scale.set(1,1.7,1);
     const sb=shadowBlob(r*3,r*3,0.25); sb.position.set(x,0.006,z); scene.add(sb);
   });
 
@@ -290,7 +327,7 @@ function buildScene(){
     fo.scale.set(1,1.15,1); fo.position.set(x,2.6,z); fo.castShadow=true; scene.add(fo);
   });
 
-  camera=new THREE.PerspectiveCamera(46,16/10,0.1,140);
+  camera=new THREE.PerspectiveCamera(46,16/10,0.5,140);
   applyCam(true);
 }
 
@@ -307,15 +344,17 @@ function applyCam(hard){
 function ensureRenderer(){
   if(renderer||failed) return !failed;
   try{
-    renderer=new THREE.WebGLRenderer({antialias:true});
+    renderer=new THREE.WebGLRenderer({antialias:!MOBILE});
     renderer.shadowMap.enabled=true;
-    renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+    // PCF statt PCFSoft: nur PCF wertet shadow.radius aus → steuerbare Weichheit
+    renderer.shadowMap.type=MOBILE?THREE.BasicShadowMap:THREE.PCFShadowMap;
     renderer.outputColorSpace=THREE.SRGBColorSpace;
     renderer.toneMapping=THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure=0.72;
+    renderer.toneMappingExposure=1.05;
     maxAniso=renderer.capabilities.getMaxAnisotropy()||8;
     buildScene();
     const el=renderer.domElement;
+    el.addEventListener('webglcontextlost',e=>e.preventDefault());   // iOS: schwarzer Canvas vermeiden
     el.style.cssText='width:100%;height:100%;display:block;border-radius:inherit;cursor:grab;touch-action:none';
     let drag=false,lx=0,ly=0;
     el.addEventListener('pointerdown',e=>{ drag=true; lx=e.clientX; ly=e.clientY;
@@ -337,7 +376,7 @@ function sizeToHost(){
   renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
-  camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+  camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
   camera.updateProjectionMatrix();
 }
 // rAF-Loop + Timer-Watchdog: rendert auch weiter, wenn der Browser rAF drosselt
@@ -348,23 +387,10 @@ function startLoops(){
   if(!rafId) loop();
   if(!wdId) wdId=setInterval(()=>{ if(!document.hidden && performance.now()-lastRaf>200) step(); },120);
 }
-function texFromCanvas(cv){
-  if(!cv) return null;
-  const t=new THREE.CanvasTexture(cv);
-  t.colorSpace=THREE.SRGBColorSpace;
-  t.anisotropy=maxAniso;
-  return t;
-}
-function applyTex(m,cv,fallback,rough,ns){
-  if(m.map) m.map.dispose();
-  if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
-  m.map=texFromCanvas(cv);
-  m.color.set(cv?0xffffff:fallback);
-  m.roughness=cv?(rough!=null?rough:1.0):0.95;   // Klinker matt
-  if(cv){ const nt=normalFromCanvas(cv);                    // Fugen tief, Stein-Relief aus dem Foto
-    if(nt){ nt.anisotropy=maxAniso; nt.generateMipmaps=false; nt.minFilter=THREE.LinearFilter; m.normalMap=nt; const s=ns!=null?ns:0.8; m.normalScale=new THREE.Vector2(s,s); } }
-  m.envMapIntensity=cv?0.18:0.3;                    // kaum Env-Reflexion
-  m.needsUpdate=true;
+// Fugentiefe in UV-Einheiten (~14 mm auf die von der Textur abgedeckte Breite)
+function applyTex(m,cv,fallback,rough,ns,pom){
+  applySurface(m,cv,{fallback,rough,normalScale:ns!=null?ns:0.9,aniso:maxAniso,
+    env:cv?0.40:0.3, pom:pom||0});
 }
 window.Bungalow3D={
   available(){ return !failed; },
@@ -382,12 +408,19 @@ window.Bungalow3D={
   },
   // Render-Loop + Watchdog anhalten (Mixer zu / anderes Gebaeude aktiv)
   stop(){ if(rafId){ cancelAnimationFrame(rafId); rafId=0; } if(wdId){ clearInterval(wdId); wdId=0; } },
+  // Kontext und Speicher wirklich freigeben — ensureRenderer() baut beim naechsten mount() neu auf
+  dispose(){
+    this.stop();
+    if(ro){ ro.disconnect(); ro=null; }
+    disposeScene(scene,renderer);
+    renderer=null; scene=null; camera=null; host=null; failed=false;
+  },
   // Fassade vorne, Fassade Seiten, Terrasse — je ein Canvas (null → neutral)
   setTextures(facadeCv,sideCv,floorCv){
     if(!renderer) return;
-    applyTex(facadeMat,facadeCv,0xdad6d1);
-    applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce);
-    applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce);
+    applyTex(facadeMat,facadeCv,0xdad6d1,1.0,0.9,0.0024);
+    applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce,1.0,0.9,0.0031);
+    applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce,1.0,0.9,0.0031);
     applyTex(floorMat,floorCv,0xd0cdc8,0.8,0.55);
   },
   snapshot(w,h){
@@ -395,13 +428,13 @@ window.Bungalow3D={
     const pr=renderer.getPixelRatio(), sz=new THREE.Vector2(); renderer.getSize(sz);
     renderer.setPixelRatio(1); renderer.setSize(w,h,false);
     camera.aspect=w/h;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     const url=renderer.domElement.toDataURL('image/png');
     renderer.setPixelRatio(pr); renderer.setSize(sz.x,sz.y,false);
     camera.aspect=sz.x/sz.y;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     return url;

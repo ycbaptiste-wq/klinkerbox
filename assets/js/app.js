@@ -564,16 +564,31 @@
   const REAL={ brick:0.24, block:0.29, strip:0.24, pflaster:0.21, hex:0.22, oct:0.24, sq:0.30 };
   // echte Sichtflächen-Masse eines Produkts aus dem "size"-Feld: {len, ar} (Meter · Länge/Höhe)
   // → damit z.B. Infinitum/LF-Langformat länger & dünner rendern als Standard-Klinker (NF)
-  function fmtOf(p){ if(!p) return null;
+  // flat=true → Bodenprodukt: die sichtbare Fläche ist Länge x BREITE.
+  // flat=false → Wandprodukt: die sichtbare Fläche ist Länge x HÖHE.
+  // Vorher wurde ueber ALLE Zahlen max/min genommen. Die Normschreibweise ist
+  // Laenge x Tiefe x Hoehe: beim Vollstein (240x115x71) ist die Tiefe groesser als
+  // die Hoehe, min() traf also zufaellig die Hoehe und draussen ging es gut. Beim
+  // Riemchen (240x36x72) ist die Tiefe die KLEINSTE Zahl — min() traf die Dicke und
+  // machte aus 240x72 ein 240x36. Das Schichtmass lag damit bei fast jedem
+  // Innenprodukt daneben: 66.7 Schichten auf 3.00 m Raumhoehe statt 35.7. Aus 25 m
+  // Fassadenabstand faellt das nicht auf, im Wohnraum zaehlt man die Schichten.
+  // Bodenplatten stehen dagegen als Laenge x Breite x Dicke — dort sind es die
+  // ersten beiden Zahlen, und "300 x 300 x 25" darf nicht als 300x25 gelesen werden.
+  function fmtOf(p,flat){ if(!p) return null;
     const s=(p.size||'')+' '+((p.formats&&p.formats.join(' '))||'');
     const nums=s.match(/\d+(?:[.,]\d+)?/g); if(!nums) return null;
     const v=nums.map(n=>parseFloat(n.replace(',','.'))).filter(n=>n>2);
     if(v.length<2) return null;
     const cm=/\bcm\b/i.test(s) && !/\bmm\b/i.test(s), scale=cm?0.01:0.001;   // cm/mm → m
-    const len=Math.max.apply(null,v)*scale, hgt=Math.min.apply(null,v)*scale;
+    // Nennt der String zwei Formate ("215x100x65 / 240x107x72"), zaehlt das erste —
+    // sonst entsteht aus 240 und 65 ein Steingesicht, das keines der beiden hat.
+    let a=v[0], b=(v.length>=3)?(flat?v[1]:v[2]):v[1];
+    if(!(b>0)) b=Math.min.apply(null,v);
+    const len=Math.max(a,b)*scale, hgt=Math.max(0.001,Math.min(a,b)*scale);
     return { len:Math.min(0.62,Math.max(0.12,len)), ar:Math.min(9,Math.max(1,len/hgt)) };
   }
-  function zoneFmt(name){ const z=zoneData[name]; return (z&&z.mix.length)?fmtOf(z.mix[0].p):null; }
+  function zoneFmt(name){ const z=zoneData[name]; return (z&&z.mix.length)?fmtOf(z.mix[0].p,/_floor$/.test(name)):null; }
   // Fassade: Steinlänge bw_m = wM*FAM_BW/100/div  →  div = wM*FAM_BW/100/len (echte Länge wenn bekannt)
   function facadeDiv(wM,fam,lenM){ fam=fam||'brick';
     return Math.max(2, wM*(FAM_BW[fam]||15.6)/100/(lenM||REAL[fam]||0.24)); }
@@ -581,8 +596,17 @@
   function floorDiv(wM,shape,lenM){
     if(shape==='hex') return Math.max(7, (wM/REAL.hex)*(3/7));   // cols_hex = 7*div/3
     if(shape==='oct') return Math.max(8, (wM/REAL.oct)*(3/8));   // n_oct    = 8*div/3
-    if(shape==='square') return Math.max(9, (wM/REAL.sq)/3);     // n_sq     = 3*div (nach Fix)
-    return Math.max(3, wM*15.6/100/(lenM||REAL.pflaster));       // Pflaster (brick-Familie)
+    // Die echte Plattenlaenge nutzen statt der festen 0.30 m, und die Klemme von 9
+    // auf 3. Bei 6.4 m Bodenbreite ergab (6.4/0.30)/3 = 7.11, die Klemme griff und
+    // machte daraus 27 Platten je Reihe = 233 mm — fuer JEDE quadratische Platte.
+    // Eine 14er und eine 30er kamen beide mit 233 mm heraus, und dieselbe 14er
+    // rendert in der Musteransicht korrekt 141 mm: dasselbe Produkt in zwei
+    // Ansichten mit 65 % Unterschied. Die Klemme biss nur innen, weil dort 6.4 m
+    // Bezugsbreite stehen; aussen sind es 12-21 m.
+    if(shape==='square') return Math.max(3, (wM/(lenM||REAL.sq))/3);   // n_sq = 3*div
+    // FAM_BW statt fest 15.6: fuer die block-Familie waren die Platten 9 %, fuer
+    // strip 41 % zu gross. facadeDiv rechnet das laengst richtig, floorDiv nicht.
+    return Math.max(3, wM*(FAM_BW[shape]||15.6)/100/(lenM||REAL.pflaster));
   }
   function shapeFamily(p){
     const s=(p.size||'')+' '+((p.formats&&p.formats.join(' '))||'');
@@ -817,6 +841,7 @@
   }
   let texJointMul=1;                                   // scene textures use finer joints
   let texDiv=1;                                        // >1 → smaller bricks (full-wall texture without tiling)
+  let texFloor=false;                                  // gerade gezeichnete Zone ist ein Bodenbelag
   function paintWall(cx,W,H,map){
     cx.clearRect(0,0,W,H); cx.fillStyle=mixJoint; cx.fillRect(0,0,W,H);
     const fam=mixShape||'brick', sc=W/560*texJointMul/texDiv;
@@ -831,7 +856,7 @@
   }
   function paintCourses(cx,W,H,map,fam,bed,head){
     // Seitenverhältnis aus der ECHTEN Steingrösse (falls parsebar), sonst Familien-Default
-    const rf=(mix&&mix.length)?fmtOf(mix[0].p):null, ar=(rf&&rf.ar)||FAM_AR[fam]||3.4;
+    const rf=(mix&&mix.length)?fmtOf(mix[0].p,texFloor):null, ar=(rf&&rf.ar)||FAM_AR[fam]||3.4;
     // Nahansicht (texDiv=1): Steinbreite massstäblich zur realen Länge — ~1.55 m sichtbare Wand
     const bw=(texDiv===1 && rf && rf.len)? W*rf.len/1.55 : W*(FAM_BW[fam]||15.6)/100/texDiv, bh=bw/ar;
     const rows=Math.ceil(H/(bh+bed))+1, cols=Math.ceil(W/(bw+head))+2, sq=(fam==='square');
@@ -839,8 +864,8 @@
       for(let c=-1;c<cols;c++){ const {im,b}=pickCell(map,c,r); drawUnit(cx,im,c*(bw+head)-off,y,bw,bh,b); } }
   }
   function paintSquare(cx,W,H,map,gap){
-    const rf=(mix&&mix.length)?fmtOf(mix[0].p):null;
-    const n=(texDiv===1)? Math.max(3,Math.round(1.55/((rf&&rf.len)||REAL.sq))) : Math.max(9,Math.round(3*texDiv));
+    const rf=(mix&&mix.length)?fmtOf(mix[0].p,true):null;   // Quadratplatte: immer Bodenprodukt
+    const n=(texDiv===1)? Math.max(3,Math.round(1.55/((rf&&rf.len)||REAL.sq))) : Math.max(3,Math.round(3*texDiv));
     const tw=(W-(n+1)*gap)/n, rows=Math.ceil(H/(tw+gap))+1;
     for(let r=0;r<rows;r++) for(let c=0;c<n;c++){ const {im,b}=pickCell(map,c,r);
       drawUnit(cx,im,gap+c*(tw+gap),gap+r*(tw+gap),tw,tw,b); }
@@ -1297,10 +1322,19 @@
       if(o.length>4) cx.restore();
     }); }
   }
+  // Regler und Farbfelder feuern bei jedem Pixel — ohne Debounce baut das die
+  // komplette Wandtextur samt PBR-Karten neu und die UI friert beim Ziehen ein.
+  let _rwT=0;
+  function refreshWallSoon(){ clearTimeout(_rwT); _rwT=setTimeout(refreshWall,130); }
   function refreshWall(){
+    clearTimeout(_rwT);
     const host=$('#mixPreview'); if(!host) return;
     const sceneView=(mixView==='exterior'||mixView==='interior');
-    if(!mix.length && !sceneView){ host.innerHTML=''; return; }
+    // Hier wurde die Vorschau bei leerer Auswahl schlicht GELEERT und zurueck-
+    // gesprungen. Danach stand im Vorschaubereich gar kein Bild mehr und man sah
+    // durch den Mixer hindurch auf die Seite dahinter — der Zustand "noch nichts
+    // gewaehlt" sah aus wie ein Fehler. Jetzt laeuft die Nahansicht weiter und
+    // zeigt ihre Flaeche mit dem hellen Fallback: eine schlichte weisse Wand.
     saveActive();
     // Innen-Ansicht: echter 3D-Wohnraum (WebGL).
     if(mixView==='interior'){
@@ -1339,7 +1373,7 @@
         const fShape=(zoneData[zoneKey('exterior','floor')]||{}).shape||'brick';
         // reale Masse je Gebäude (m): Front-Breite, Seiten-Tiefe, Vorplatz-Breite (+ Giebel)
         const D={ bungalow:{fw:13,sw:8,pw:14}, villa:{fw:13,sw:10,pw:15},
-                  office:{fw:18,sw:12,pw:21}, friesen:{fw:13,sw:9,pw:17,gw:3.6}, efh:{fw:9.6,sw:8,pw:12} }[bld];
+                  office:{fw:18,sw:12,pw:21}, friesen:{fw:13,sw:9,pw:17,gw:3.6}, efh:{fw:12,sw:8,pw:12} }[bld];
         const fLen=(zoneFmt(zoneKey('exterior','facade'))||{}).len, flLen=(zoneFmt(zoneKey('exterior','floor'))||{}).len;
         const fD=facadeDiv(D.fw,fFam,fLen), sD=facadeDiv(D.sw,fFam,fLen), flD=floorDiv(D.pw,fShape,flLen);
         let facadeCv,sideCv,floorCv,gableCv=null;
@@ -1361,13 +1395,44 @@
           sideCv=zoneTexFull(zoneKey('exterior','facade'),1800,600,sD,map);
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1230,flD,map);
         } else {                                                                   // EFH
-          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2000,1270,fD,map);
-          sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,1700,sD,map);
+          // Front 12.0 x 6.3 m, Giebelwand 8.0 m breit bis zum First 10.3 m - das
+          // Seitenverhaeltnis der Textur muss dem folgen, sonst steht der Stein schief.
+          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2400,1260,fD,map);
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,2060,sD,map);
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,flD,map);
         }
         if(EXT3D.mount(host)) EXT3D.setTextures(facadeCv,sideCv,floorCv,gableCv);
       }, allP);
       return;
+    }
+    // Nahansicht in 3D: das gemalte Fugenbild ohne Relief und Licht war ausgerechnet
+    // dort flach, wo der Kunde am genauesten hinschaut. Faellt auf die 2D-Leinwand
+    // zurueck, wenn WebGL nicht laeuft.
+    if(!sceneView){
+      if(!window.Wall3D){ load3D('wall',host); return; }
+      if(window.Wall3D.available()){
+        stopAll3D('Wall3D');
+        // Ohne gewaehlten Stein lief die Nahansicht bisher in die 2D-Leinwand, und
+        // paintWall zeichnet bei leerem Mix nichts — die Flaeche blieb durchsichtig
+        // und man sah durch den Mixer hindurch auf die Seite dahinter. Jetzt steht
+        // eine schlichte helle Wand. Das ist der Zustand "noch nichts gewaehlt",
+        // und der muss aussehen wie eine Wand, nicht wie ein Loch.
+        if(!mix.length){
+          if(window.Wall3D.mount(host)) window.Wall3D.setTextures(null,mixSurface==='floor');
+          return;
+        }
+        if(!mixLayout.length) genLayout();
+        const allW=[]; mix.forEach(m=>allW.push(m.p));
+        ensureImgObjs(map=>{
+          if(mixView==='exterior'||mixView==='interior') return;   // Ansicht inzwischen gewechselt
+          const isFloor=(mixSurface==='floor');
+          const fam=mixShape||'brick', len=(fmtOf(mix[0]&&mix[0].p,isFloor)||{}).len;
+          const div=isFloor?floorDiv(3.20,fam,len):facadeDiv(3.20,fam,len);   // = PW in wall3d.js
+          const cvw=zoneTexFull(activeZone,2000,1400,div,map);
+          if(window.Wall3D.mount(host)) window.Wall3D.setTextures(cvw,isFloor);
+        }, allW);
+        return;
+      }
     }
     if(!sceneView) stopAll3D();                      // Muster-Ansicht braucht kein 3D
     if(!sceneView && !mixLayout.length) genLayout();
@@ -1398,6 +1463,7 @@
     }, allP);
   }
   // 3D-Module laden asynchron (ES-Module) → betroffene Ansicht neu rendern, sobald bereit
+  window.addEventListener('wall3d-ready',()=>{ if(mixView!=='exterior'&&mixView!=='interior') refreshWall(); });
   window.addEventListener('room3d-ready',()=>{ if(mixView==='interior') refreshWall(); });
   window.addEventListener('bungalow3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='bungalow') refreshWall(); });
   window.addEventListener('efh3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='efh') refreshWall(); });
@@ -1406,14 +1472,14 @@
   window.addEventListener('friesen3d-ready',()=>{ if(mixView==='exterior'&&mixBuilding==='friesen') refreshWall(); });
   // three.js + Szenen-Module werden ERST beim Öffnen der jeweiligen 3D-Ansicht geladen
   // (nicht beim Seitenaufbau) → deutlich schnellerer Erststart.
-  const MOD3D={interior:'room3d',bungalow:'bungalow3d',efh:'efh3d',villa:'villa3d',office:'office3d',friesen:'friesen3d'};
-  const GLOB3D={interior:'Room3D',bungalow:'Bungalow3D',efh:'Efh3D',villa:'Villa3D',office:'Office3D',friesen:'Friesen3D'};
+  const MOD3D={wall:'wall3d',interior:'room3d',bungalow:'bungalow3d',efh:'efh3d',villa:'villa3d',office:'office3d',friesen:'friesen3d'};
+  const GLOB3D={wall:'Wall3D',interior:'Room3D',bungalow:'Bungalow3D',efh:'Efh3D',villa:'Villa3D',office:'Office3D',friesen:'Friesen3D'};
   const _load3D={}, L3D={de:'3D wird geladen …',fr:'Chargement 3D …',it:'Caricamento 3D …',en:'Loading 3D …'};
   function load3D(key,host){
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=75', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=119', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -1433,6 +1499,19 @@
     }
     return tex;
   }
+  // Signatur einer fertigen Wandtextur — die 3D-Seite haengt daran ihren Cache fuer
+  // die PBR-Karten auf (Normal/AO/Roughness/Hoehe), damit die teure Pixelrechnerei
+  // beim blossen Neu-Mounten nicht jedes Mal von vorne laeuft.
+  function klbTexKey(name,w,h,div,z){
+    const lay=z.layout||[], step=Math.max(1,Math.ceil(lay.length/96));
+    const smp=[]; for(let i=0;i<lay.length;i+=step) smp.push(lay[i]);
+    const s=name+'|'+w+'x'+h+'|'+(+div).toFixed(3)+'|'+z.cat+z.shape+z.bond+z.bed+z.head+z.joint+z.order
+      +'|'+z.mix.map(m=>m.p.id+':'+m.weight).join(',')
+      +'|'+(z.seq||[]).join('.')+'|'+(z.wild||[]).join('.')+'|'+lay.length+':'+smp.join('.');
+    let hh=2166136261;
+    for(let i=0;i<s.length;i++){ hh^=s.charCodeAt(i); hh=Math.imul(hh,16777619); }
+    return (hh>>>0).toString(36);
+  }
   // full-size wall texture (no tiling → no visible repeat): div = brick-size divisor
   function zoneTexFull(name,w,h,div,map){
     const z=zoneData[name]; if(!z.mix.length) return null;
@@ -1442,12 +1521,16 @@
       mix=z.mix;mixCat=z.cat;mixShape=z.shape;mixBond=z.bond;mixBed=z.bed;mixHead=z.head;mixJoint=z.joint;mixOrder=z.order;mixLayout=z.layout;mixSeq=z.seq;wildOff=z.wild;
       if(!mixLayout.length){ genLayout(); z.layout=mixLayout; z.seq=mixSeq; z.wild=wildOff; }
       tex=document.createElement('canvas'); tex.width=Math.max(2,Math.round(w)); tex.height=Math.max(2,Math.round(h));
-      texJointMul=0.55; texDiv=div;
+      texJointMul=0.55; texDiv=div; texFloor=/_floor$/.test(name);
       paintWall(tex.getContext('2d'),tex.width,tex.height,map);
     } finally {
-      texJointMul=1; texDiv=1;
+      texJointMul=1; texDiv=1; texFloor=false;
       [mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff]=B;
     }
+    // Die Moertelfarbe wird in paintWall als flaeche Fuellung gesetzt und ist damit
+    // exakt bekannt. Ohne diese Angabe muesste die 3D-Seite sie aus dem Histogramm
+    // raten - und raet bei duennen Fugen den haeufigsten STEIN statt den Moertel.
+    if(tex){ tex.__klbKey=klbTexKey(name,tex.width,tex.height,div,z); tex.__klbJoint=z.joint; }
     return tex;
   }
   function switchView(v){
@@ -1532,9 +1615,12 @@
     if(lastFocusMix && lastFocusMix.focus) lastFocusMix.focus({preventScroll:true});
     lastFocusMix=null; }
   // 3D-Render-Loops stoppen (alle ausser dem aktiven Modul) — Akku/GPU-Last, iOS-Kontextlimit
+  // Inaktive Module bekommen dispose() statt stop(): sonst bleibt pro angeschautem
+  // Gebaeude ein WebGL-Kontext liegen und der Browser haengt sich nach ein paar Wechseln auf.
   function stopAll3D(except){
-    ['Room3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
-      const m=window[n]; if(m && m.stop && n!==except) m.stop();
+    ['Wall3D','Room3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
+      const m=window[n]; if(!m || n===except) return;
+      if(m.dispose) m.dispose(); else if(m.stop) m.stop();
     });
   }
   // Steinliste + Anteile beider Zonen (für Anfrage und Export-Legende)
@@ -1648,11 +1734,12 @@
       </button>`).join('')}</div>`;
     // ---------- Tab «Steine»: Katalog-Grid direkt im Konfigurator ----------
     if(mixTab==='stones'){
-      if(!mix.length && !sceneView){
-        const sugs=getSuggestions();
-        prev.innerHTML=`<div class="mixsuggest"><div class="mixsuggest__h">${M.suggest_title[lang]}</div>${sugCards(sugs)}<p class="mixsuggest__hint">${M.empty[lang]}</p></div>`;
-        prev.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
-      } else refreshWall();
+      // Auch hier keine Vorschlagstafel mehr ANSTELLE der Vorschau: die Nahansicht
+      // zeigt jetzt in jedem Fall ihre Flaeche, ohne Auswahl eben eine schlichte
+      // helle Wand. Vorher ueberschrieb die Tafel den ganzen Vorschaubereich,
+      // dahinter stand kein Bild, und man sah durch den Mixer auf die Seite.
+      // Die Vorschlaege stehen weiterhin bereit — im Katalog gleich daneben.
+      refreshWall();
       const cats=mixSurface==='facade'?['mauer']:['pflaster','tonplatten'];
       let pool=P.filter(p=>cats.includes(p.cat));
       if(mixView==='exterior' && mixSurface==='floor') pool=pool.filter(p=>!(p.cat==='tonplatten'&&p.sub==='Indoor'));
@@ -1678,16 +1765,17 @@
     // ---------- Tab «Gestaltung» ----------
     if(!mix.length){
       const sugs=sceneView?surfSuggestions():getSuggestions();
-      if(sceneView){
-        refreshWall();
-        list.innerHTML=zonesHtml+`<div class="mixgrp"><div class="mixgrp__h">${surfName} · ${M.surf_add[lang]}</div>${sugCards(sugs)}</div>`;
-        bindZones();
-        list.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
-        return;
-      }
-      prev.innerHTML=`<div class="mixsuggest"><div class="mixsuggest__h">${M.suggest_title[lang]}</div>${sugCards(sugs)}<p class="mixsuggest__hint">${M.empty[lang]}</p></div>`;
-      list.innerHTML=zonesHtml; bindZones();
-      prev.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
+      // Auch die Nahansicht zeigt jetzt ihre Flaeche, statt sie durch die
+      // Vorschlagstafel zu ERSETZEN. Vorher ueberschrieb die Tafel den ganzen
+      // Vorschaubereich, dahinter stand kein Bild, und man sah durch den Mixer
+      // hindurch auf die Seite — genau das "Durchsichtige". Die Vorschlaege
+      // wandern in die Seitenleiste, dorthin also, wo sie in der Aussen- und
+      // Innenansicht ohnehin schon stehen.
+      refreshWall();
+      const kopf=sceneView?(surfName+' · '+M.surf_add[lang]):M.suggest_title[lang];
+      list.innerHTML=zonesHtml+`<div class="mixgrp"><div class="mixgrp__h">${kopf}</div>${sugCards(sugs)}</div>`;
+      bindZones();
+      list.querySelectorAll('.mixsug').forEach(b=>b.onclick=()=>loadSuggestion(sugs[+b.dataset.i]));
       return;
     }
     refreshWall();
@@ -1724,17 +1812,17 @@
     list.innerHTML=zonesHtml+ratio+bond+jcol+profi;
     bindZones();
     // handlers
-    list.querySelectorAll('.mixratio__sl').forEach(sl=>sl.oninput=()=>{ mix[+sl.dataset.i].weight=+sl.value; genLayout(); updatePcts(); refreshWall(); });
+    list.querySelectorAll('.mixratio__sl').forEach(sl=>sl.oninput=()=>{ mix[+sl.dataset.i].weight=+sl.value; genLayout(); updatePcts(); refreshWallSoon(); });
     list.querySelectorAll('.mixchip__x').forEach(b=>b.onclick=()=>{ const p=P.find(x=>x.id===b.dataset.id); if(p) removeFromMixer(p); });
     list.querySelectorAll('.mixseg').forEach(s=>s.querySelectorAll('.mixseg__b').forEach(b=>b.onclick=()=>{
       const v=b.dataset.v, name=s.dataset.seg;
       if(name==='bond') mixBond=v; else if(name==='bed') mixBed=v; else if(name==='head') mixHead=v;
       else if(name==='order') mixOrder=(v==='rnd')?0:(v==='mid')?0.5:1;
       s.querySelectorAll('.mixseg__b').forEach(x=>{ x.classList.remove('is-active'); x.setAttribute('aria-pressed','false'); });
-      b.classList.add('is-active'); b.setAttribute('aria-pressed','true'); refreshWall();
+      b.classList.add('is-active'); b.setAttribute('aria-pressed','true'); refreshWallSoon();
     }));
     list.querySelectorAll('.mixmortar').forEach(b=>b.onclick=()=>{ mixJoint=b.dataset.hex;
-      list.querySelectorAll('.mixmortar').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWall(); });
+      list.querySelectorAll('.mixmortar').forEach(x=>x.classList.remove('is-active')); b.classList.add('is-active'); refreshWallSoon(); });
     { const mm=list.querySelector('#mortMore'); if(mm) mm.onclick=()=>{ mortarsAll=!mortarsAll; renderMixer(); }; }
   }
   // form per stone — pre-fill the contact form with the selected product
