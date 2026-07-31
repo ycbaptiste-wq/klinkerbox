@@ -16,10 +16,14 @@ let rafId=0, failed=false;
 // Wandstueck 2.60 x 1.82 m — gross genug fuer mehrere Schichten, klein genug,
 // dass der einzelne Stein noch als Stein liest.
 const PW=2.60, PH=1.82;
+// Fester Blickwinkel — die Nahansicht muss nicht drehbar sein, sie soll das
+// PROFIL zeigen. Leicht schräg und leicht von oben: nur so wirft die Fuge einen
+// Schatten und der Stein bekommt eine sichtbare Dicke.
 const TARGET=new THREE.Vector3(0,0,0);
-let az=0.30, po=1.485, rad=3.05;    // Wandstück ganz im Bild, leicht schräg für das Relief
-let azT=az, poT=po, radT=rad;
-const AZ_MIN=-0.95, AZ_MAX=0.95, PO_MIN=1.05, PO_MAX=2.05, R_MIN=1.15, R_MAX=4.20;
+let az=0.30, po=1.485, rad=3.05;
+let radT=rad;                       // nur Zoom bleibt, kein Drehen
+const R_MIN=1.60, R_MAX=4.20;
+let needsRender=true;
 
 // Fugentiefe in UV-Einheiten: 16 mm auf die Flaeche, die die Karte abdeckt
 const POM=0.016/Math.sqrt(PW*PH);
@@ -58,25 +62,29 @@ function buildScene(){
   const fill=new THREE.DirectionalLight(0xe9eef6,0.55);
   fill.position.set(3.0,0.6,2.4); scene.add(fill);
 
+  // Platte und Laibung stehen in EINER Gruppe — sonst bleibt der Rahmen senkrecht
+  // stehen, wenn das Stueck fuer ein Bodenprodukt flach gelegt wird.
+  panel=new THREE.Group(); scene.add(panel);
   panelMat=new THREE.MeshStandardMaterial({color:0xdad6d1,roughness:0.95});
-  panel=new THREE.Mesh(new THREE.PlaneGeometry(PW,PH),panelMat);
-  panel.receiveShadow=true; panel.castShadow=true;
-  scene.add(panel);
-  // Schmale Laibung ringsum: die Wand bekommt eine Kante und damit eine Dicke,
+  const face=new THREE.Mesh(new THREE.PlaneGeometry(PW,PH),panelMat);
+  face.receiveShadow=true; face.castShadow=true; panel.add(face);
+  // Schmale Laibung ringsum: das Stueck bekommt eine Kante und damit eine Dicke,
   // sonst schwebt eine Textur im Raum.
   { const em=new THREE.MeshStandardMaterial({color:0xb4b0a9,roughness:0.9});
     const D=0.14;
     [[0,PH/2+0.015,PW+0.03,0.03],[0,-PH/2-0.015,PW+0.03,0.03],
      [-PW/2-0.015,0,0.03,PH],[PW/2+0.015,0,0.03,PH]].forEach(([x,y,w,h])=>{
       const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,D),em);
-      m.position.set(x,y,-D/2); m.castShadow=true; m.receiveShadow=true; scene.add(m); }); }
+      m.position.set(x,y,-D/2); m.castShadow=true; m.receiveShadow=true; panel.add(m); }); }
 
   camera=new THREE.PerspectiveCamera(38,16/10,0.05,60);
   applyCam(true);
 }
 function applyCam(hard){
   const k=hard?1:0.14;
-  az+=(azT-az)*k; po+=(poT-po)*k; rad+=(radT-rad)*k;
+  const before=rad;
+  rad+=(radT-rad)*k;
+  if(Math.abs(rad-before)>0.0005) needsRender=true;
   camera.position.set(
     TARGET.x+rad*Math.sin(po)*Math.sin(az),
     TARGET.y+rad*Math.cos(po),
@@ -96,18 +104,10 @@ function ensureRenderer(){
     buildScene();
     const el=renderer.domElement;
     el.addEventListener('webglcontextlost',e=>e.preventDefault());
-    el.style.cssText='width:100%;height:100%;display:block;border-radius:inherit;cursor:grab;touch-action:none';
-    let drag=false,lx=0,ly=0;
-    el.addEventListener('pointerdown',e=>{ drag=true; lx=e.clientX; ly=e.clientY;
-      el.setPointerCapture(e.pointerId); el.style.cursor='grabbing'; });
-    el.addEventListener('pointermove',e=>{ if(!drag) return;
-      azT=Math.min(AZ_MAX,Math.max(AZ_MIN,azT-(e.clientX-lx)*0.006));
-      poT=Math.min(PO_MAX,Math.max(PO_MIN,poT+(e.clientY-ly)*0.005));
-      lx=e.clientX; ly=e.clientY; });
-    const end=()=>{ drag=false; el.style.cursor='grab'; };
-    el.addEventListener('pointerup',end); el.addEventListener('pointercancel',end);
+    el.style.cssText='width:100%;height:100%;display:block;border-radius:inherit;touch-action:pan-y';
+    // Kein Drehen. Nur Zoom, damit man den Stein naeher heranholen kann.
     el.addEventListener('wheel',e=>{ e.preventDefault();
-      radT=Math.min(R_MAX,Math.max(R_MIN,radT+e.deltaY*0.0016)); },{passive:false});
+      radT=Math.min(R_MAX,Math.max(R_MIN,radT+e.deltaY*0.0016)); needsRender=true; },{passive:false});
   }catch(e){ failed=true; console.warn('Wall3D deaktiviert:',e); return false; }
   return true;
 }
@@ -119,9 +119,18 @@ function sizeToHost(){
   camera.aspect=w/h;
   camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
   camera.updateProjectionMatrix();
+  needsRender=true;
 }
 let wdId=0, lastRaf=0;
-function step(){ if(!renderer||!host) return; applyCam(false); renderer.render(scene,camera); }
+// Ohne Drehen steht das Bild still — dann muss auch nicht 60-mal pro Sekunde
+// gerendert werden. Nur bei Zoom, Groessenaenderung oder Produktwechsel.
+function step(){
+  if(!renderer||!host) return;
+  const moving=Math.abs(radT-rad)>0.0005;
+  if(!moving && !needsRender) return;
+  applyCam(false); needsRender=false;
+  renderer.render(scene,camera);
+}
 function loop(){ rafId=requestAnimationFrame(loop); lastRaf=performance.now(); step(); }
 function startLoops(){
   if(!rafId) loop();
@@ -156,7 +165,8 @@ window.Wall3D={
     applySurface(panelMat,cv,{fallback:0xdad6d1,rough:1.0,normalScale:0.95,
       aniso:maxAniso,env:0.40,pom:POM});
     if(panel) panel.rotation.x=floor?-Math.PI/2:0;
-    poT=floor?0.95:1.485; azT=floor?0.10:0.30; radT=floor?3.3:3.05;
+    po=floor?0.95:1.485; az=floor?0.10:0.30; rad=radT=floor?3.3:3.05;
+    applyCam(true); needsRender=true;
   },
   snapshot(w,h){
     if(!renderer) return null;
