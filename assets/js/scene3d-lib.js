@@ -672,14 +672,23 @@ function patchParallax(m,depth){
   m.userData.klbPomDepth=depth;
   m.onBeforeCompile=sh=>{
     const marker='void main() {';
-    const i=sh.fragmentShader.indexOf(marker);
-    if(i<0) return;                                // three-Version passt nicht → still ohne POM
+    if(sh.fragmentShader.indexOf(marker)<0) return;   // three-Version passt nicht → still ohne POM
     sh.uniforms.uPomDepth={value:m.userData.klbPomDepth||0};
-    const head=sh.fragmentShader.slice(0,i);
-    // Nur im Rumpf ersetzen — die varying-Deklarationen im Kopf müssen ihre Namen behalten
-    const body=sh.fragmentShader.slice(i+marker.length)
-      .replace(/\bvMapUv\b|\bvNormalMapUv\b|\bvAoMapUv\b|\bvRoughnessMapUv\b/g,'klbUv');
-    sh.fragmentShader=head+POM_HEAD+marker+'\n\tvec2 klbUv=klbParallax(vMapUv);\n'+body;
+    sh.fragmentShader=sh.fragmentShader.replace(marker,
+      POM_HEAD+marker+'\n\tvec2 klbUv=klbParallax(vMapUv);\n');
+    // Die #include-Direktiven sind hier NOCH NICHT aufgelöst — three expandiert sie
+    // erst NACH onBeforeCompile. Ein Suchen-und-Ersetzen im Rumpf findet die
+    // Varying-Namen deshalb gar nicht, und der Patch greift ins Leere. Stattdessen
+    // werden die betroffenen Chunks selbst eingesetzt, mit ersetztem UV-Namen.
+    const sub=(name,vary)=>{
+      const c=THREE.ShaderChunk[name];
+      if(!c) return;
+      sh.fragmentShader=sh.fragmentShader.replace('#include <'+name+'>',c.split(vary).join('klbUv'));
+    };
+    sub('map_fragment','vMapUv');
+    sub('roughnessmap_fragment','vRoughnessMapUv');
+    sub('aomap_fragment','vAoMapUv');
+    sub('normal_fragment_maps','vNormalMapUv');
     m.userData.klbShader=sh;
   };
   m.customProgramCacheKey=()=>'klbPom'+((m.userData.klbPomDepth||0)>0?'1':'0');

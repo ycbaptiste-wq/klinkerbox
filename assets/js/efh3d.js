@@ -5,7 +5,7 @@
 // Orbit + Zoom wie beim Bungalow/Innenraum.
 import * as THREE from './three.module.min.js';
 import { buildEnv, glassMaterial, skyDomeTexture, applySurface, surfaceMaps, disposeScene,
-         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=49';
+         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=50';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -745,9 +745,11 @@ function startLoops(){
   if(!rafId) loop();
   if(!wdId) wdId=setInterval(()=>{ if(!document.hidden && performance.now()-lastRaf>200) step(); },120);
 }
-// Fugentiefe in UV-Einheiten: ~14 mm echte Tiefe auf die Breite, die die Textur
-// abdeckt (Front 9.6 m, Giebelseite 8.0 m) → so bleibt der Effekt massstäblich.
-const POM_FRONT=0.014/HW, POM_SIDE=0.014/HD;
+// Fugentiefe in UV-Einheiten. Die Textur deckt in u und v unterschiedlich viele
+// Meter ab (Front 12.0 × 6.3), der Shader kann aber nur EINEN Skalar verschieben —
+// ein exakt achsenrichtiger Wert ist damit nicht möglich. Genommen wird das
+// geometrische Mittel beider Achsen bei 16 mm Fugentiefe.
+const POM_FRONT=0.016/Math.sqrt(HW*HE), POM_SIDE=0.016/Math.sqrt(HD*HR);
 // Mittlere Helligkeit der Produkttextur — entscheidet die Schreinerfarbe
 function canvasLuma(cv){
   if(!cv) return 0.5;
