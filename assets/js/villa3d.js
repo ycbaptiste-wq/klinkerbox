@@ -408,8 +408,10 @@ function buildScene(){
     // Randstein 0.14 breit, Oberkante 0.12 über dem Rasen, Fuss auf -0.06 (Rasen -0.01)
     const kf=new THREE.Mesh(new THREE.BoxGeometry(run+0.07,0.18,0.14),kerbM);
     kf.position.set(cx+s*0.035,0.03,KZ); kf.receiveShadow=true; beds.add(kf);
-    const ks=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.18,KZ+0.07-1.60),kerbM);
-    ks.position.set(x1,0.03,(KZ+0.07+1.60)/2); ks.receiveShadow=true; beds.add(ks);
+    // endet an der HINTERkante des vorderen Randsteins (z=8.20): läge er bis 8.34,
+    // wären beide Deckflächen auf y=0.12 deckungsgleich → z-Fighting am Eckstück
+    const ks=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.18,KZ-0.07-1.60),kerbM);
+    ks.position.set(x1,0.03,(KZ-0.07+1.60)/2); ks.receiveShadow=true; beds.add(ks);
     groundContact(cx,KZ,run,0.55,beds);
     // Strauchband setzt die Grundstücksgrenze dort fort, wo der Zaun aufhört
     bushClump(s*8.30,ZEND-0.30,0.50,0x4e603f,beds);
