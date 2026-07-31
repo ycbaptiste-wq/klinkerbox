@@ -562,7 +562,9 @@ function buildScene(){
     thr.position.set(0,y0-0.01,-D/2+0.05); thr.receiveShadow=true; scene.add(thr);   // Schwellenprofil
     // Zarge: Blatt 1.05 + Setzholz 0.06 + Seitenteil 0.43 + 2x0.03 Rahmen = 1.60,
     // vorher blieben 0.36 m der Oeffnung schlicht offen (schwarzer Spalt).
-    const zM=mat(0x33383c,0.55);
+    // Zarge ebenfalls aufgehellt: bei 0x33383c stand sie mit dem Blatt auf demselben
+    // Wert, die Tuer hatte damit gar keinen erkennbaren Rahmen.
+    const zM=mat(0x565c60,0.5);
     [[-w/2+0.015,yc,0.03,h],[w/2-0.015,yc,0.03,h],[0,y0+h-0.015,w,0.03],
      [0.245,yc,0.06,h-0.03]].forEach(([bx,by,bw,bh])=>{
       const z=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,0.086),zM);
@@ -571,11 +573,26 @@ function buildScene(){
     back2.position.set(0,yc,-D-0.01); scene.add(back2);
     // Tuerblatt: 1.05 x 2.10, Verhaeltnis 1:2.0 statt der frueheren 1:2.47 -
     // ab 2.40 m Blatthoehe haengt ein einfluegeliges Blatt durch.
-    const door=new THREE.Mesh(new THREE.BoxGeometry(1.05,h-0.06,0.082),mat(0x2b2f33,0.38));
+    // Das Blatt las sich als schwarzes Loch in der Fassade. Gemessen im Standard-
+    // rendering: Blatt 25/255, Fuellung 23/255, Fassade daneben 106, Sockel 154.
+    // Zwei Ursachen. Erstens die Farbe: 0x2b2f33 hat eine lineare Albedo von 0.025,
+    // also ein Achtel des Klinkers — in einer 0.24 m tiefen Laibung, die ohnehin
+    // wenig Himmel sieht, bleibt davon nichts uebrig. Zweitens die Fuellungen: sie
+    // standen 12 mm vor dem Blatt, hatten aber praktisch dieselbe Farbe und
+    // bekamen dasselbe Licht — 2 Anzeigewerte Unterschied sind nicht sichtbar.
+    // Eine Reliefstufe allein reicht bei diffusem Licht nicht, es braucht einen
+    // MATERIALwechsel.
+    const door=new THREE.Mesh(new THREE.BoxGeometry(1.05,h-0.06,0.082),
+      new THREE.MeshStandardMaterial({color:0x3f464b,roughness:0.42,envMapIntensity:1.0}));
     door.position.set(-0.24,yc,-D+0.055); door.castShadow=true; scene.add(door);
-    const panelM=mat(0x24282c,0.42);
-    [0.62,-0.28].forEach(dy=>{ const pn=new THREE.Mesh(new THREE.BoxGeometry(0.72,0.62,0.012),panelM);
-      pn.position.set(-0.24,yc+dy,-D+0.10); scene.add(pn); });
+    // Statt zweier dunkler Platten drei gebuerstete Edelstahl-Applikationen, wie sie
+    // eine moderne Haustuer wirklich hat. Metall zieht sein Licht aus der Spiegelung
+    // des Himmels und liest deshalb auch in der Laibung hell — es funktioniert
+    // genau dort, wo die Farbstufe versagt.
+    const appM=new THREE.MeshStandardMaterial({color:0xc2c7ca,roughness:0.34,metalness:0.9,envMapIntensity:1.2});
+    [0.72,0.0,-0.72].forEach(dy=>{
+      const ap=new THREE.Mesh(new THREE.BoxGeometry(0.78,0.075,0.014),appM);
+      ap.position.set(-0.24,yc+dy,-D+0.098); ap.castShadow=true; scene.add(ap); });
     // Stossgriff MIT Stuetzen - vorher schwebte er 7 mm vor dem Blatt
     const gM=mat(0xb8bcbe,0.32,1.0);
     const dBar=new THREE.Mesh(new THREE.CylinderGeometry(0.015,0.015,1.20,10),gM);
