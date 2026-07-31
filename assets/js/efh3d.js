@@ -173,7 +173,7 @@ const AX=3.90, AX_S=1.90;              // Achsen Front / Giebelseite
 const BT_H=2.23, BT_Y=1.435;           // bodentiefe Oeffnung: gleicher Sturz wie die Tuer
 // Materialien einmal anlegen statt pro Fenster - vorher entstanden 13x je neun
 // MeshStandardMaterials, die three alle einzeln kompiliert.
-let frameMat=null, revealMat=null, soldierMat=null;
+let frameMat=null, revealMat=null, soldierMat=null, chimMat=null;
 // Rollschicht = STEHENDE Steine. Ein Quader bekommt von three UVs 0..1 je Seite —
 // damit wird die ganze Wandtextur (9.6 x 6.1 m) in ein 1.5 x 0.24 m Band gequetscht
 // und man sieht nur einen verschmierten Fleck. Deshalb eigene UVs: ein
@@ -507,11 +507,42 @@ function buildScene(){
         sc2.position.set(x,hy,0.055); scene.add(sc2); });
     });
   }
-  // Kamin (weiss, Metallkappe) + kleines Lüftungsrohr
-  const chim=new THREE.Mesh(new THREE.BoxGeometry(0.55,1.6,0.55),mat(0xe9e7e3,0.8));
-  chim.position.set(-0.9,HR+0.55,-HD/2-0.4); chim.castShadow=true; scene.add(chim);
-  const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,0.5,12),mat(0x9fa3a7,0.4,0.7));
-  cap.position.set(-0.9,HR+1.55,-HD/2-0.4); scene.add(cap);
+  // ---- Kamin ----
+  // Er schwebte, war zu hoch und war das hellste Objekt im ganzen Bild.
+  // Nachgerechnet mit den Modulmassen: Rueckflaeche y = HR - (|z| - HD/2), der
+  // Schaft stand bei z = -4.40 also ueber einer Dachhaut, die talseitig (z=-4.675)
+  // bei 9.625 liegt — seine Unterkante lag bei 10.05, das sind 0.43 m Luft ohne
+  // jedes Anschlussblech. Der Kopf stand mit 11.65 volle 1.35 m ueber dem First
+  // (10.30), die Kappe mit 12.10 sogar 1.80 m; gebaut werden 0.40 bis 0.80 m.
+  // Und die Farbe: gemessen 213/215/213 gegen 177/189/196 Himmel — 1.36-mal
+  // heller als der Himmel, auf einem roten Klinkerhaus.
+  // Jetzt: Unterkante 9.55 unter beide Dachflaechen gezogen, Oberkante 10.95 =
+  // First + 0.65, Achse auf -1.35 in die Pfeilerachse zwischen Tuer und Fenster.
+  const chimGeo=new THREE.BoxGeometry(0.55,1.40,0.55);
+  { // Der Schaft traegt jetzt DAS PRODUKT. Eine BoxGeometry hat je Flaeche UVs von
+    // 0 bis 1 — damit laege ein einziger Stein ueber den ganzen Schaft. Die UVs
+    // werden deshalb auf den Ausschnitt der Fassadenkarte umgerechnet, den 0.55 m
+    // Breite und 1.40 m Hoehe dort wirklich einnehmen: so bleibt die Steingroesse
+    // massstabstreu zur uebrigen Fassade.
+    const uv=chimGeo.attributes.uv, sx=0.55/HW, sy=1.40/HE;
+    for(let i=0;i<uv.count;i++) uv.setXY(i, 0.42+uv.getX(i)*sx, 0.30+uv.getY(i)*sy);
+  }
+  chimMat=new THREE.MeshStandardMaterial({color:0xdad6d1,roughness:1.0});
+  const chim=new THREE.Mesh(chimGeo,chimMat);
+  chim.position.set(-1.35,10.25,-4.15); chim.castShadow=true; chim.receiveShadow=true; scene.add(chim);
+  // Abdeckplatte mit Ueberstand statt einer Metallwalze: ein Kamin endet oben mit
+  // einer Platte, die das Mauerwerk gegen Regen abdeckt.
+  const cap=new THREE.Mesh(new THREE.BoxGeometry(0.71,0.06,0.71),mat(0xb9b5ad,0.85));
+  cap.position.set(-1.35,10.98,-4.15); cap.castShadow=true; scene.add(cap);
+  const flue=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.25,12),mat(0x9fa3a7,0.4,0.7));
+  flue.position.set(-1.35,11.13,-4.15); flue.castShadow=true; scene.add(flue);
+  // Anschlussblech in der Dachebene, beidseitig — ohne das bleibt der Schaft ein
+  // Klotz, der die Dachhaut durchstoesst.
+  [[-1,-4.60],[1,-3.70]].forEach(([s,cz])=>{
+    const kb=new THREE.Mesh(new THREE.BoxGeometry(0.69,0.20,0.03),mat(0x8f9497,0.35,0.8));
+    kb.rotation.x=s*Math.PI/4;
+    kb.position.set(-1.35, HR-Math.abs(cz+HD/2)+0.07, cz);
+    scene.add(kb); });
   const vent=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.5,10),mat(0x4a4d52,0.5,0.5));
   vent.position.set(1.6,HR-0.6,-HD/2-1.4); scene.add(vent);
 
@@ -852,6 +883,11 @@ window.Efh3D={
     applyTex(facadeMat,facadeCv,0xdad6d1,1.0,0.9,POM_FRONT);
     applyTex(sideMatL,sideCv||facadeCv,0xd7d3ce,1.0,0.9,POM_SIDE);
     applyTex(sideMatR,sideCv||facadeCv,0xd7d3ce,1.0,0.9,POM_SIDE);
+    // Der Kamin war die einzige grosse Flaeche am Haus, die kein Produkt trug —
+    // und ausgerechnet die hellste. Kein POM: der Schaft ist 0.55 m breit und
+    // steht 25 m entfernt, die Verschiebung waere unter einem Pixel.
+    if(chimMat) applySurface(chimMat,facadeCv,{fallback:0xdad6d1,rough:1.0,
+      normalScale:0.7,aniso:maxAniso,env:0.20});
     // Der Belag hat UVs in Metern (ShapeGeometry) — die Bodentextur deckt 12 m ab.
     // KEIN POM auf dem Boden: bei flachem Blickwinkel liegt die Abbruchschwelle des
     // Parallax-Shaders als scharfe Kante quer durchs Bild.
