@@ -108,7 +108,7 @@ export function buildEnv(renderer){
   // Himmel gedimmt (0.62): das IBL-Umgebungslicht darf die Sonnenschatten
   // nicht überstrahlen — Glanz auf Glas liefert die HDR-Sonne darunter
   const sky=new THREE.Mesh(new THREE.SphereGeometry(60,32,20),
-    new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:0x8e8e8e,side:THREE.BackSide}));
+    new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:0xdcdcdc,side:THREE.BackSide}));
   es.add(sky);
   const sun=new THREE.Mesh(new THREE.SphereGeometry(3.2,16,12),
     new THREE.MeshBasicMaterial({color:new THREE.Color(11,9.5,7.5)}));

@@ -5,7 +5,7 @@
 // Orbit + Zoom wie beim Bungalow/Innenraum.
 import * as THREE from './three.module.min.js';
 import { buildEnv, glassMaterial, skyDomeTexture, applySurface, surfaceMaps, disposeScene,
-         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=50';
+         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=51';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -14,10 +14,16 @@ let rafId=0, failed=false;
 
 // Startblick: Dreiviertel-Ansicht auf Augenhöhe wie in Architektur-Renderings —
 // frontal-symmetrisch wirkt jedes Gebäude flach. Orbit und Zoom bleiben unverändert.
-const TARGET=new THREE.Vector3(0,4.18,1.0);
-let az=0.52, po=1.487, rad=26.0;    // Dreiviertel-Ansicht braucht mehr Abstand als frontal
+// Augpunkt lag bei 6.12 m — 0.60 m ÜBER der Dachrinne, man blickte in sie hinein.
+// Und PO_MAX deckelte den tiefsten erreichbaren Punkt auf 4.24 m: das Haus liess
+// sich in keiner Stellung von unterhalb der OG-Brüstung betrachten. Das ist eine
+// Modellansicht von oben, keine Gebäudeansicht. Beide Referenzen sind auf rund
+// 1.70 m aufgenommen. Jetzt: Start 2.30 m, tiefster erreichbarer Punkt 1.70 m,
+// Vogelblick über PO_MIN unverändert erhalten.
+const TARGET=new THREE.Vector3(0,3.60,1.0);
+let az=0.52, po=1.6327, rad=21.0;   // cos(po)=-0.0619 → Augpunkt 3.60-1.30=2.30 m
 let azT=az, poT=po, radT=rad;
-const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.30, PO_MAX=1.565, R_MIN=12.5, R_MAX=29;
+const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.30, PO_MAX=1.6550, R_MIN=11, R_MAX=26;
 
 // Die Neigung wird ueber die WANDFLUCHT gerechnet (45 Grad) — dadurch sitzt das
 // Dach nicht wie ein Deckel obenauf, sondern ueberschneidet die Wand.
@@ -236,15 +242,22 @@ function buildScene(){
   // Kulisse einen blaugrauen Halo genau an ihrer Silhouette.
   scene.fog=new THREE.Fog(0xf1eee6,38,150);
 
+  // Der Himmel deckelte das Bild: hellster Pixel 237, Anteil über Helligkeit 240
+  // bei 0.08 % — die Referenzen liegen bei 9-10 %. Ohne Lichter wirkt jedes
+  // Aussenbild wie bei Hochnebel. Der Dome ist MeshBasicMaterial und ändert die
+  // Szenenbeleuchtung NICHT; das Füll-Licht läuft separat über buildEnv.
   { const sky=new THREE.Mesh(new THREE.SphereGeometry(85,48,28),
-      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(1.45,1.45,1.45),side:THREE.BackSide,fog:false}));
+      new THREE.MeshBasicMaterial({map:skyDomeTexture(),color:new THREE.Color(2.90,2.90,2.90),side:THREE.BackSide,fog:false}));
     scene.add(sky); }
 
-  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x6d7663,0.26));   // Himmel oben, Rasengrün unten
+  // Sonne:Füll-Licht lag bei 10.5:1, aus der Referenz zurückgerechnet sind 2.1:1
+  // richtig. Jeder Schatten war dadurch ein schwarzes Loch: unter der Traufe
+  // gemessen Helligkeit 9-11 gegen 88 zwanzig Zentimeter tiefer.
+  scene.add(new THREE.HemisphereLight(0xcfe0f2,0x8a9179,1.60));   // Himmel oben, Rasengrün unten
   // Sonnenstand 33°: streifend genug, dass das Fugenrelief Schatten wirft, aber
   // hoch genug für einen Kontrastumfang wie in der Referenz. Wenig Füll-Licht,
   // damit die Schatten stehen bleiben und nicht zugeleuchtet werden.
-  const sun=new THREE.DirectionalLight(0xfff6ea,3.9);
+  const sun=new THREE.DirectionalLight(0xfff6ea,2.8);
   sun.position.set(18.9,15.7,10.9);
   sun.target.position.set(0,1.5,0);
   sun.castShadow=true;
@@ -427,7 +440,20 @@ function buildScene(){
     }
     tiles.instanceMatrix.needsUpdate=true; scene.add(tiles);
   }
-  const ridge=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,HW+1.25,10),mat(0x33363a,0.7));
+  // ---- Ortgang: Windbretter an beiden Giebelschrägen ----
+  // An der Traufe gibt es die Traufblende, am Ortgang fehlte das entsprechende
+  // Bauteil vollständig — sichtbar war die 0.14 m dicke Schnittkante der Dachbox,
+  // auf der die Pfannentextur quer verschmiert. In der Referenz ist das dunkle
+  // Windbrett das stärkste Linienelement des Giebels.
+  { const wbM=mat(0x2e3339,0.7), wx=HW/2+OV+0.016, wy=(HR+eaveY)/2-0.155;
+    [[wx,pitch,(OV-HD/2)/2],[-wx,pitch,(OV-HD/2)/2],
+     [wx,-pitch,(-HD-OV+(-HD/2))/2],[-wx,-pitch,(-HD-OV+(-HD/2))/2]].forEach(([bx,br,bz])=>{
+      const wb=new THREE.Mesh(new THREE.BoxGeometry(0.032,0.24,slopeLen),wbM);
+      wb.rotation.x=br; wb.position.set(bx,wy,bz); wb.castShadow=true; scene.add(wb); });
+  }
+  // Firstziegel bündig mit dem Windbrett — vorher stand er 0.175 m frei über die
+  // Dachkante hinaus und las sich als Stange.
+  const ridge=new THREE.Mesh(new THREE.CylinderGeometry(0.11,0.11,HW+2*OV,10),mat(0x33363a,0.7));
   ridge.rotation.z=Math.PI/2; ridge.position.set(0,HR+0.06,-HD/2); ridge.castShadow=true; scene.add(ridge);
   // Traufblende: das dunkle Band unter der Dachkante, das die Referenz zeigt.
   // Ein waagrechter Sofit entfällt — das Dach überschneidet die Wand jetzt, es
@@ -734,7 +760,9 @@ function sizeToHost(){
   renderer.setPixelRatio(Math.min(MOBILE?1.5:2,window.devicePixelRatio||1));
   renderer.setSize(w,h,false);
   camera.aspect=w/h;
-  camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+  // Engere Brennweiten: 42/48/56 Grad sind Reportage, keine Architektur. Damit
+  // fuellte das Haus 47 % der Bildhoehe, die Referenzen liegen bei ueber 80 %.
+  camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
   camera.updateProjectionMatrix();
 }
 // rAF-Loop + Timer-Watchdog: rendert auch weiter, wenn der Browser rAF drosselt
@@ -763,7 +791,11 @@ function canvasLuma(cv){
 }
 function applyTex(m,cv,fallback,rough,ns,pom){
   applySurface(m,cv,{fallback,rough,normalScale:ns!=null?ns:0.9,aniso:maxAniso,
-    env:cv?0.11:0.3, pom:pom||0});   // Klinker spiegelt die Umgebung kaum
+    // envMapIntensity war auf 0.11 gesenkt, um den Klinker matter zu machen — das
+    // war der falsche Hebel: envMapIntensity skaliert das INDIREKTE Licht insgesamt,
+    // also auch die diffuse Aufhellung. Damit starb das Füll-Licht in den Schatten.
+    // Für den Glanz ist die Rauheit zuständig, und die liegt bei 0.74-0.86.
+    env:cv?0.40:0.3, pom:pom||0});
 }
 window.Efh3D={
   available(){ return !failed; },
@@ -828,13 +860,17 @@ window.Efh3D={
     const pr=renderer.getPixelRatio(), sz=new THREE.Vector2(); renderer.getSize(sz);
     renderer.setPixelRatio(1); renderer.setSize(w,h,false);
     camera.aspect=w/h;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    // Engere Brennweiten: 42/48/56 Grad sind Reportage, keine Architektur. Damit
+  // fuellte das Haus 47 % der Bildhoehe, die Referenzen liegen bei ueber 80 %.
+  camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     const url=renderer.domElement.toDataURL('image/png');
     renderer.setPixelRatio(pr); renderer.setSize(sz.x,sz.y,false);
     camera.aspect=sz.x/sz.y;
-    camera.fov=(camera.aspect>1.45)?42:(camera.aspect>1.1?48:56);
+    // Engere Brennweiten: 42/48/56 Grad sind Reportage, keine Architektur. Damit
+  // fuellte das Haus 47 % der Bildhoehe, die Referenzen liegen bei ueber 80 %.
+  camera.fov=(camera.aspect>1.45)?34:(camera.aspect>1.1?38:46);
     camera.updateProjectionMatrix();
     renderer.render(scene,camera);
     return url;
