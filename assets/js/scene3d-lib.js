@@ -436,7 +436,7 @@ void main(){
   gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);
 }`;
 const INT_FRAG=`precision highp float;
-uniform float uW,uH,uD,uSeed,uKind,uCorner,uFrost;
+uniform float uW,uH,uD,uSeed,uKind,uCorner,uFrost,uBack;
 uniform vec3 uWall; uniform vec2 uFurn,uLamp;
 varying vec3 vP;varying vec3 vC;
 float hash(float n){ return fract(sin(n)*43758.5453123); }
@@ -513,12 +513,14 @@ void main(){
     float bwx=(hash(uSeed*5.1)-0.5)*0.38*uW;
     float bwHW=uW*(office?0.24:0.19), bwHH=uH*0.24, bwCY=uH*0.12;
     vec2 bwd=abs(hit.xy-vec2(bwx,bwCY));
-    bool inBW=bwd.x<bwHW && bwd.y<bwHH;
+    bool inBW=bwd.x<bwHW && bwd.y<bwHH && uBack>0.02;
     if(inBW){
       if(office){ float gv=clamp((hit.y-bwCY)/bwHH*0.5+0.5,0.0,1.0);
         col=mix(vec3(0.58,0.63,0.70),vec3(0.80,0.86,0.94),gv); }        // Büro: Stadt/Himmel
       else { float gv=clamp((hit.y-bwCY)/bwHH*0.5+0.5,0.0,1.0);
-        col=mix(vec3(0.50,0.60,0.40),vec3(0.76,0.84,0.94),gv); }        // Wohnen: Garten → Himmel
+        // Auf uBack gedimmt und gegen den Wandton gemischt: ein Durchblick durch
+        // ein zweites Fenster ist von aussen eine Ahnung, kein Loch ins Freie.
+        col=mix(col, mix(vec3(0.34,0.40,0.28),vec3(0.50,0.56,0.62),gv), uBack); }
       if(bwd.x>bwHW-uW*0.013||bwd.y>bwHH-uH*0.019) col=vec3(0.66,0.64,0.59); // heller Rahmen
       else if(abs(hit.x-bwx)<uW*0.006||abs(hit.y-bwCY)<uH*0.008) col*=0.72; // Sprossenkreuz
     }
@@ -597,16 +599,19 @@ void main(){
 // ein Wohnzimmer. Jetzt bestimmt der Raumtyp Wandton, Möbelhöhe, Lichtstimmung
 // und ob die Scheibe satiniert ist. Mehrere Fenster eines Zimmers bekommen
 // denselben Typ und zeigen damit dasselbe.
-// [wandR,wandG,wandB, moebelHoehe, moebelDunkel, lampWarm, lampAn, milchglas]
+// [wandR,wandG,wandB, moebelHoehe, moebelDunkel, lampWarm, lampAn, milchglas, durchblick]
+// durchblick = wie hell das Fenster in der RÜCKWAND des Raums leuchtet. Es liess
+// vorher jeden Raum gleich stark durchscheinen — dadurch wirkte es, als falle
+// Licht quer durchs Haus. Ein Dachraum und ein Bad haben keinen Durchblick.
 const ROOMS={
-  wohnen:   [0.215,0.195,0.170, 0.34, 0.42, 1.0, 0.9, 0],   // Sofa, Stehleuchte, warm
-  kueche:   [0.235,0.230,0.215, 0.55, 0.34, 0.5, 0.7, 0],   // Zeile + Oberschränke, kühler
-  essen:    [0.225,0.205,0.180, 0.26, 0.40, 1.0, 1.0, 0],   // Pendelleuchte über dem Tisch
-  diele:    [0.200,0.190,0.175, 0.16, 0.50, 0.8, 0.5, 0],   // fast leer, Blick in die Tiefe
-  schlafen: [0.205,0.200,0.195, 0.30, 0.55, 0.9, 0.2, 0],   // Bett, meist unbeleuchtet
-  kind:     [0.215,0.210,0.185, 0.36, 0.48, 0.9, 0.4, 0],
-  bad:      [0.260,0.265,0.270, 0.30, 0.60, 0.6, 0.3, 1],   // Milchglas — man sieht nichts
-  estrich:  [0.120,0.115,0.110, 0.10, 0.70, 0.5, 0.0, 0],   // Dachraum, dunkel
+  wohnen:   [0.215,0.195,0.170, 0.34, 0.42, 1.0, 0.9, 0, 0.55],  // Sofa, Stehleuchte, warm
+  kueche:   [0.235,0.230,0.215, 0.55, 0.34, 0.5, 0.7, 0, 0.35],  // Zeile + Oberschränke, kühler
+  essen:    [0.225,0.205,0.180, 0.26, 0.40, 1.0, 1.0, 0, 0.55],  // Pendelleuchte über dem Tisch
+  diele:    [0.200,0.190,0.175, 0.16, 0.50, 0.8, 0.5, 0, 0.25],  // fast leer, Blick in die Tiefe
+  schlafen: [0.205,0.200,0.195, 0.30, 0.55, 0.9, 0.2, 0, 0.20],  // Bett, meist unbeleuchtet
+  kind:     [0.215,0.210,0.185, 0.36, 0.48, 0.9, 0.4, 0, 0.25],
+  bad:      [0.260,0.265,0.270, 0.30, 0.60, 0.6, 0.3, 1, 0.00],  // Milchglas — man sieht nichts
+  estrich:  [0.120,0.115,0.110, 0.10, 0.70, 0.5, 0.0, 0, 0.00],  // Dachraum, kein Durchblick
 };
 // corner: -1 = Fenster nahe der linken Gebäudeecke, +1 = rechte Ecke (→ Seitenfenster im Raum), 0 = keins
 export function interiorRoom(w,h,depth,seed,kind,corner,room){
@@ -617,7 +622,7 @@ export function interiorRoom(w,h,depth,seed,kind,corner,room){
       uWall:{value:new THREE.Vector3(r[0],r[1],r[2])},
       uFurn:{value:new THREE.Vector2(r[3],r[4])},
       uLamp:{value:new THREE.Vector2(r[5],r[6])},
-      uFrost:{value:r[7]}},
+      uFrost:{value:r[7]}, uBack:{value:r[8]}},
     vertexShader:INT_VERT, fragmentShader:INT_FRAG
   });
 }
