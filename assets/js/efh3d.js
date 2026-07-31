@@ -5,7 +5,7 @@
 // Orbit + Zoom wie beim Bungalow/Innenraum.
 import * as THREE from './three.module.min.js';
 import { buildEnv, glassMaterial, skyDomeTexture, applySurface, surfaceMaps, disposeScene,
-         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=48';
+         addVignette, interiorRoom, grassTuft, bushClump, groundContact, rnd, resetRnd, LOWQ } from './scene3d-lib.js?v=49';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
@@ -14,16 +14,20 @@ let rafId=0, failed=false;
 
 // Startblick: Dreiviertel-Ansicht auf Augenhöhe wie in Architektur-Renderings —
 // frontal-symmetrisch wirkt jedes Gebäude flach. Orbit und Zoom bleiben unverändert.
-const TARGET=new THREE.Vector3(0,4.1,1.0);
-let az=0.52, po=1.487, rad=24.0;    // Dreiviertel-Ansicht braucht mehr Abstand als frontal
+const TARGET=new THREE.Vector3(0,4.18,1.0);
+let az=0.52, po=1.487, rad=26.0;    // Dreiviertel-Ansicht braucht mehr Abstand als frontal
 let azT=az, poT=po, radT=rad;
-const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.30, PO_MAX=1.565, R_MIN=11, R_MAX=26;
+const AZ_MIN=-0.85, AZ_MAX=0.85, PO_MIN=1.30, PO_MAX=1.565, R_MIN=12.5, R_MAX=29;
 
-// First von 8.50 auf 10.10: das Dach machte vorher nur 28 % der Gesamthoehe aus,
-// bei der Referenz sind es rund zwei Drittel. Die Neigung wird jetzt ueber die
-// WANDFLUCHT gerechnet (45 statt 27.6 Grad) — dadurch sitzt das Dach nicht mehr
-// wie ein Deckel obenauf, sondern ueberschneidet die Wand.
-const HW=9.6, HE=6.1, HR=10.1, HD=8.0;          // Breite, Traufe, First, Tiefe
+// Die Neigung wird ueber die WANDFLUCHT gerechnet (45 Grad) — dadurch sitzt das
+// Dach nicht wie ein Deckel obenauf, sondern ueberschneidet die Wand.
+// Breite 9.60 -> 12.00: First/Breite lag bei 1.05, also hoeher als breit. Das ist
+// die Proportion eines Stadthauses, nicht eines Einfamilienhauses; im Bild las es
+// sich als schmaler Turm mit sehr grossem Hut. Jetzt 0.86, Breite/Tiefe 1.50.
+// Traufe 6.10 -> 6.30 loest ausserdem einen echten Fehler: die Rollschicht ueber
+// den OG-Fenstern endete bei 5.73, die Traufkante lag bei 5.65 — das Detail
+// verschwand dreimal im Schatten des Dachueberstands. Jetzt 0.12 m Luft.
+const HW=12.0, HE=6.3, HR=10.3, HD=8.0;         // Breite, Traufe, First, Tiefe
 const SOC=0.32;                                 // Sockelhöhe (Schwelle der Haustür)
 
 function mat(c,rough,metal){ return new THREE.MeshStandardMaterial({color:c,roughness:rough!=null?rough:0.9,metalness:metal||0}); }
@@ -155,9 +159,12 @@ const REVEAL=0.19;                     // Laibungstiefe der Fenster (m)
 // fuenf Sturzhoehen, und die ECKPFEILER waren mit 1.05 m die schmalsten
 // Mauerstuecke der Fassade. Ein Mauerwerksbau, dessen Ecken duenner sind als
 // seine Mitte, sieht ausgehoehlt aus.
-const WIN_W=1.30, WIN_H=1.35;          // Eckpfeiler jetzt 1.45 m, breitestes Vollstueck
+const WIN_W=1.30, WIN_H=1.35;          // Eckpfeiler 1.45 m, breitestes Vollstueck
+// Y_EG und Y_OG sind zurueckgerechnet: Bruestung EG 0.88 ueber Fussboden, Sturz
+// 2.55 = Deckenunterkante, OG-Fussboden 3.20, Bruestung OG 0.90. Gesperrt.
 const Y_OG=4.775, Y_EG=1.875;          // gemeinsame Sturz- und Bruestungslinie
-const AX=2.70, AX_S=1.90;              // Achsen Front / Giebelseite
+const AX=3.90, AX_S=1.90;              // Achsen Front / Giebelseite
+const BT_H=2.23, BT_Y=1.435;           // bodentiefe Oeffnung: gleicher Sturz wie die Tuer
 // Materialien einmal anlegen statt pro Fenster - vorher entstanden 13x je neun
 // MeshStandardMaterials, die three alle einzeln kompiliert.
 let frameMat=null, revealMat=null, soldierMat=null;
@@ -214,9 +221,12 @@ function makeWindow(parent,x,y,w,h,glassM,withBox,corner,room){
   const post=new THREE.Mesh(new THREE.BoxGeometry(0.055,h-fw*2,0.05),frM);
   post.position.set(x,y,fz); parent.add(post);               // Mittelpfosten
   // Sohlbank aus Klinker (Rollschicht liegend): steht vor der Wand und wirft die
-  // charakteristische Schattenkante. Ersetzt die frueheren zwei Betonprofile.
-  const sill=new THREE.Mesh(soldierGeo(w+0.23,0.10,D+0.11,HW,HE,x+1.7,y-0.9),soldierMat);
-  sill.position.set(x,y-h/2-0.05,-D/2+0.005); sill.castShadow=true; sill.receiveShadow=true; parent.add(sill);
+  // charakteristische Schattenkante. Bodentiefe Oeffnungen bekommen keine — dort
+  // liegt der Belag an, das ist eine Tuerschwelle.
+  if(y-h/2>SOC+0.05){
+    const sill=new THREE.Mesh(soldierGeo(w+0.23,0.10,D+0.11,HW,HE,x+1.7,y-0.9),soldierMat);
+    sill.position.set(x,y-h/2-0.05,-D/2+0.005); sill.castShadow=true; sill.receiveShadow=true; parent.add(sill);
+  }
 }
 
 function buildScene(){
@@ -241,7 +251,7 @@ function buildScene(){
   sun.shadow.mapSize.set(MOBILE?2048:4096,MOBILE?2048:4096);
   // Enger gefasst: kleineres Frustum = kleinere Texel = schärfere Kanten an
   // Traufe und Sohlbank. First und Kaminkopf liegen nachgerechnet noch drin.
-  sun.shadow.camera.left=-13; sun.shadow.camera.right=13;
+  sun.shadow.camera.left=-14.5; sun.shadow.camera.right=14.5;
   sun.shadow.camera.top=13;   sun.shadow.camera.bottom=-9.5;
   sun.shadow.camera.near=1; sun.shadow.camera.far=60;
   sun.shadow.camera.updateProjectionMatrix();
@@ -295,7 +305,7 @@ function buildScene(){
   // Rasen. Stattdessen ein Hausumgang: ein durchgehender Weg am Sockel entlang,
   // der vom Vorplatz um beide Giebel nach hinten führt. Ein Belag, der irgendwo
   // im Rasen endet, ist schlechter als keiner.
-  const UO=5.88, UI=4.88, UZ0=-9.08, UZ1=1.08;   // Umgang: aussen/innen, hinten/vorne
+  const UI=HW/2+0.08, UO=UI+1.00, UZ0=-9.08, UZ1=1.08;   // Umgang: innen am Sockel, 1.00 m breit
   // Zwei Gruppen mit unterschiedlicher Verlegerichtung: der Vorplatz ist eine
   // Fahrfläche, der Umgang ein Weg. Ein Belag, der überall gleich läuft, liest
   // sich als eine Restfläche statt als zwei geplante Bereiche.
@@ -310,7 +320,11 @@ function buildScene(){
               fld( UI, UO,UZ0,UZ1),              // Umgang rechter Giebel
               fld(-UI,-1.70,0.08,UZ1),           // Umgang vorne links
               fld(1.70, UI,0.08,UZ1),            // Umgang vorne rechts
-              fld(-UI, UI,UZ0,-8.08)];           // Umgang hinten — schliesst den Ring
+              fld(-UI, UI,UZ0,-8.08),            // Umgang hinten — schliesst den Ring
+              // Aufweitung vor den bodentiefen Giebeloeffnungen: dort tritt man
+              // hinaus, ein 1.00 m Streifen ist dafuer keine Flaeche.
+              fld(UO,UO+1.40,-8.30,-4.90),
+              fld(-UO-1.40,-UO,-8.30,-4.90)];
   const pave=new THREE.Mesh(new THREE.ShapeGeometry(PLAZA),floorMat);
   pave.rotation.x=-Math.PI/2; pave.position.y=0.020;
   pave.receiveShadow=true; scene.add(pave);
@@ -334,7 +348,7 @@ function buildScene(){
   const bedM=new THREE.MeshStandardMaterial({map:bedT,roughness:1});
   // Beetkante fluchtet jetzt exakt mit der Vorplatzkante (z=1.90) — vorher blieb
   // dazwischen ein 10 cm breiter, unmähbarer Rasenschlitz.
-  [[-3.79,1.49,4.18,0.82],[3.79,1.49,4.18,0.82]].forEach(([x,z,w,d])=>{
+  [[-4.39,1.49,5.38,0.82],[4.39,1.49,5.38,0.82]].forEach(([x,z,w,d])=>{
     const b=new THREE.Mesh(new THREE.PlaneGeometry(w,d),bedM);
     b.rotation.x=-Math.PI/2; b.position.set(x,-0.004,z); b.receiveShadow=true; scene.add(b); });
 
@@ -344,9 +358,12 @@ function buildScene(){
   const FRONT_WIN=[{x:-AX,y:Y_OG,...W1},{x:0,y:Y_OG,...W1},{x:AX,y:Y_OG,...W1},
                    {x:-AX,y:Y_EG,...W1},{x:AX,y:Y_EG,...W1}];
   const DOOR={x:0,y:1.435,w:1.60,h:2.23};                 // Schwelle auf dem Sockel, Sturz auf Fensterlinie
+  // Giebel: OG-Fenster im Standardtyp, EG bodentief (Terrassentür bzw. Zugang zum
+  // Umgang), Giebelspitze ebenfalls Standardtyp — damit gibt es im ganzen Haus nur
+  // noch EINEN Fenstertyp. Der frühere 0.90×1.30 in der Spitze war der zweite.
   const SIDE_WIN=[{x:-AX_S,y:Y_OG,...W1},{x:AX_S,y:Y_OG,...W1},
-                  {x:-AX_S,y:Y_EG,...W1},{x:AX_S,y:Y_EG,...W1},
-                  {x:0,y:7.10,w:0.90,h:1.30}];            // Giebelfenster, erst durch das 45°-Dach möglich
+                  {x:-AX_S,y:BT_Y,w:WIN_W,h:BT_H},{x:AX_S,y:BT_Y,w:WIN_W,h:BT_H},
+                  {x:0,y:7.45,...W1}];
   facadeMat=new THREE.MeshStandardMaterial({color:0xdad6d1,roughness:0.95});
   const front=new THREE.Mesh(wallGeo(HW,HE,0,FRONT_WIN.concat([DOOR])),facadeMat);
   front.position.set(0,0,0); front.receiveShadow=true; front.castShadow=true; scene.add(front);
@@ -479,21 +496,27 @@ function buildScene(){
   // Raumzuordnung: mehrere Fenster desselben Zimmers zeigen DENSELBEN Raum.
   // EG: Wohnen links, Küche rechts, Diele hinter der Tür.
   // OG: Schlafen links, Bad in der Mitte, Kinderzimmer rechts.
+  // Raumzuordnung nach dem Grundriss des Entwurfsverfassers. Wichtigste Korrektur:
+  // das Bad liegt NICHT mehr in der Mittelachse über der Haustür — dort setzt der
+  // Shader Milchglas, und damit wäre ausgerechnet die repräsentativste Stelle der
+  // Schaufassade eine blinde Scheibe. Dort ist jetzt die Galerie über der Diele.
   const grp=new THREE.Group(); scene.add(grp);
-  makeWindow(grp,-AX,Y_OG,WIN_W,WIN_H,glassM,false,-1,'schlafen');
-  makeWindow(grp, 0.0,Y_OG,WIN_W,WIN_H,glassM,false, 0,'bad');
-  makeWindow(grp, AX,Y_OG,WIN_W,WIN_H,glassM,false, 1,'kind');
-  makeWindow(grp,-AX,Y_EG,WIN_W,WIN_H,glassM,false,-1,'wohnen');
-  makeWindow(grp, AX,Y_EG,WIN_W,WIN_H,glassM,false, 1,'kueche');
-  // Seitenfenster (Giebelwände links/rechts): je zwei Achsen, OG + EG + Giebelspitze
+  makeWindow(grp,-AX,Y_OG,WIN_W,WIN_H,glassM,false,-1,'kind');     // Kind 1, strassenseitig
+  makeWindow(grp, 0.0,Y_OG,WIN_W,WIN_H,glassM,false, 0,'diele');   // Galerie / Treppenaustritt
+  makeWindow(grp, AX,Y_OG,WIN_W,WIN_H,glassM,false, 1,'kind');     // Kind 2
+  makeWindow(grp,-AX,Y_EG,WIN_W,WIN_H,glassM,false,-1,'essen');    // Arbeiten
+  makeWindow(grp, AX,Y_EG,WIN_W,WIN_H,glassM,false, 1,'diele');    // Treppenraum
+  // Giebelwände links/rechts. Welt-z = -HD/2 -/+ x_lokal, deshalb liegt dasselbe
+  // x_lokal auf beiden Seiten an unterschiedlichen Stellen des Grundrisses.
   [-1,1].forEach(s=>{
     const sg=new THREE.Group(); sg.rotation.y=s*Math.PI/2; sg.position.set(s*HW/2,0,-HD/2); scene.add(sg);
-    const eg=s<0?'wohnen':'kueche', og=s<0?'schlafen':'kind';
-    makeWindow(sg,-AX_S,Y_OG,WIN_W,WIN_H,glassM,false,0,og);
-    makeWindow(sg, AX_S,Y_OG,WIN_W,WIN_H,glassM,false,0,og);
-    makeWindow(sg,-AX_S,Y_EG,WIN_W,WIN_H,glassM,false,0,eg);
-    makeWindow(sg, AX_S,Y_EG,WIN_W,WIN_H,glassM,false,0,eg);
-    makeWindow(sg, 0,7.10,0.90,1.30,glassM,false,0,'estrich');
+    const ogA=s<0?'kind':'bad', ogB=s<0?'schlafen':'kind';         // bei x_lok -1.9 / +1.9
+    const egA=s<0?'essen':'essen', egB=s<0?'wohnen':'diele';
+    makeWindow(sg,-AX_S,Y_OG,WIN_W,WIN_H,glassM,false,0,ogA);
+    makeWindow(sg, AX_S,Y_OG,WIN_W,WIN_H,glassM,false,0,ogB);
+    makeWindow(sg,-AX_S,BT_Y,WIN_W,BT_H,glassM,false,0,egA);
+    makeWindow(sg, AX_S,BT_Y,WIN_W,BT_H,glassM,false,0,egB);
+    makeWindow(sg, 0,7.45,WIN_W,WIN_H,glassM,false,0,'estrich');
   });
 
   // ---- Eingang: echte Nische in der Wand, Holztür + Seitenteil + Stufen ----

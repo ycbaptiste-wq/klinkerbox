@@ -1344,7 +1344,7 @@
         const fShape=(zoneData[zoneKey('exterior','floor')]||{}).shape||'brick';
         // reale Masse je Gebäude (m): Front-Breite, Seiten-Tiefe, Vorplatz-Breite (+ Giebel)
         const D={ bungalow:{fw:13,sw:8,pw:14}, villa:{fw:13,sw:10,pw:15},
-                  office:{fw:18,sw:12,pw:21}, friesen:{fw:13,sw:9,pw:17,gw:3.6}, efh:{fw:9.6,sw:8,pw:12} }[bld];
+                  office:{fw:18,sw:12,pw:21}, friesen:{fw:13,sw:9,pw:17,gw:3.6}, efh:{fw:12,sw:8,pw:12} }[bld];
         const fLen=(zoneFmt(zoneKey('exterior','facade'))||{}).len, flLen=(zoneFmt(zoneKey('exterior','floor'))||{}).len;
         const fD=facadeDiv(D.fw,fFam,fLen), sD=facadeDiv(D.sw,fFam,fLen), flD=floorDiv(D.pw,fShape,flLen);
         let facadeCv,sideCv,floorCv,gableCv=null;
@@ -1366,10 +1366,10 @@
           sideCv=zoneTexFull(zoneKey('exterior','facade'),1800,600,sD,map);
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2200,1230,flD,map);
         } else {                                                                   // EFH
-          // Giebelwand ist 8.0 m breit und reicht bis zum First (10.1 m) - das
+          // Front 12.0 x 6.3 m, Giebelwand 8.0 m breit bis zum First 10.3 m - das
           // Seitenverhaeltnis der Textur muss dem folgen, sonst steht der Stein schief.
-          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2000,1270,fD,map);
-          sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,2020,sD,map);
+          facadeCv=zoneTexFull(zoneKey('exterior','facade'),2400,1260,fD,map);
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),1600,2060,sD,map);
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,flD,map);
         }
         if(EXT3D.mount(host)) EXT3D.setTextures(facadeCv,sideCv,floorCv,gableCv);
@@ -1420,7 +1420,7 @@
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=80', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=81', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
