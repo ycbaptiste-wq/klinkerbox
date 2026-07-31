@@ -9,7 +9,7 @@ import { buildEnv, glassMaterial, skyDomeTexture, applySurface, surfaceMaps, dis
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;
-let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, maxAniso=8;
+let facadeMat=null, sideMatL=null, sideMatR=null, floorMat=null, floorWalkMat=null, maxAniso=8;
 let rafId=0, failed=false;
 
 // Startblick: Dreiviertel-Ansicht auf Augenhöhe wie in Architektur-Renderings —
@@ -270,9 +270,14 @@ function buildScene(){
     const walk=new THREE.Mesh(new THREE.PlaneGeometry(120,1.70),
       new THREE.MeshStandardMaterial({map:walkT,roughness:0.9}));
     walk.rotation.x=-Math.PI/2; walk.position.set(0,0.012,10.05); walk.receiveShadow=true; scene.add(walk);
-    // Randstein zwischen Gehsteig und Fahrbahn
-    const curb=new THREE.Mesh(new THREE.BoxGeometry(120,0.14,0.22),mat(0x9c9992,0.9));
-    curb.position.set(0,0.055,10.98); curb.receiveShadow=true; scene.add(curb);
+    // Randstein zwischen Gehsteig und Fahrbahn — in der Toreinfahrt abgesenkt,
+    // sonst steht dort eine 12.5 cm hohe Kante quer vor der Zufahrt.
+    const cm=mat(0x9c9992,0.9);
+    [[-31.65,56.7],[31.65,56.7]].forEach(([cx,cw])=>{
+      const c2=new THREE.Mesh(new THREE.BoxGeometry(cw,0.14,0.22),cm);
+      c2.position.set(cx,0.055,10.98); c2.receiveShadow=true; scene.add(c2); });
+    const low=new THREE.Mesh(new THREE.BoxGeometry(6.60,0.14,0.22),cm);
+    low.position.set(0,-0.040,10.98); low.receiveShadow=true; scene.add(low);
   }
 
   // ---- Belag: EINE Fläche aus mehreren Feldern statt einer grauen Platte ----
@@ -291,35 +296,33 @@ function buildScene(){
   // der vom Vorplatz um beide Giebel nach hinten führt. Ein Belag, der irgendwo
   // im Rasen endet, ist schlechter als keiner.
   const UO=5.88, UI=4.88, UZ0=-9.08, UZ1=1.08;   // Umgang: aussen/innen, hinten/vorne
-  const PAVE=[fld(-3.10,3.10,1.90,8.75),         // Vorplatz hinter dem Tor
-              fld(-1.70,1.70,0.12,1.90),         // Zuweg und Türpodest
-              fld(-UO,-UI,UZ0,UZ1),              // Umgang linker Giebel
+  // Zwei Gruppen mit unterschiedlicher Verlegerichtung: der Vorplatz ist eine
+  // Fahrfläche, der Umgang ein Weg. Ein Belag, der überall gleich läuft, liest
+  // sich als eine Restfläche statt als zwei geplante Bereiche.
+  const PLAZA=[fld(-3.10,3.10,1.90,8.75),        // Vorplatz hinter dem Tor
+               fld(-1.70,1.70,0.08,1.90),        // Zuweg und Türpodest — z0 auf 0.08,
+                                                  // sonst klafft am Sockel ein 4 cm Rasenschlitz
+               fld(-3.10,3.10,8.75,9.20)];       // Torschwelle: in der Toröffnung lag Rasen
+  // Aussenkanten auf ±UI getrimmt. Vorher liefen sie bis ±UO und ueberlappten die
+  // Giebelstreifen an vier Ecken um je 1x1 m — koplanar auf derselben Hoehe, also
+  // vier flimmernde Quadratmeter genau an den Hausecken.
+  const WALK=[fld(-UO,-UI,UZ0,UZ1),              // Umgang linker Giebel
               fld( UI, UO,UZ0,UZ1),              // Umgang rechter Giebel
-              fld(-UO,-1.70,0.08,UZ1),           // Umgang vorne links
-              fld(1.70, UO,0.08,UZ1),            // Umgang vorne rechts
-              fld(-UO, UO,UZ0,-8.08)];           // Umgang hinten — schliesst den Ring
-  const pave=new THREE.Mesh(new THREE.ShapeGeometry(PAVE),floorMat);
+              fld(-UI,-1.70,0.08,UZ1),           // Umgang vorne links
+              fld(1.70, UI,0.08,UZ1),            // Umgang vorne rechts
+              fld(-UI, UI,UZ0,-8.08)];           // Umgang hinten — schliesst den Ring
+  const pave=new THREE.Mesh(new THREE.ShapeGeometry(PLAZA),floorMat);
   pave.rotation.x=-Math.PI/2; pave.position.y=0.020;
   pave.receiveShadow=true; scene.add(pave);
-  // Randeinfassung: Läuferreihe hochkant. Das ist am Bodenprodukt der teuerste
-  // fehlende Posten — ohne Kante liest sich der Belag als Farbwechsel im Rasen.
-  const kerbMat=new THREE.MeshStandardMaterial({color:0xc9c5bf,roughness:0.85});
-  const kerb=(x0,x1,z0,z1)=>{
-    [[x0-0.06,z0,0.12,z1-z0],[x1+0.06,z0,0.12,z1-z0]].forEach(([cx,cz,cw,cd])=>{
-      const m2=new THREE.Mesh(new THREE.BoxGeometry(cw,0.11,cd),kerbMat);
-      m2.position.set(cx,0.015,cz+cd/2); m2.castShadow=true; m2.receiveShadow=true; scene.add(m2); });
-    const f=new THREE.Mesh(new THREE.BoxGeometry(x1-x0+0.24,0.11,0.12),kerbMat);
-    f.position.set((x0+x1)/2,0.015,z1+0.06); f.castShadow=true; f.receiveShadow=true; scene.add(f);
-  };
-  // Eingefasst wird nur gegen den Rasen — am Sockel braucht es keine Kante.
-  [[-3.16,1.90,8.75],[3.16,1.90,8.75],          // Vorplatz seitlich
-   [-UO-0.06,UZ0,UZ1],[UO+0.06,UZ0,UZ1]].forEach(([cx,z0,z1])=>{   // Umgang aussen
-    const m2=new THREE.Mesh(new THREE.BoxGeometry(0.12,0.11,z1-z0),kerbMat);
-    m2.position.set(cx,0.015,(z0+z1)/2); m2.castShadow=true; m2.receiveShadow=true; scene.add(m2); });
-  [[UZ1+0.06,-UO-0.06,-1.70],[UZ1+0.06,1.70,UO+0.06],[UZ0-0.06,-UO-0.06,UO+0.06]]
-    .forEach(([cz,x0,x1])=>{                     // Umgang vorne und hinten
-      const m2=new THREE.Mesh(new THREE.BoxGeometry(x1-x0,0.11,0.12),kerbMat);
-      m2.position.set((x0+x1)/2,0.015,cz); m2.castShadow=true; m2.receiveShadow=true; scene.add(m2); });
+  floorWalkMat=new THREE.MeshStandardMaterial({color:0xdedcd8,roughness:0.85,envMapIntensity:0.35});
+  const walk2=new THREE.Mesh(new THREE.ShapeGeometry(WALK),floorWalkMat);
+  walk2.rotation.x=-Math.PI/2; walk2.position.y=0.020;
+  walk2.receiveShadow=true; scene.add(walk2);
+  // KEINE aufgehende Bordkante mehr. Sie stand 0.05 m über dem Belag — damit
+  // konnte der Umgang nicht entwässern und die Kante las sich als Mäuerchen.
+  // Und ihre Ansichtsfläche misst bei der Startkamera unter 3 Pixel, für sieben
+  // Draw-Calls. Die Kante trägt in beiden Referenzen ohnehin der Materialkontrast
+  // plus der 30-mm-Absatz zum Rasen, nicht die Höhe.
 
   // ---- Traufstreifen (Kies) statt des 13 m breiten Beetstreifens ----
   // Der ragte beidseits 1.70 m frei in den Rasen. Ein Spritzschutzstreifen läuft
@@ -329,7 +332,9 @@ function buildScene(){
   // und Zugang. Die Staudenbeete rücken nach aussen, vor den Umgang.
   const bedT=noiseTex('#7d746a',26,256,128); bedT.repeat.set(6,1);
   const bedM=new THREE.MeshStandardMaterial({map:bedT,roughness:1});
-  [[-3.79,1.44,4.18,0.72],[3.79,1.44,4.18,0.72]].forEach(([x,z,w,d])=>{
+  // Beetkante fluchtet jetzt exakt mit der Vorplatzkante (z=1.90) — vorher blieb
+  // dazwischen ein 10 cm breiter, unmähbarer Rasenschlitz.
+  [[-3.79,1.49,4.18,0.82],[3.79,1.49,4.18,0.82]].forEach(([x,z,w,d])=>{
     const b=new THREE.Mesh(new THREE.PlaneGeometry(w,d),bedM);
     b.rotation.x=-Math.PI/2; b.position.set(x,-0.004,z); b.receiveShadow=true; scene.add(b); });
 
@@ -535,10 +540,14 @@ function buildScene(){
     doorGlass.position.set(0.545,yc,-D+0.04); scene.add(doorGlass);
     // Zwei GLEICHE Steigungen a 0.16 - vorher 9.6 / 9.6 / 12.8 cm, ein Baufehler,
     // den das Auge sofort sieht.
-    const step1=new THREE.Mesh(new THREE.BoxGeometry(2.20,SOC/2,1.10),mat(0x55585b,0.8));
-    step1.position.set(0,SOC*0.75,0.55); step1.castShadow=true; step1.receiveShadow=true; scene.add(step1);
-    const step2=new THREE.Mesh(new THREE.BoxGeometry(2.60,SOC/2,1.40),mat(0x55585b,0.8));
-    step2.position.set(0,SOC*0.25,0.90); step2.castShadow=true; step2.receiveShadow=true; scene.add(step2);
+    // Zwei gleiche Steigungen à 0.150 m vom Belag (0.020) auf die Schwelle (0.320).
+    // Vorher ergaben sich 0.140 und 0.160 — ungleiche Steigungen sind ein Mangel,
+    // den das Auge sofort sieht, auch wenn es ihn nicht benennen kann.
+    const stM=mat(0x55585b,0.8);
+    const step1=new THREE.Mesh(new THREE.BoxGeometry(2.20,0.30,1.10),stM);
+    step1.position.set(0,0.170,0.55); step1.castShadow=true; step1.receiveShadow=true; scene.add(step1);
+    const step2=new THREE.Mesh(new THREE.BoxGeometry(2.60,0.30,1.40),stM);
+    step2.position.set(0,0.020,0.90); step2.castShadow=true; step2.receiveShadow=true; scene.add(step2);
     // Wandleuchten flankierend. Bewusst KEINE echte Lichtquelle: jede zusaetzliche
     // zwingt three, alle Standardmaterialien neu zu kompilieren - tagsueber fuer nichts.
     [-1.15,1.15].forEach(lx=>{
@@ -558,11 +567,13 @@ function buildScene(){
    [-5.30,1.55,1.3],[5.30,1.55,1.3],[-3.40,1.62,0.9],[3.40,1.62,0.95]]
     .forEach(([x,z,s])=>grassTuft(x,z,s,beds));
   // Nur zwei Grüntöne statt vier — vier lesen sich als Zufall, zwei als Pflanzung
-  bushClump(-3.85,1.44,0.30,0x4c5c40,beds); bushClump(-2.05,1.44,0.26,0x5f6d4a,beds);
-  bushClump(2.05,1.44,0.26,0x4c5c40,beds);  bushClump(3.85,1.44,0.30,0x5f6d4a,beds);
-  bushClump(-4.95,1.44,0.28,0x5f6d4a,beds); bushClump(4.95,1.44,0.28,0x4c5c40,beds);
+  bushClump(-3.85,1.49,0.30,0x4c5c40,beds); bushClump(-2.05,1.49,0.26,0x5f6d4a,beds);
+  bushClump(2.05,1.49,0.26,0x4c5c40,beds);  bushClump(3.85,1.49,0.30,0x5f6d4a,beds);
+  bushClump(-4.95,1.49,0.28,0x5f6d4a,beds); bushClump(4.95,1.49,0.28,0x4c5c40,beds);
   // Kübel am Eingang: der einzige Massstabsvergleich, den der Belag bekommt
-  [[-1.15,0.60,0x3a3d40],[1.15,0.60,0x3a3d40],[-2.85,2.35,0xb6b2ab],[2.85,2.35,0xb6b2ab]]
+  // Türkübel steckten vorher in den Stufenblöcken, die grauen verengten die
+  // Zufahrt auf 5.3 m. Jetzt neben der Stufe bzw. innen an den Torpfeilern.
+  [[-1.56,0.58,0x3a3d40],[1.56,0.58,0x3a3d40],[-2.80,8.30,0xb6b2ab],[2.80,8.30,0xb6b2ab]]
     .forEach(([px,pz,pc])=>{
       const pot=new THREE.Mesh(new THREE.BoxGeometry(0.42,0.55,0.42),mat(pc,0.8));
       pot.position.set(px,0.275,pz); pot.castShadow=true; pot.receiveShadow=true; scene.add(pot);
@@ -763,6 +774,9 @@ window.Efh3D={
     // Parallax-Shaders als scharfe Kante quer durchs Bild.
     applySurface(floorMat,floorCv,{fallback:0xdedcd8,rough:0.85,normalScale:0.6,
       aniso:maxAniso,env:0.35,repeat:1/12});
+    // Umgang quer zum Vorplatz verlegt — ein Weg läuft anders als eine Fahrfläche
+    if(floorWalkMat) applySurface(floorWalkMat,floorCv,{fallback:0xdedcd8,rough:0.85,
+      normalScale:0.6,aniso:maxAniso,env:0.35,repeat:1/12,rotate:Math.PI/2});
     if(revealMat){
       // Laibung und Rollschicht tragen DAS PRODUKT statt hellem Putz. Das war die
       // groesste helle Nicht-Produktflaeche der Fassade, direkt neben dem Produkt.
