@@ -358,8 +358,11 @@ function buildScene(){
   const beds=new THREE.Group(); scene.add(beds);
   const hedgeM=new THREE.MeshStandardMaterial({map:noiseTex('#41552f',22,256,128),roughness:1});
   [[-3.6,1.15,3.4],[3.6,1.15,3.4]].forEach(([x,z,w])=>{
+    // Unterkante lag auf y=0.000, die Pflasterebene liegt auf y=0.004 — das Pflaster
+    // schnitt also 4 mm ueber dem Boden quer durch die Hecke und hinterliess dort eine
+    // flimmernde Naht. 6 mm angehoben: die Hecke steht jetzt auf dem Belag statt in ihm.
     const h=new THREE.Mesh(new THREE.BoxGeometry(w,0.45,0.7),hedgeM);
-    h.position.set(x,0.225,z); h.castShadow=true; h.receiveShadow=true; beds.add(h);
+    h.position.set(x,0.231,z); h.castShadow=true; h.receiveShadow=true; beds.add(h);
   });
   bush(-2.2,0.9,0.4,0x4a5e3e,beds); bush(2.2,0.9,0.4,0x4a5e3e,beds);
   bush(-5.9,1.0,0.5,0x46583c,beds); bush(5.9,1.0,0.5,0x46583c,beds);

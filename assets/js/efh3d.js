@@ -589,8 +589,14 @@ function buildScene(){
     // Rollschicht auch ueber der Tuer
     const roll=new THREE.Mesh(soldierGeo(w+0.23,0.24,0.115,HW,HE,0.6,2.9),soldierMat);
     roll.position.set(0,y0+h+0.16,-0.046); roll.castShadow=true; roll.receiveShadow=true; scene.add(roll);
+    // Das Schwellenprofil lag mit seiner Oberkante auf exakt y=0.32 — derselben
+    // Ebene wie die Sockeloberkante darunter. Zwei deckungsgleiche Flaechen auf
+    // 1.70 x 0.17 m: gemessen 85 Pixel, die bei 0.034 Grad Kameradrehung komplett
+    // umschlugen. Das war das Flimmern am Tuerrahmen. Jetzt sitzt die Schwelle
+    // OBEN AUF dem Sockel (0.320 bis 0.340) statt in ihm — so wird sie auch
+    // gebaut, damit Wasser nicht unter die Tuer laeuft.
     const thr=new THREE.Mesh(new THREE.BoxGeometry(w+0.10,0.02,0.17),mat(0xa8acae,0.42,0.55));
-    thr.position.set(0,y0-0.01,-D/2+0.05); thr.receiveShadow=true; scene.add(thr);   // Schwellenprofil
+    thr.position.set(0,y0+0.01,-D/2+0.05); thr.receiveShadow=true; scene.add(thr);   // Schwellenprofil
     // Zarge: Blatt 1.05 + Setzholz 0.06 + Seitenteil 0.43 + 2x0.03 Rahmen = 1.60,
     // vorher blieben 0.36 m der Oeffnung schlicht offen (schwarzer Spalt).
     // Zarge ebenfalls aufgehellt: bei 0x33383c stand sie mit dem Blatt auf demselben
@@ -641,8 +647,13 @@ function buildScene(){
     // Vorher ergaben sich 0.140 und 0.160 — ungleiche Steigungen sind ein Mangel,
     // den das Auge sofort sieht, auch wenn es ihn nicht benennen kann.
     const stM=mat(0x55585b,0.8);
+    // Der Sockel springt 0.08 m vor die Fassade, das Podest lag mit z 0.00 bis 1.10
+    // darueber — und mit seiner Oberkante auf derselben Hoehe 0.32. Auf 2.20 x 0.08 m
+    // lagen damit zwei Flaechen exakt aufeinander. 4 mm tiefer gelegt: das ist zugleich
+    // das Gefaelle, das ein Podest vor einer Haustuer ohnehin braucht, damit Wasser
+    // vom Haus wegläuft. Die Steigungen bleiben mit 0.146 und 0.150 praktisch gleich.
     const step1=new THREE.Mesh(new THREE.BoxGeometry(2.20,0.30,1.10),stM);
-    step1.position.set(0,0.170,0.55); step1.castShadow=true; step1.receiveShadow=true; scene.add(step1);
+    step1.position.set(0,0.166,0.55); step1.castShadow=true; step1.receiveShadow=true; scene.add(step1);
     const step2=new THREE.Mesh(new THREE.BoxGeometry(2.60,0.30,1.40),stM);
     step2.position.set(0,0.020,0.90); step2.castShadow=true; step2.receiveShadow=true; scene.add(step2);
     // Wandleuchten flankierend. Bewusst KEINE echte Lichtquelle: jede zusaetzliche
