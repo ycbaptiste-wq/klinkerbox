@@ -375,7 +375,10 @@ a.cinfo__val:hover{color:var(--clay)}
 .news__form input{font:inherit;font-size:.95rem;padding:.8rem .95rem;border:1px solid rgba(255,255,255,.2);border-radius:12px;background:rgba(255,255,255,.06);color:#fff;outline:none;transition:.2s}
 .news__form input::placeholder{color:rgba(255,255,255,.5)}
 .news__form input:focus{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.12)}
-.news__form input[name=email]{grid-column:1/3}
+/* Jedes Feld liegt in einem <label>; das Label ist jetzt das Rasterelement. */
+.news__form .nlf{display:block;min-width:0}
+.news__form .nlf input{width:100%}
+.news__form .nlf--email{grid-column:1/3}
 .news__form .btn{grid-column:3;grid-row:1/3;height:100%}
 
 /* ===================== FOOTER ===================== */
@@ -745,7 +748,7 @@ a.cinfo__val:hover{color:var(--clay)}
   .cform{padding:1.6rem 1.2rem}
   .cform__grid{grid-template-columns:1fr}
   .news__form{grid-template-columns:1fr}
-  .news__form input[name=email]{grid-column:auto}
+  .news__form .nlf--email{grid-column:auto}
   .news__form .btn{grid-column:auto;grid-row:auto}
   .filters__group--size,.filters__group--search{width:100%}
   .select,.input{width:100%}

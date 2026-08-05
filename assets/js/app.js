@@ -394,7 +394,7 @@
     const load = loadOf(p);
     const multi = gal.length>1;
     const thumbs = multi ? `<div class="lb__thumbs">${gal.map((src,i)=>
-        `<button class="lb__thumb${i===0?' is-active':''}" data-i="${i}" aria-label="${d.lb_img_n.replace('{n}',i+1).replace('{t}',gal.length)}"><img loading="lazy" src="${thumbSrc(src)}" onerror="this.onerror=null;this.src='${src}'" alt=""></button>`).join('')}</div>` : '';
+        `<button class="lb__thumb${i===0?' is-active':''}" data-i="${i}" aria-label="${d.lb_img_n.replace('{n}',i+1).replace('{t}',gal.length)}"><img loading="lazy" src="${thumbSrc(src)}" data-full="${src}" alt=""></button>`).join('')}</div>` : '';
     const counter = multi ? `<span class="lb__count" id="lbCount">1 / ${gal.length}</span>` : '';
     const navArrows = multi ? `<button class="lb__nav lb__nav--prev" id="lbPrev" aria-label="${d.lb_prev}">‹</button>
         <button class="lb__nav lb__nav--next" id="lbNext" aria-label="${d.lb_next}">›</button>` : '';
@@ -2149,6 +2149,14 @@
       $('#burger').setAttribute('aria-expanded', String(open)); };
     $('#lbClose').onclick=closeLightbox;
     $('#lightbox').onclick=e=>{ if(e.target.id==='lightbox') closeLightbox(); };
+    // Vorschaubild-Fallback: fehlt die verkleinerte Variante, kommt das Originalbild.
+    // Frueher ein onerror="..."-Attribut — das verbietet die Content-Security-Policy.
+    // 'error' steigt nicht auf, deshalb Capture-Phase.
+    $('#lbInner').addEventListener('error', e=>{
+      const img=e.target;
+      if(img.tagName!=='IMG' || !img.dataset.full) return;
+      const full=img.dataset.full; delete img.dataset.full; img.src=full;
+    }, true);
     $('#loadMore').onclick=loadMore;
     $('#mixFab').onclick=openMixer; $('#mixClose').onclick=closeMixer;
     { const hc=$('#heroConfig'); if(hc) hc.onclick=openMixer; }
