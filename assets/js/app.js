@@ -1344,8 +1344,11 @@
         stopAll3D(GLOB3D[ik]);
         const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
         mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
+        showBusy(host);
         ensureImgObjs(map=>{
-          if(mixView!=='interior') return;              // Ansicht wurde inzwischen gewechselt
+          if(mixView!=='interior'){ hideBusy(host); return; }   // Ansicht wurde inzwischen gewechselt
+          afterPaint(()=>{
+          if(mixView!=='interior'){ hideBusy(host); return; }
           // Rückwand 6.4m + rechte Wand 8.4m (eigene Textur → kein Kachel-Nahtfehler),
           // Steingrösse massstäblich (Riemchen ~24cm wie Vollstein)
           const wFam=(zoneData[zoneKey('interior','facade')]||{}).shape||'brick';
@@ -1355,6 +1358,8 @@
           const fShape=(zoneData[zoneKey('interior','floor')]||{}).shape||'brick';
           const floorCv=zoneTexFull(zoneKey('interior','floor'),1600,2100,floorDiv(6.4,fShape,flLenI),map);
           if(IG.mount(host)) IG.setTextures(wallCv,wallSideCv,floorCv);
+          hideBusy(host);
+          });
         }, allP);
       }
       return;
@@ -1367,8 +1372,11 @@
       const bld=mixBuilding;
       const allP=[]; Object.keys(zoneData).forEach(z=>zoneData[z].mix.forEach(m=>allP.push(m.p)));
       mix.forEach(m=>{ if(!allP.includes(m.p)) allP.push(m.p); });
+      showBusy(host);
       ensureImgObjs(map=>{
-        if(mixView!=='exterior'||mixBuilding!==bld) return;
+        if(mixView!=='exterior'||mixBuilding!==bld){ hideBusy(host); return; }
+        afterPaint(()=>{
+        if(mixView!=='exterior'||mixBuilding!==bld){ hideBusy(host); return; }
         const fFam=(zoneData[zoneKey('exterior','facade')]||{}).shape||'brick';
         const fShape=(zoneData[zoneKey('exterior','floor')]||{}).shape||'brick';
         // reale Masse je Gebäude (m): Front-Breite, Seiten-Tiefe, Vorplatz-Breite (+ Giebel)
@@ -1402,6 +1410,8 @@
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,flD,map);
         }
         if(EXT3D.mount(host)) EXT3D.setTextures(facadeCv,sideCv,floorCv,gableCv);
+        hideBusy(host);
+        });
       }, allP);
       return;
     }
@@ -1434,7 +1444,9 @@
         return;
       }
     }
-    if(!sceneView) stopAll3D();                      // Muster-Ansicht braucht kein 3D
+    // Hier landet nur, wer ueberhaupt kein laufendes 3D hat (WebGL aus, Modul
+    // gescheitert). Dann bringt Warmhalten nichts und kostet nur Speicher.
+    if(!sceneView) disposeAll3D();                   // Muster-Ansicht braucht kein 3D
     if(!sceneView && !mixLayout.length) genLayout();
     let cv=host.querySelector('canvas.mixcanvas');
     if(!cv){ host.innerHTML=''; cv=document.createElement('canvas'); cv.className='mixcanvas'; host.appendChild(cv); }
@@ -1479,7 +1491,7 @@
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=120', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=124', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -1512,9 +1524,39 @@
     for(let i=0;i<s.length;i++){ hh^=s.charCodeAt(i); hh=Math.imul(hh,16777619); }
     return (hh>>>0).toString(36);
   }
+  // Gemalte Wandbilder zwischenspeichern. klbTexKey deckt alles ab, was das Bild
+  // bestimmt (Groesse, Teilung, Verband, Fuge, Mischung, Reihenfolge, Layout) —
+  // stimmt der Schluessel, ist das Bild pixelgleich und Neumalen ist verschenkte
+  // Zeit. Vorher wurde bei jedem Ansichtswechsel jede Flaeche neu Stein fuer Stein
+  // gezeichnet, obwohl sich nichts geaendert hatte.
+  // Dieselbe Erkennung wie LOWQ in scene3d-lib.js. Hier noch einmal, weil app.js
+  // kein Modul ist und nicht importieren kann; sie steuert, wie viel Speicher wir
+  // fuer Geschwindigkeit ausgeben duerfen.
+  const LOWQ3D=(()=>{ try{
+    const q=new URLSearchParams(location.search).get('q');
+    if(q==='low') return true; if(q==='high') return false;
+    if(/Android|iPhone|iPod|iPad|Mobile/i.test(navigator.userAgent||'')) return true;
+    if((navigator.hardwareConcurrency||8)<=4) return true;
+    if((navigator.deviceMemory||8)<=4) return true;
+    return matchMedia('(pointer:coarse)').matches && Math.min(innerWidth,innerHeight)<820;
+  }catch(e){ return false; } })();
+  // Ein Fassaden-Canvas mit 2600x1500 belegt rund 15 MB. Jedes Gebaeude braucht
+  // drei bis vier davon, also reichen acht Plaetze nicht einmal fuer zwei
+  // Gebaeude — beim Durchklicken war der Cache dauernd leer. Am Desktop zwoelf,
+  // auf dem Telefon vier. Aeltester fliegt zuerst raus.
+  const TEXCACHE=new Map(), TEXCACHE_MAX=LOWQ3D?4:12;
   // full-size wall texture (no tiling → no visible repeat): div = brick-size divisor
   function zoneTexFull(name,w,h,div,map){
     const z=zoneData[name]; if(!z.mix.length) return null;
+    if(!(z.layout||[]).length){                       // Schluessel braucht das Layout
+      const B0=[mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff];
+      try{ mix=z.mix;mixCat=z.cat;mixShape=z.shape;mixBond=z.bond;mixBed=z.bed;mixHead=z.head;mixJoint=z.joint;mixOrder=z.order;mixLayout=z.layout;mixSeq=z.seq;wildOff=z.wild;
+        genLayout(); z.layout=mixLayout; z.seq=mixSeq; z.wild=wildOff; }
+      finally{ [mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff]=B0; }
+    }
+    const ck=klbTexKey(name,Math.max(2,Math.round(w)),Math.max(2,Math.round(h)),div,z);
+    { const hit=TEXCACHE.get(ck);
+      if(hit){ TEXCACHE.delete(ck); TEXCACHE.set(ck,hit); return hit; } }   // LRU auffrischen
     const B=[mix,mixCat,mixShape,mixBond,mixBed,mixHead,mixJoint,mixOrder,mixLayout,mixSeq,wildOff];
     let tex=null;
     try{
@@ -1530,7 +1572,12 @@
     // Die Moertelfarbe wird in paintWall als flaeche Fuellung gesetzt und ist damit
     // exakt bekannt. Ohne diese Angabe muesste die 3D-Seite sie aus dem Histogramm
     // raten - und raet bei duennen Fugen den haeufigsten STEIN statt den Moertel.
-    if(tex){ tex.__klbKey=klbTexKey(name,tex.width,tex.height,div,z); tex.__klbJoint=z.joint; }
+    if(tex){ tex.__klbKey=ck; tex.__klbJoint=z.joint;
+      TEXCACHE.set(ck,tex);
+      while(TEXCACHE.size>TEXCACHE_MAX){ const old=TEXCACHE.keys().next().value;
+        const c=TEXCACHE.get(old); TEXCACHE.delete(old);
+        if(c){ c.width=0; c.height=0; } }        // Bitmap sofort freigeben, nicht erst beim GC
+    }
     return tex;
   }
   function switchView(v){
@@ -1611,15 +1658,92 @@
       $('#mixIntroH').textContent=M.intro_style[lang];
     });
   }
-  function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); stopAll3D();
+  function closeMixer(){ $('#mixer').hidden=true; document.body.style.overflow=''; if(window.__lenis) window.__lenis.start(); disposeAll3D();
     if(lastFocusMix && lastFocusMix.focus) lastFocusMix.focus({preventScroll:true});
     lastFocusMix=null; }
   // 3D-Render-Loops stoppen (alle ausser dem aktiven Modul) — Akku/GPU-Last, iOS-Kontextlimit
   // Inaktive Module bekommen dispose() statt stop(): sonst bleibt pro angeschautem
   // Gebaeude ein WebGL-Kontext liegen und der Browser haengt sich nach ein paar Wechseln auf.
+  // Gemessen: ein Wechsel der Ansicht kostete 1.0 bis 1.7 Sekunden, in denen der
+  // Hauptthread als EIN Block stillstand — kein Scrollen, kein Klick. Ursache war
+  // diese Funktion: sie gab jedes inaktive Modul frei, also musste jedes Gebaeude
+  // bei jeder Rueckkehr komplett neu gebaut werden (Efh3D allein 950 ms fuer 402
+  // Objekte). Hin und zurueck kostete jedes Mal voll.
+  // Das Kontextlimit ist real, aber 7 Module sind nicht das Problem — 3 sind es
+  // nie. Der Browser erlaubt 8 bis 16 gleichzeitige WebGL-Kontexte; wir halten das
+  // aktive plus die zwei zuletzt benutzten warm und geben nur den Rest frei.
+  // Warm heisst: Render-Loop gestoppt (keine GPU-Last, kein Akkuverbrauch), aber
+  // Szene und Kontext bleiben stehen. Zurueckwechseln kostet dann nur noch das
+  // Wiedereinhaengen des Canvas.
+  // Wie viele Module warm bleiben duerfen, haengt am Geraet. Es gibt sieben
+  // (fuenf Gebaeude, Innenraum, Nahansicht). Gemessen: bei drei warmen Plaetzen
+  // ist jedes Gebaeude wieder freigegeben, bevor der Kunde zurueckkommt — beim
+  // Durchklicken aller fuenf war die zweite Runde genauso langsam wie die erste.
+  // Am Desktop sind fuenf unbedenklich: der Browser erlaubt 8 bis 16 Kontexte.
+  // Auf dem Telefon bleibt es bei zwei — dort ist nicht das Kontextlimit das
+  // Problem, sondern der Grafikspeicher (das EFH allein haelt 30'590 Dreiecke
+  // und mehrere 2400x1260-Karten mit Mipmaps).
+  // Der erste Aufbau eines Gebaeudes kostet 1 bis 3.7 Sekunden und laeuft als EIN
+  // Block: in dieser Zeit reagiert die Seite auf gar nichts. Ohne Rueckmeldung
+  // liest sich das als kaputt, nicht als "laedt". Ein normaler Spinner haette
+  // nichts genuetzt — eine Animation auf dem Hauptthread steht genauso still.
+  // Deshalb eine reine transform-Drehung: die laeuft im Compositor und dreht sich
+  // auch dann weiter, wenn JavaScript blockiert.
+  function busyCss(){
+    if(document.getElementById('klbBusyCss')) return;
+    const s=document.createElement('style'); s.id='klbBusyCss';
+    s.textContent='@keyframes klbSpin{to{transform:rotate(360deg)}}';
+    document.head.appendChild(s);
+  }
+  function showBusy(host){
+    if(!host) return; busyCss();
+    if(getComputedStyle(host).position==='static') host.style.position='relative';
+    let d=host.querySelector(':scope > .klb-busy');
+    if(!d){
+      d=document.createElement('div'); d.className='klb-busy';
+      d.style.cssText='position:absolute;inset:0;z-index:5;display:flex;align-items:center;'+
+        'justify-content:center;border-radius:inherit;pointer-events:none;'+
+        'background:rgba(248,247,245,0.55);backdrop-filter:blur(1px)';
+      const r=document.createElement('div');
+      r.style.cssText='width:38px;height:38px;border-radius:50%;'+
+        'border:3px solid rgba(60,55,50,0.18);border-top-color:rgba(60,55,50,0.75);'+
+        'will-change:transform;animation:klbSpin 0.8s linear infinite';
+      d.appendChild(r); host.appendChild(d);
+    }
+    d.style.display='flex';
+  }
+  function hideBusy(host){
+    const d=host&&host.querySelector(':scope > .klb-busy'); if(d) d.style.display='none';
+  }
+  // Zwei Bilder abwarten, dann erst rechnen: sonst hat der Browser den Spinner noch
+  // gar nicht gezeichnet, wenn der Block schon laeuft, und man saehe ihn nie.
+  // Der Timer daneben ist kein Guertel-und-Hosentraeger, sondern noetig:
+  // requestAnimationFrame ruht in versteckten Tabs vollstaendig. Ohne ihn bleibt
+  // der Aufbau stehen, sobald jemand waehrend des Ladens die Registerkarte
+  // wechselt — gemessen: Spinner laeuft, Canvas erscheint nie.
+  function afterPaint(fn){
+    let fertig=false;
+    const los=()=>{ if(fertig) return; fertig=true; fn(); };
+    requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(los,0)));
+    setTimeout(los,250);
+  }
+  const LRU3D=[], KEEP3D=LOWQ3D?2:5;
   function stopAll3D(except){
+    if(except){ const i=LRU3D.indexOf(except); if(i>=0) LRU3D.splice(i,1); LRU3D.unshift(except); }
+    const warm=new Set(LRU3D.slice(0,KEEP3D));
     ['Wall3D','Room3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
       const m=window[n]; if(!m || n===except) return;
+      if(warm.has(n)){ if(m.stop) m.stop(); }              // warm halten
+      else if(m.dispose) m.dispose(); else if(m.stop) m.stop();
+    });
+    for(let i=LRU3D.length-1;i>=0;i--) if(!warm.has(LRU3D[i])) LRU3D.splice(i,1);
+  }
+  // Beim Schliessen des Mixers wird wirklich alles freigegeben: dort ist die
+  // Wartezeit egal, und ein liegengebliebener Kontext ist es nicht.
+  function disposeAll3D(){
+    LRU3D.length=0;
+    ['Wall3D','Room3D','Bungalow3D','Efh3D','Villa3D','Office3D','Friesen3D'].forEach(n=>{
+      const m=window[n]; if(!m) return;
       if(m.dispose) m.dispose(); else if(m.stop) m.stop();
     });
   }

@@ -707,6 +707,16 @@ function patchParallax(m,depth){
 export function applySurface(m,cv,opts){
   opts=opts||{};
   const aniso=opts.aniso||8;
+  // surfaceMaps kostet je Flaeche 150 bis 225 ms (gemessen an 2600x1250, 2000x1000
+  // und 2000x900). Bei drei bis vier Flaechen je Gebaeude sind das ueber eine halbe
+  // Sekunde — und die wurde bei jedem Ansichtswechsel neu bezahlt, obwohl Quelle
+  // und Parameter unveraendert waren. Stimmt der Schluessel des Quell-Canvas UND
+  // jeder Parameter, der in die Karten eingeht, sind die Karten bitgleich.
+  // aniso und fallback stehen bewusst nicht drin: das eine ist eine reine
+  // Sampler-Einstellung, das andere greift nur ohne Canvas.
+  const srcKey=(cv&&cv.__klbKey)?[cv.__klbKey,opts.rough,opts.normalScale,opts.pom,
+      opts.env,opts.tint,opts.rotate,opts.repeat,opts.maxW].join('~'):null;
+  if(srcKey && m.userData.klbSrcKey===srcKey && m.map) return;
   if(m.map) m.map.dispose();
   if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
   if(m.aoMap){ m.aoMap.dispose(); m.aoMap=null; m.roughnessMap=null; }
@@ -753,6 +763,7 @@ export function applySurface(m,cv,opts){
   if(pom>0 && maps){ if(!m.userData.klbShader) patchParallax(m,pom); else { m.userData.klbPomDepth=pom;
       if(m.userData.klbShader.uniforms.uPomDepth) m.userData.klbShader.uniforms.uPomDepth.value=pom; } }
   else m.userData.klbPomDepth=0;
+  m.userData.klbSrcKey=srcKey;      // Ausgangspunkt fuer das Ueberspringen oben
   m.needsUpdate=true;
 }
 
