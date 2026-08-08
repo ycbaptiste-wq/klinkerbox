@@ -366,6 +366,9 @@ a.cinfo__val:hover{color:var(--clay)}
 @keyframes fieldFlash{0%{border-color:var(--clay);box-shadow:0 0 0 4px rgba(176,73,47,.22);background:rgba(176,73,47,.06)}100%{box-shadow:0 0 0 0 rgba(176,73,47,0)}}
 
 /* ===================== NEWSLETTER ===================== */
+/* Newsletter — Abschnitt am 8.8.2026 aus index.html herausgenommen (Versand noch nicht
+   eingerichtet). Die Regeln bleiben absichtlich stehen, damit das Wiedereinschalten in
+   einigen Monaten nur den HTML-Abschnitt braucht. Siehe Kommentar in index.html. */
 .news{background:linear-gradient(160deg,#2a2320,#171311);color:#fff}
 .news__inner{max-width:var(--maxw);margin:0 auto;padding:clamp(40px,6vw,72px) clamp(20px,5vw,48px);
   display:grid;grid-template-columns:1fr 1.1fr;gap:2rem 3rem;align-items:center}

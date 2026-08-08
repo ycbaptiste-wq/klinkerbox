@@ -8,7 +8,7 @@
        script-src 'self'  - nur eigene Skripte, kein Inline-JavaScript (der wirksame Teil)
        style-src  unsafe-inline - noetig fuer style="..."-Attribute in Markup und Templates
        i.ytimg.com / youtube-nocookie.com - Vorschaubilder und Player der Referenzfilme
-       api.web3forms.com - Ziel von Kontaktformular und Newsletter
+       api.web3forms.com - Ziel des Kontaktformulars
      frame-ancestors fehlt bewusst: im Meta-Tag ignoriert der Browser die Direktive.
      Sie steht in der Header-Fassung (siehe SICHERHEITS-HEADER.md). -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://i.ytimg.com; font-src 'self'; connect-src 'self' https://api.web3forms.com; frame-src https://www.youtube-nocookie.com; form-action 'self'">
@@ -45,7 +45,7 @@
 <link rel="icon" type="image/png" href="assets/img/logo-mark.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <meta name="theme-color" content="#fbfaf8">
-<link rel="stylesheet" href="assets/css/style.css?v=51">
+<link rel="stylesheet" href="assets/css/style.css?v=52">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -335,30 +335,15 @@
     </div>
   </section>
 
-  <!-- ===== NEWSLETTER ===== -->
-  <section class="news" id="newsletter">
-    <div class="news__inner reveal">
-      <div class="news__text">
-        <h2 class="news__title" data-t="nl_title">Newsletter</h2>
-        <p class="news__sub" data-t="nl_sub">Neue Kollektionen und Projekte — ein paar Mal im Jahr, ohne Spam.</p>
-      </div>
-      <form class="news__form" id="newsForm" novalidate>
-        <!-- Platzhalter ist keine Beschriftung: er verschwindet beim Tippen und wird von
-             Screenreadern nicht zuverlaessig vorgelesen. Darum echtes <label> je Feld,
-             sichtbar nur fuer Hilfsmittel — die Optik der Leiste bleibt unveraendert. -->
-        <label class="nlf"><span class="sr-only" data-t="nl_first">Vorname</span>
-          <input type="text" name="first" autocomplete="given-name" data-ph="nl_first" placeholder="Vorname"></label>
-        <label class="nlf"><span class="sr-only" data-t="nl_last">Nachname</span>
-          <input type="text" name="last" autocomplete="family-name" data-ph="nl_last" placeholder="Nachname"></label>
-        <label class="nlf nlf--email"><span class="sr-only" data-t="nl_email">E-Mail</span>
-          <input type="email" name="email" required autocomplete="email" data-ph="nl_email" placeholder="E-Mail"></label>
-        <button type="submit" class="btn btn--solid" data-t="nl_btn">Abonnieren</button>
-        <label class="news__consent"><input type="checkbox" name="consent" required>
-          <span data-t="nl_consent">Ich möchte den Klinkerbox-Newsletter erhalten und kann mich jederzeit abmelden. Es gilt die <a href="datenschutz/">Datenschutzerklärung</a>.</span></label>
-        <p class="cform__hint" id="newsHint" role="status" aria-live="polite"></p>
-      </form>
-    </div>
-  </section>
+  <!-- ===== NEWSLETTER =====
+       Am 8.8.2026 herausgenommen: der Versand ist noch nicht eingerichtet, geplant in
+       einigen Monaten. Ein Anmeldeformular, das ins Leere fuehrt, sammelt Adressen, die
+       niemand bedient — und die Einwilligung nach UWG Art. 3 lit. o waere fuer einen
+       Newsletter erteilt, den es nicht gibt.
+       Zum Wiederherstellen: das Formular steht vollstaendig in Commit fa2d443. CSS
+       (.news, .news__form, .nlf), die Schluessel nl_* in i18n.js und der Absender in
+       app.js sind absichtlich stehen geblieben — es fehlt dann nur dieser Abschnitt.
+       Vor dem Wiedereinschalten: Abschnitt Newsletter in datenschutz/ wieder aufnehmen. -->
 </main>
 
 <footer class="footer">
