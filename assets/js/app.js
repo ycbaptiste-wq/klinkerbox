@@ -1391,7 +1391,11 @@
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,1170,flD,map);
         } else if(bld==='villa'){
           facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,1250,fD,map);
-          sideCv=zoneTexFull(zoneKey('exterior','facade'),2000,1000,sD,map);
+          // Die Seitenwaende sind 10.00 x 6.25 m, also Verhaeltnis 1.60. Die Textur
+          // hatte 2000 x 1000 = 2.00 und wurde damit um 25 % in die Hoehe gezogen:
+          // gemessen 72 mm Schichtmass statt 58 bei einem 215 x 50er Stein. Die
+          // Vorderseite stimmte mit 2600 x 1250 auf 13.00 x 6.25 m schon exakt.
+          sideCv=zoneTexFull(zoneKey('exterior','facade'),2000,1250,sD,map);
           floorCv=zoneTexFull(zoneKey('exterior','floor'),2000,900,flD,map);
         } else if(bld==='office'){
           facadeCv=zoneTexFull(zoneKey('exterior','facade'),2600,1500,fD,map);
@@ -1491,7 +1495,7 @@
     if(host) host.innerHTML='<div class="mix3dload">'+(L3D[lang]||L3D.de)+'</div>';
     if(_load3D[key]) return; _load3D[key]=true;
     // absolute URL (relativ zur Seite) — Bare-Specifier vermeiden
-    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=126', document.baseURI).href;
+    const url=new URL('assets/js/'+MOD3D[key]+'.js?v=128', document.baseURI).href;
     import(url).catch(e=>{ _load3D[key]=false; console.warn('3D-Modul konnte nicht geladen werden:',key,e); });
   }
   // render one surface's mix to an offscreen texture (temporarily swaps the active state)
@@ -1574,9 +1578,12 @@
     // raten - und raet bei duennen Fugen den haeufigsten STEIN statt den Moertel.
     if(tex){ tex.__klbKey=ck; tex.__klbJoint=z.joint;
       TEXCACHE.set(ck,tex);
-      while(TEXCACHE.size>TEXCACHE_MAX){ const old=TEXCACHE.keys().next().value;
-        const c=TEXCACHE.get(old); TEXCACHE.delete(old);
-        if(c){ c.width=0; c.height=0; } }        // Bitmap sofort freigeben, nicht erst beim GC
+      // Nur aus dem Verzeichnis nehmen, NICHT das Bitmap loeschen. Ein verdraengtes
+      // Canvas haengt in aller Regel noch als map.image an einem Material eines warm
+      // gehaltenen Gebaeudes; ein c.width=0 wuerde dessen Bildquelle unter ihm
+      // wegziehen, und beim naechsten Upload (Kontextverlust, needsUpdate) waere die
+      // Flaeche leer. Der Speicher faellt ohnehin, sobald niemand mehr darauf zeigt.
+      while(TEXCACHE.size>TEXCACHE_MAX) TEXCACHE.delete(TEXCACHE.keys().next().value);
     }
     return tex;
   }

@@ -6,7 +6,7 @@
 // streifendem Licht, das das Fugenrelief ueberhaupt erst sichtbar macht.
 // Drehbar wie die Gebaeudeansichten, nur mit engeren Grenzen.
 import * as THREE from './three.module.min.js';
-import { buildEnv, applySurface, disposeScene, addVignette, LOWQ } from './scene3d-lib.js?v=55';
+import { buildEnv, applySurface, disposeScene, addVignette, LOWQ } from './scene3d-lib.js?v=56';
 
 const MOBILE=LOWQ;
 let renderer=null, scene=null, camera=null, host=null, ro=null;

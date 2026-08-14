@@ -716,7 +716,9 @@ export function applySurface(m,cv,opts){
   // Sampler-Einstellung, das andere greift nur ohne Canvas.
   const srcKey=(cv&&cv.__klbKey)?[cv.__klbKey,opts.rough,opts.normalScale,opts.pom,
       opts.env,opts.tint,opts.rotate,opts.repeat,opts.maxW].join('~'):null;
-  if(srcKey && m.userData.klbSrcKey===srcKey && m.map) return;
+  // Zusaetzlich pruefen, dass die alte Bildquelle ueberhaupt noch Inhalt hat —
+  // sonst behaelt das Material eine leere Textur, statt sie neu aufzubauen.
+  if(srcKey && m.userData.klbSrcKey===srcKey && m.map && m.map.image && m.map.image.width>1) return;
   if(m.map) m.map.dispose();
   if(m.normalMap){ m.normalMap.dispose(); m.normalMap=null; }
   if(m.aoMap){ m.aoMap.dispose(); m.aoMap=null; m.roughnessMap=null; }
@@ -735,7 +737,18 @@ export function applySurface(m,cv,opts){
   if(opts.rotate){ t.center.set(0.5,0.5); t.rotation=opts.rotate; }
   // repeat wird gebraucht, wenn die Geometrie UVs in METERN liefert (ShapeGeometry).
   // Muss zwingend auch auf Normal und ORM — sonst liegt das Relief daneben.
-  if(opts.repeat){ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(opts.repeat,opts.repeat); }
+  // repeat wird gebraucht, wenn die Geometrie UVs in METERN liefert (ShapeGeometry).
+  // Beide Achsen mit DEMSELBEN Wert zu skalieren ist nur richtig, wenn das Bild
+  // quadratisch ist. Der Belag ist es nicht: 2000 x 1170 px, gemalt fuer 12 m
+  // Breite. Seine 1170 px entsprechen 1170 * 12/2000 = 7.02 m, wurden aber ueber
+  // 12 m gespannt — jeder Pflasterstein kam 2000/1170 = 1.71-fach zu tief heraus.
+  // Gemessen am Vorplatz: 92 mm Schichtmass statt 52 mm, also fast quadratische
+  // Steine, wo ein 186 x 44er Pflasterklinker liegen sollte.
+  // Das Bild muss isotrop auf die Flaeche: gleiche Meter je Pixel in u und v.
+  // Die Skalierung wirkt in three.js NACH der Drehung, im Texturraum — deshalb
+  // gilt derselbe Faktor auch fuer den quer verlegten Umgang.
+  const repY=opts.repeat?opts.repeat*(cv.width/cv.height):0;
+  if(opts.repeat){ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(opts.repeat,repY); }
   m.map=t;
   // tint dunkelt dieselbe Produktkarte ab — fuer Laibungen (Schnittflaeche) und
   // Sockel. Billiger als ein zweiter surfaceMaps-Lauf mit eigener Textur.
@@ -748,7 +761,7 @@ export function applySurface(m,cv,opts){
     if(opts.rotate){ maps.normal.center.set(0.5,0.5); maps.normal.rotation=opts.rotate;
                      maps.orm.center.set(0.5,0.5);    maps.orm.rotation=opts.rotate; }
     if(opts.repeat){ [maps.normal,maps.orm].forEach(t2=>{
-      t2.wrapS=t2.wrapT=THREE.RepeatWrapping; t2.repeat.set(opts.repeat,opts.repeat); }); }
+      t2.wrapS=t2.wrapT=THREE.RepeatWrapping; t2.repeat.set(opts.repeat,repY); }); }
     m.normalMap=maps.normal;
     const ns=opts.normalScale!=null?opts.normalScale:0.9;
     m.normalScale=new THREE.Vector2(ns,ns);
